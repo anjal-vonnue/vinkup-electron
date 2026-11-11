@@ -1,0 +1,30 @@
+{
+  "name": "desktop",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Electron desktop shell for Vinkup",
+  "author": "Vinkup",
+  "homepage": "https://vinkup.netlify.app",
+  "desktopName": "vinkup.desktop",
+  "type": "commonjs",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "npm run build && NODE_ENV=development node scripts/run-electron.mjs .",
+    "start": "npm run build && NODE_ENV=production node scripts/run-electron.mjs .",
+    "dist": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  },
+  "devDependencies": {
+    "@itp/types": "^1.0.0",
+    "@types/http-proxy": "^1.17.17",
+    "@types/node": "^24.19.0",
+    "electron": "45.2.3",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.2"
+  }
+}

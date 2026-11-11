@@ -10,7 +10,7 @@ import globals from 'globals';
 const rootDir = import.meta.dirname;
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/build/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/build/**', '**/release/**'] },
 
   // Base, non-type-aware rules for everything — covers eslint.config.js
   // and any config file not explicitly matched below
@@ -73,6 +73,27 @@ export default tseslint.config(
     },
   },
 
+  // Desktop (Electron main + preload) — type-aware, own root
+  {
+    files: ['desktop/src/**/*.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        project: [path.join(rootDir, 'desktop/tsconfig.json')],
+        tsconfigRootDir: path.join(rootDir, 'desktop'),
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+
   // Shared types package — type-aware, own root
   {
     files: ['packages/types/src/**/*.ts'],
@@ -95,6 +116,13 @@ export default tseslint.config(
   },
   {
     files: ['frontend/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {},
+  },
+  {
+    files: ['desktop/scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,
     },

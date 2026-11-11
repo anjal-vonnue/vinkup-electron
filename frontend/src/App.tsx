@@ -4,7 +4,7 @@ import { PublicOnlyRoute } from './routes/PublicOnlyRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { AuthProvider } from './context/AuthProvider';
 import { ActivityProvider } from './context/ActivityProvider';
-import FullscreenGate from './components/FullscreenGate';
+// import FullscreenGate from './components/FullscreenGate';
 import LoginPage from './pages/LoginPage/LoginPage';
 import ProfilePage from './pages/ProfilePage';
 import DashboardPage from './pages/DashboardPage';
@@ -36,56 +36,56 @@ function ReferenceRoute() {
 export default function App() {
   return (
     <AuthProvider>
-      <FullscreenGate>
-        <ActivityProvider>
-          <Routes>
-            <Route element={<ProtectedRoute />}>
-              <Route element={<RoleRoute role="trainee" />}>
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/help" element={<HelpPage />}></Route>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/typing-test" element={<TypingTestPage />} />
-                <Route path="/journal" element={<JournalPage />} />
-                <Route path="/certificates/:courseId" element={<CertificatePage />} />
-                <Route
-                  path="/tasks/:taskId"
-                  element={
-                    <Suspense fallback={<TaskPageSkeleton />}>
-                      <TaskPage />
-                    </Suspense>
-                  }
-                />
-                <Route path="/days/:dayId" element={<DayOverviewPage />} />
-                <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
-              </Route>
-
-              <Route element={<RoleRoute role="admin" />}>
-                <Route
-                  path="/admin"
-                  element={
-                    <Suspense fallback={<LoaderOverlay fullPage />}>
-                      <AdminTraineesPage />
-                    </Suspense>
-                  }
-                ></Route>
-
-                <Route
-                  path="/admin/trainees/:traineeId"
-                  element={
-                    <Suspense fallback={<LoaderOverlay fullPage />}>
-                      <AdminTraineePage />
-                    </Suspense>
-                  }
-                ></Route>
-              </Route>
+      {/* <FullscreenGate> */}
+      <ActivityProvider>
+        <Routes>
+          <Route element={<ProtectedRoute />}>
+            <Route element={<RoleRoute role="trainee" />}>
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/help" element={<HelpPage />}></Route>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/typing-test" element={<TypingTestPage />} />
+              <Route path="/journal" element={<JournalPage />} />
+              <Route path="/certificates/:courseId" element={<CertificatePage />} />
+              <Route
+                path="/tasks/:taskId"
+                element={
+                  <Suspense fallback={<TaskPageSkeleton />}>
+                    <TaskPage />
+                  </Suspense>
+                }
+              />
+              <Route path="/days/:dayId" element={<DayOverviewPage />} />
+              <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
             </Route>
-            <Route element={<PublicOnlyRoute />}>
-              <Route path="/login" element={<LoginPage />} />
+
+            <Route element={<RoleRoute role="admin" />}>
+              <Route
+                path="/admin"
+                element={
+                  <Suspense fallback={<LoaderOverlay fullPage />}>
+                    <AdminTraineesPage />
+                  </Suspense>
+                }
+              ></Route>
+
+              <Route
+                path="/admin/trainees/:traineeId"
+                element={
+                  <Suspense fallback={<LoaderOverlay fullPage />}>
+                    <AdminTraineePage />
+                  </Suspense>
+                }
+              ></Route>
             </Route>
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </ActivityProvider>
-      </FullscreenGate>
+          </Route>
+          <Route element={<PublicOnlyRoute />}>
+            <Route path="/login" element={<LoginPage />} />
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </ActivityProvider>
+      {/* </FullscreenGate> */}
     </AuthProvider>
   );
 }
