@@ -328,16 +328,18 @@ Send the data directly (`res.json(task)`), never wrapped in `{ data: ... }`.
 clear message if something is missing. Read configuration from `env`, never from `process.env` in
 other files.
 
-| Variable                                                          | Notes                                                                  |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `PORT`                                                            | Default 3000. Leave it out rather than empty: an empty value becomes 0 |
-| `DATABASE_URL`                                                    | PostgreSQL connection string                                           |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Google OAuth client                                                    |
-| `ALLOWED_EMAIL_DOMAIN`                                            | Company domain without `@`                                             |
-| `FRONTEND_URL`                                                    | CORS origin and redirect target after sign-in                          |
-| `JWT_SECRET`, `JWT_EXPIRES_IN`                                    | Use `7d` to match the cookie's 7-day lifetime                          |
-| `SESSION_SECRET`                                                  | Required by `env.ts` but unused (see §14)                              |
-| `NODE_ENV`                                                        | `production` makes the cookie `Secure`                                 |
+| Variable                                                          | Notes                                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `PORT`                                                            | Default 3000. Leave it out rather than empty: an empty value becomes 0   |
+| `DATABASE_URL`                                                    | PostgreSQL connection string                                             |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Google OAuth client                                                      |
+| `GOOGLE_DESKTOP_CALLBACK_URL`                                     | Optional second redirect URI for Electron (see `docs/authentication.md`) |
+| `DESKTOP_ACCESS_TOKEN_TTL`                                        | Desktop access JWT lifetime, default `15m`                               |
+| `ALLOWED_EMAIL_DOMAIN`                                            | Company domain without `@`                                               |
+| `FRONTEND_URL`                                                    | CORS origin and redirect target after sign-in                            |
+| `JWT_SECRET`, `JWT_EXPIRES_IN`                                    | Use `7d` to match the cookie's 7-day lifetime                            |
+| `SESSION_SECRET`                                                  | Required by `env.ts` but unused (see §14)                                |
+| `NODE_ENV`                                                        | `production` makes the cookie `Secure`                                   |
 
 When you add a variable, add it to `env.ts`, `backend/.env.example` and the setup guide in the same
 PR.
@@ -464,7 +466,14 @@ Change both in the same PR so they describe the same shape.
 4. The frontend calls `GET /api/auth/me` on every page load. `POST /api/auth/logout` clears the
    cookie.
 
-There are no server sessions: the JWT is the session.
+There are no server sessions for the web flow: the JWT is the session.
+
+**Electron** has its own path under `/api/auth/desktop` (system browser + PKCE
+handoff to a loopback listener). It shares the Google Web client and the same
+Google Cloud redirect setup, and uses a short-lived access JWT plus a hashed,
+rotating refresh session (`desktop_session`). The renderer never receives a
+token. The full flow is in `docs/authentication.md`; the web endpoints above
+must stay unchanged.
 
 ### 8.2 Route guards
 
@@ -669,8 +678,11 @@ saving so it can't be clicked twice.
 ### 10.6 Signed-in user
 
 `AuthProvider` (`context/AuthProvider.tsx`) loads `GET /auth/me` once and exposes `useAuth()`:
-`status` (`loading` / `authenticated` / `unauthenticated`), `user`, `login()` and `logout()`.
-`ProtectedRoute` waits for `loading` to finish, so a refresh doesn't flash the login page.
+`status` (`loading` / `authenticated` / `unauthenticated`, plus `pending` for a desktop sign-in
+waiting on the browser), `user`, `error`, `login()` and `logout()`.
+`ProtectedRoute` waits for `loading` to finish, so a refresh doesn't flash the login page. In
+Electron it gets state from `window.desktop.auth` and never calls the API for tokens; see
+`docs/authentication.md`.
 
 ### 10.7 Components and styling
 

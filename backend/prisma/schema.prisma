@@ -217,3 +217,48 @@ model activity_log {
 
   @@unique([trainee_id, date])
 }
+
+// ---------- Electron sign-in ----------
+// A short-lived transaction binds one browser OAuth attempt to the Electron
+// process that started it. No Vinkup token is ever placed in a redirect URL;
+// only a one-time handoff code is.
+
+model desktop_auth_transaction {
+  id                    String    @id @default(uuid()) @db.Uuid
+  state                 String    @unique
+  code_challenge        String
+  code_challenge_method String
+  loopback_redirect_uri String
+  status                String    @default("pending") // pending | processing | authenticated | failed | consumed
+  user_id               String?   @db.Uuid
+  user_email            String?
+  user_name             String?
+  user_role             String?
+  error_code            String?
+  handoff_code_hash     String?   @unique
+  handoff_expires_at    DateTime? @db.Timestamptz
+  handoff_consumed_at   DateTime? @db.Timestamptz
+  expires_at            DateTime  @db.Timestamptz
+  consumed_at           DateTime? @db.Timestamptz
+  created_at            DateTime  @default(now()) @db.Timestamptz
+
+  @@index([expires_at])
+}
+
+// A long-lived refresh session. Only a SHA-256 hash of the refresh token is
+// stored, so a database read cannot be replayed as a session.
+model desktop_session {
+  id                 String    @id @db.Uuid
+  user_id            String    @db.Uuid
+  user_email         String
+  user_name          String
+  user_role          String
+  refresh_token_hash String    @unique
+  expires_at         DateTime  @db.Timestamptz
+  last_used_at       DateTime  @default(now()) @db.Timestamptz
+  revoked_at         DateTime? @db.Timestamptz
+  created_at         DateTime  @default(now()) @db.Timestamptz
+
+  @@index([user_id])
+  @@index([expires_at])
+}

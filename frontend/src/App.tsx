@@ -34,6 +34,7 @@ function ReferenceRoute() {
   return <ReferencePage dayId={dayId} />;
 }
 export default function App() {
+  console.log(import.meta.env.PORT);
   return (
     <AuthProvider>
       {/* <FullscreenGate> */}

@@ -40,8 +40,15 @@ In development, Electron loads Vite directly. In production it loads the local
 server that serves `frontend/dist` — that is why the frontend must be built
 before `npm run start:desktop` or `npm run dist:desktop`.
 
-Authentication is not wired for the desktop shell yet. Until it is, use mock mode
-in `frontend/.env.local`:
+Authentication uses the system browser and the backend's Google OAuth client. The
+main process creates a PKCE transaction, opens Google in the system browser,
+receives a one-time handoff code on a loopback listener, and exchanges it for a
+short-lived access cookie plus an OS-encrypted refresh token. The renderer never
+sees a token. See [docs/authentication.md](../docs/authentication.md) for the
+flow, Google Cloud setup and security model.
+
+For frontend-only UI work you can still use mock mode in
+`frontend/.env.local`:
 
 ```bash
 VITE_USE_MOCKS=true
@@ -75,12 +82,12 @@ release.
 
 ## Environment variables
 
-| Variable                | Default                               | Purpose                                                                                  |
-| ----------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `VINKUP_API_URL`        | `https://vinkup-backend.onrender.com` | Backend the `/api` proxy forwards to. Use `http://localhost:4000` for a local backend.   |
-| `VINKUP_DESKTOP_PORT`   | `43110`                               | Local renderer port. Changing it changes the renderer origin, which clears stored state. |
-| `NODE_ENV`              | unset                                 | `development` loads the Vite dev server and enables DevTools.                            |
-| `VINKUP_OZONE_PLATFORM` | unset                                 | Set to `wayland` to use native Wayland instead of XWayland on Linux.                     |
+| Variable                | Default                               | Purpose                                                                                                            |
+| ----------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `VINKUP_API_URL`        | `https://vinkup-backend.onrender.com` | Backend the `/api` proxy and desktop sign-in use. Defaults to `http://localhost:3000` when `NODE_ENV=development`. |
+| `VINKUP_DESKTOP_PORT`   | `43110`                               | Local renderer port. Changing it changes the renderer origin, which clears stored state.                           |
+| `NODE_ENV`              | unset                                 | `development` loads the Vite dev server and enables DevTools.                                                      |
+| `VINKUP_OZONE_PLATFORM` | unset                                 | Set to `wayland` to use native Wayland instead of XWayland on Linux.                                               |
 
 ## Linux troubleshooting
 
@@ -127,9 +134,9 @@ or run the AppImage with `--appimage-extract-and-run`.
 
 ## Current limitations
 
-- Desktop auth is not implemented. The web flow redirects to
-  `VITE_API_URL/api/auth/google`; the desktop build needs a system-browser
-  redirect to a loopback URL plus a one-time code exchange.
+- Persistent desktop sessions need an OS keyring. On Linux, Chromium's
+  `basic_text` backend is rejected, so the session stays in memory and does not
+  survive a restart (`persistent: false`).
 - Fullscreen tracking still uses the web implementation
   (`document.fullscreenElement`). `window.desktop.window` exposes native
   fullscreen events for the follow-up change.

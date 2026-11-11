@@ -7,7 +7,7 @@ export function ProtectedRoute() {
   const { status } = useAuth();
 
   // Wait for /me before deciding, otherwise a page refresh would flash the login page
-  if (status === 'loading') return <LoaderOverlay fullPage={true} />;
+  if (status === 'loading' || status === 'pending') return <LoaderOverlay fullPage={true} />;
   if (status === 'unauthenticated') return <Navigate to="/login" replace />;
 
   return <Outlet />;

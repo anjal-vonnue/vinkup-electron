@@ -6,7 +6,7 @@ import cors from 'cors';
 import { notFoundHandler } from './middleware/notFoundHandler';
 import passport from './module/auth-module/passport';
 import authRoutes from './module/auth-module/auth.routes';
-import { env } from './config/env';
+import desktopAuthRoutes from './module/auth-module/desktop-auth.routes';
 import profileRoutes from './module/profile-module/profile.routes';
 import { requireTrainee, requireAdmin } from './middleware/authMiddleware';
 import { dashboardRoutes } from './module/dashboard-module/dashboard.routes';
@@ -23,7 +23,7 @@ const app: Express = express();
 
 app.use(
   cors({
-    origin: env.FRONTEND_URL,
+    origin: '*',
     credentials: true,
   })
 );
@@ -37,6 +37,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/auth/desktop', desktopAuthRoutes);
 app.use('/api/activity', flagRoutes);
 
 app.use('/api/profile', requireTrainee, profileRoutes);

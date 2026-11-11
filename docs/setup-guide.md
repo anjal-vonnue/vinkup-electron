@@ -112,22 +112,29 @@ Copy the example and fill it in:
 cp backend/.env.example backend/.env
 ```
 
-| Variable               | Local value                                                                                              | Notes                                                                                                |
-| ---------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`             | `development`                                                                                            |                                                                                                      |
-| `PORT`                 | `3000`                                                                                                   | **Set it.** The Vite proxy sends `/api` to port 3000; left empty, the server starts on a random port |
-| `DATABASE_URL`         | your Neon string from §5.1                                                                               |                                                                                                      |
-| `SESSION_SECRET`       | any random string, 32+ characters                                                                        | `openssl rand -hex 32`                                                                               |
-| `JWT_SECRET`           | any random string, 16+ characters                                                                        | `openssl rand -hex 32`                                                                               |
-| `JWT_EXPIRES_IN`       | `7d`                                                                                                     | Matches the 7-day login cookie                                                                       |
-| `GOOGLE_CLIENT_ID`     | from the team                                                                                            |                                                                                                      |
-| `GOOGLE_CLIENT_SECRET` | from the team                                                                                            | Never commit it                                                                                      |
-| `GOOGLE_CALLBACK_URL`  | the localhost callback registered in Google Cloud, e.g. `http://localhost:3000/api/auth/google/callback` | Must match the registered URL exactly; ask which one is registered                                   |
-| `ALLOWED_EMAIL_DOMAIN` | `vonnue.com`                                                                                             | No `@`                                                                                               |
-| `FRONTEND_URL`         | `http://localhost:5173`                                                                                  | Where sign-in sends you back                                                                         |
+| Variable                      | Local value                                                                                              | Notes                                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                    | `development`                                                                                            |                                                                                                      |
+| `PORT`                        | `3000`                                                                                                   | **Set it.** The Vite proxy sends `/api` to port 3000; left empty, the server starts on a random port |
+| `DATABASE_URL`                | your Neon string from §5.1                                                                               |                                                                                                      |
+| `SESSION_SECRET`              | any random string, 32+ characters                                                                        | `openssl rand -hex 32`                                                                               |
+| `JWT_SECRET`                  | any random string, 16+ characters                                                                        | `openssl rand -hex 32`                                                                               |
+| `JWT_EXPIRES_IN`              | `7d`                                                                                                     | Matches the 7-day login cookie                                                                       |
+| `GOOGLE_CLIENT_ID`            | from the team                                                                                            |                                                                                                      |
+| `GOOGLE_CLIENT_SECRET`        | from the team                                                                                            | Never commit it                                                                                      |
+| `GOOGLE_CALLBACK_URL`         | the localhost callback registered in Google Cloud, e.g. `http://localhost:3000/api/auth/google/callback` | Must match the registered URL exactly; ask which one is registered                                   |
+| `GOOGLE_DESKTOP_CALLBACK_URL` | optional; defaults to `<GOOGLE_CALLBACK_URL host>/api/auth/desktop/callback`                             | Second redirect URI on the same Google **Web** client, used by the Electron app                      |
+| `DESKTOP_ACCESS_TOKEN_TTL`    | `15m`                                                                                                    | Lifetime of the desktop access token; refresh sessions last 30 days                                  |
+| `ALLOWED_EMAIL_DOMAIN`        | `vonnue.com`                                                                                             | No `@`                                                                                               |
+| `FRONTEND_URL`                | `http://localhost:5173`                                                                                  | Where sign-in sends you back                                                                         |
 
 The backend checks these at startup and refuses to start with a clear message if one is missing or too
 short. `backend/.env` is git-ignored.
+
+The Electron app uses a **second** redirect URI on the same Google Web client. Register
+`<backend>/api/auth/desktop/callback` in Google Cloud (not a separate Desktop client) before trying
+desktop sign-in. The full flow, Google Cloud steps and troubleshooting are in
+[authentication.md](authentication.md).
 
 ### 5.3 Create the tables
 

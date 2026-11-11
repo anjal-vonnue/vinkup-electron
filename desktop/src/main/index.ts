@@ -4,20 +4,32 @@ import {
   dialog,
   ipcMain,
   Menu,
+  safeStorage,
   session,
   shell,
   type IpcMainInvokeEvent,
 } from 'electron';
 import path from 'node:path';
-import type { DesktopAppInfo, DesktopPlatform } from '@itp/types';
-import { APP_NAME, DEV_RENDERER_URL } from './config';
+import type { DesktopAppInfo, DesktopAuthState, DesktopPlatform } from '@itp/types';
+import { APP_NAME, DEV_RENDERER_URL, getApiUrl } from './config';
 import { startLocalServer, type LocalServer } from './server';
+import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager';
+import { HttpDesktopAuthApi } from './auth/api';
+import { SecureDesktopCredentialStorage } from './auth/storage';
+import {
+  assertTrustedSender as assertTrustedSenderForOrigin,
+  isAllowedExternalUrl,
+  isSameOrigin,
+  isTrustedUrl,
+} from './security';
 
 const isDev = process.env.NODE_ENV === 'development';
+const AUTH_COOKIE_NAME = 'auth_token';
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
 let trustedOrigin: string | null = null;
+let authManager: DesktopAuthManager | null = null;
 
 // Set the name before `ready` so userData, cache and config use the product name.
 app.setName(APP_NAME);
@@ -52,9 +64,69 @@ async function bootstrap(): Promise<void> {
     trustedOrigin = new URL(localServer.url).origin;
   }
 
+  authManager = createDesktopAuthManager();
+  authManager.onChange(broadcastAuthState);
   registerIpcHandlers();
+
+  // Restore in the background so a slow/offline backend never blocks the
+  // window. The renderer subscribes to `auth:state-changed` and shows a loader
+  // while the status is `loading`.
+  void authManager.initialize().catch((error: unknown) => {
+    console.error('[auth] Failed to restore the session', error);
+  });
+
   mainWindow = createMainWindow();
   await loadRenderer(mainWindow);
+}
+
+function createDesktopAuthManager(): DesktopAuthManager {
+  const apiUrl = getApiUrl();
+  const apiOrigin = new URL(apiUrl).origin;
+  const origin = trustedOrigin;
+  if (!origin) throw new Error('The renderer origin is not available.');
+
+  const cookies: DesktopAuthCookieStore = {
+    set: async (accessToken, expiresAt) => {
+      await session.defaultSession.cookies.set({
+        url: origin,
+        name: AUTH_COOKIE_NAME,
+        value: accessToken,
+        httpOnly: true,
+        secure: false, // both the dev renderer and the packaged app use loopback HTTP
+        sameSite: 'lax',
+        expirationDate: Math.floor(new Date(expiresAt).getTime() / 1000),
+        path: '/',
+      });
+    },
+    clear: async () => {
+      await session.defaultSession.cookies.remove(origin, AUTH_COOKIE_NAME).catch(() => undefined);
+    },
+  };
+
+  const storage = new SecureDesktopCredentialStorage(
+    path.join(app.getPath('userData'), 'auth', 'session.json'),
+    safeStorage
+  );
+
+  return new DesktopAuthManager({
+    api: new HttpDesktopAuthApi(apiUrl),
+    cookies,
+    storage,
+    apiOrigin,
+    openExternal: async (url) => {
+      // Only the configured backend may be opened for sign-in. This keeps a
+      // compromised backend response from becoming an arbitrary URL opener.
+      if (!isAllowedExternalUrl(url) || !isSameOrigin(url, apiOrigin)) {
+        throw new Error('Refusing to open an untrusted sign-in URL.');
+      }
+      await shell.openExternal(url);
+    },
+  });
+}
+
+function broadcastAuthState(state: DesktopAuthState): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('auth:state-changed', state);
 }
 
 function createMainWindow(): BrowserWindow {
@@ -98,14 +170,18 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.webContents.on('will-navigate', (event, url) => {
-    if (isTrustedUrl(url)) return;
+    if (isTrusted(url)) return;
     event.preventDefault();
     openExternal(url);
   });
 
   window.webContents.on('before-input-event', (event, input) => {
-    if (isDev) return;
-    if (isDevToolsShortcut(input)) event.preventDefault();
+    if (!isDevToolsShortcut(input)) return;
+    event.preventDefault();
+    // The custom menu below replaces Electron's default menu, so the built-in
+    // DevTools accelerator does not exist. In development we bind it ourselves;
+    // production deliberately blocks it.
+    if (isDev) window.webContents.toggleDevTools();
   });
 
   return window;
@@ -153,13 +229,40 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
+
+  ipcMain.handle('auth:get-state', (event) => {
+    assertTrustedSender(event);
+    return getAuthManager().getState();
+  });
+
+  ipcMain.handle('auth:login', (event) => {
+    assertTrustedSender(event);
+    return getAuthManager().login();
+  });
+
+  ipcMain.handle('auth:cancel', async (event) => {
+    assertTrustedSender(event);
+    await getAuthManager().cancel();
+  });
+
+  ipcMain.handle('auth:refresh', (event) => {
+    assertTrustedSender(event);
+    return getAuthManager().refresh();
+  });
+
+  ipcMain.handle('auth:logout', async (event) => {
+    assertTrustedSender(event);
+    await getAuthManager().logout();
+  });
+}
+
+function getAuthManager(): DesktopAuthManager {
+  if (!authManager) throw new Error('The authentication manager is not ready.');
+  return authManager;
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
-  const senderUrl = event.senderFrame?.url;
-  if (!senderUrl || !isTrustedUrl(senderUrl)) {
-    throw new Error('IPC request from an untrusted frame.');
-  }
+  assertTrustedSenderForOrigin(event, trustedOrigin);
 }
 
 function getAppInfo(): DesktopAppInfo {
@@ -170,23 +273,13 @@ function getAppInfo(): DesktopAppInfo {
   };
 }
 
-function isTrustedUrl(url: string): boolean {
-  if (!trustedOrigin) return false;
-  try {
-    return new URL(url).origin === trustedOrigin;
-  } catch {
-    return false;
-  }
+function isTrusted(url: string): boolean {
+  return isTrustedUrl(url, trustedOrigin);
 }
 
 function openExternal(url: string): void {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return;
-    void shell.openExternal(url);
-  } catch {
-    // Ignore malformed URLs.
-  }
+  if (!isAllowedExternalUrl(url)) return;
+  void shell.openExternal(url);
 }
 
 function isDevToolsShortcut(input: Electron.Input): boolean {
@@ -224,6 +317,17 @@ function installMenu(): void {
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+        ...(isDev
+          ? [
+              { type: 'separator' as const },
+              {
+                label: 'Toggle Developer Tools',
+                click: (_item: Electron.MenuItem, window: Electron.BaseWindow | undefined) => {
+                  if (window instanceof BrowserWindow) window.webContents.toggleDevTools();
+                },
+              },
+            ]
+          : []),
       ],
     },
   ];
@@ -252,6 +356,8 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   // TODO: ask the renderer to flush activity time before the app exits.
+  authManager?.dispose();
+  authManager = null;
   if (!localServer) return;
   const server = localServer;
   localServer = null;

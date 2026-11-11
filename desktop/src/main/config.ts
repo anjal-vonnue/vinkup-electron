@@ -9,6 +9,9 @@ export const DEV_RENDERER_URL = 'http://localhost:5173';
 /** Production API. Override with VINKUP_API_URL for a local backend. */
 export const DEFAULT_API_URL = 'https://vinkup-backend.onrender.com';
 
+/** In development the backend runs next to Vite (`npm run dev:backend`). */
+export const DEFAULT_DEV_API_URL = 'http://localhost:3000';
+
 /**
  * A fixed port keeps the renderer origin stable, so localStorage, IndexedDB
  * and cookies survive restarts. The single-instance lock stops two copies
@@ -18,7 +21,8 @@ export const DEFAULT_DESKTOP_PORT = 43110;
 
 export function getApiUrl(): string {
   const configured = process.env.VINKUP_API_URL?.trim();
-  return configured && configured.length > 0 ? configured : DEFAULT_API_URL;
+  if (configured && configured.length > 0) return configured;
+  return process.env.NODE_ENV === 'development' ? DEFAULT_DEV_API_URL : DEFAULT_API_URL;
 }
 
 export function getDesktopPort(): number {
