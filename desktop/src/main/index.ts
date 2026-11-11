@@ -6,6 +6,7 @@ import {
   Menu,
   session,
   shell,
+  screen,
   type IpcMainInvokeEvent,
 } from 'electron';
 import path from 'node:path';
@@ -58,12 +59,16 @@ async function bootstrap(): Promise<void> {
 }
 
 function createMainWindow(): BrowserWindow {
+  const display = screen.getPrimaryDisplay();
+  const { x, y, width, height } = display.bounds;
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 700,
-    show: false,
+    x,
+    y,
+    width,
+    height,
+    fullscreen: true,
+    useContentSize: true,
+    frame: false,
     title: APP_NAME,
     backgroundColor: '#10131f',
     autoHideMenuBar: true,
@@ -75,6 +80,9 @@ function createMainWindow(): BrowserWindow {
       webSecurity: true,
     },
   });
+
+  window.on('minimize', () => window.restore());
+  window.on('leave-full-screen', () => window.setFullScreen(true));
 
   window.once('ready-to-show', () => {
     window.show();
