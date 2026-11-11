@@ -39,7 +39,7 @@ export default function TypingTestPage() {
     inputRef.current?.focus();
   }, []);
 
-  // Save the finished test, then reload the trainee's history from the server.
+  // Save the finished test, then reload the trainee's history.
   const handleFinish = useCallback((stats: TypingTestStats) => {
     setLastResult(stats);
     setSaveError(null);
@@ -54,12 +54,13 @@ export default function TypingTestPage() {
 
   const {
     passage,
-    typed,
+    progress,
+    cursorPosition,
     status,
     secondsLeft,
     durationSeconds,
     options,
-    handleInput,
+    handleKeyDown,
     restart,
     toggleOption,
     isPaused,
@@ -104,6 +105,7 @@ export default function TypingTestPage() {
             <div className={styles.controls}>
               <div className={styles.modes}>
                 <span className={styles.modeLabel}>Mode:</span>
+
                 {TYPING_DURATIONS.map((seconds) => (
                   <button
                     key={seconds}
@@ -120,6 +122,7 @@ export default function TypingTestPage() {
 
               <div className={styles.modes}>
                 <span className={styles.modeLabel}>Include:</span>
+
                 {OPTION_LABELS.map(({ key, label }) => (
                   <button
                     key={key}
@@ -136,23 +139,26 @@ export default function TypingTestPage() {
             </div>
           </div>
 
-          {/* Clicking the passage refocuses the hidden input that receives the keystrokes */}
           <div className={styles.arenaWrap}>
-            {/* Clicking the passage refocuses the hidden input that receives the keystrokes */}
             <div
               className={styles.arena}
               onClick={() => inputRef.current?.focus()}
               role="presentation"
             >
-              <PassageDisplay passage={passage} typed={typed} />
+              <PassageDisplay
+                passage={passage}
+                progress={progress}
+                cursorPosition={cursorPosition}
+              />
+
               <input
                 ref={inputRef}
+                type="text"
                 className={styles.hiddenInput}
-                value={typed}
-                onChange={(event) => handleInput(event.target.value)}
+                onKeyDown={handleKeyDown}
                 onPaste={(event) => event.preventDefault()}
                 onDrop={(event) => event.preventDefault()}
-                readOnly={status === 'finished' || isPaused}
+                readOnly={status === 'finished'}
                 aria-label="Type the text shown above"
                 autoComplete="off"
                 autoCorrect="off"
@@ -179,6 +185,7 @@ export default function TypingTestPage() {
                       <span className={styles.resultValue}>{lastResult.wpm}</span>
                       <span className={styles.resultLabel}>WPM</span>
                     </div>
+
                     <div className={styles.resultStat}>
                       <span className={styles.resultValueGreen}>{lastResult.accuracy}%</span>
                       <span className={styles.resultLabel}>ACCURACY</span>
@@ -187,6 +194,7 @@ export default function TypingTestPage() {
                 )}
 
                 {isSaving && <p className={styles.timeoutHint}>Saving result...</p>}
+
                 {saveError && (
                   <p className={styles.error} role="alert">
                     Could not save your result: {saveError.message}
@@ -204,6 +212,7 @@ export default function TypingTestPage() {
             <p className={styles.hint}>
               Press <kbd>Enter</kbd> to restart test
             </p>
+
             <button
               type="button"
               className={styles.restart}
@@ -223,6 +232,7 @@ export default function TypingTestPage() {
           <TestHistory results={results} />
         ) : null}
       </div>
+
       <HelpButton />
     </>
   );

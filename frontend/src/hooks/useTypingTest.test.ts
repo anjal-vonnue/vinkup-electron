@@ -1,318 +1,376 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { TypingTestStats } from '@itp/types';
+
 import { useTypingTest } from './useTypingTest';
-import { buildPassage } from '../lib/typingStats';
 
-vi.mock('../lib/typingStats', async () => {
-  const actual = await vi.importActual<typeof import('../lib/typingStats')>('../lib/typingStats');
+function pressKey(
+  handleKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void,
+  key: string
+) {
+  const event = {
+    key,
+    preventDefault: vi.fn(),
+  } as unknown as ReactKeyboardEvent<HTMLInputElement>;
 
-  return {
-    ...actual,
-    buildPassage: vi.fn(() => 'abc def'),
-  };
-});
+  act(() => {
+    handleKeyDown(event);
+  });
+
+  return event;
+}
 
 describe('useTypingTest', () => {
+  let onFinish: (stats: TypingTestStats) => void;
+
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    vi.setSystemTime(new Date('2026-11-11T10:00:00'));
+
+    onFinish = vi.fn<(stats: TypingTestStats) => void>();
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('starts idle with the full time left', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+  describe('initial state', () => {
+    it('initializes the typing test correctly', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    expect(result.current.status).toBe('idle');
-    expect(result.current.secondsLeft).toBe(30);
-    expect(result.current.typed).toBe('');
-    expect(result.current.passage).toBe('abc def');
-  });
+      expect(result.current.passage.length).toBeGreaterThan(0);
+      expect(result.current.cursorPosition).toBe(0);
+      expect(result.current.status).toBe('idle');
+      expect(result.current.secondsLeft).toBe(30);
+      expect(result.current.durationSeconds).toBe(30);
+      expect(result.current.isPaused).toBe(false);
 
-  it('starts the countdown on the first key press', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+      expect(result.current.progress.typedCharacters).toHaveLength(result.current.passage.length);
 
-    act(() => result.current.handleInput('a'));
+      expect(result.current.progress.typedCharacters.every((character) => character === null)).toBe(
+        true
+      );
 
-    expect(result.current.status).toBe('running');
-
-    act(() => {
-      vi.advanceTimersByTime(4_000);
-      result.current.handleInput('ab');
-
-      vi.advanceTimersByTime(4_000);
-      result.current.handleInput('abc');
-    });
-
-    expect(result.current.secondsLeft).toBe(22);
-  });
-
-  it('does not count down before typing starts', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
-
-    act(() => {
-      vi.advanceTimersByTime(10_000);
-    });
-
-    expect(result.current.secondsLeft).toBe(30);
-    expect(result.current.status).toBe('idle');
-  });
-
-  it('finishes when the time runs out and reports the stats', () => {
-    const onFinish = vi.fn();
-    const { result } = renderHook(() => useTypingTest(5, onFinish));
-
-    act(() => result.current.handleInput('a'));
-
-    act(() => {
-      vi.advanceTimersByTime(1_000);
-      result.current.handleInput('ab');
-
-      vi.advanceTimersByTime(1_000);
-      result.current.handleInput('abc');
-
-      vi.advanceTimersByTime(1_000);
-      result.current.handleInput('abcd');
-
-      vi.advanceTimersByTime(1_000);
-      result.current.handleInput('abcde');
-
-      vi.advanceTimersByTime(1_000);
-    });
-
-    expect(result.current.status).toBe('finished');
-    expect(result.current.secondsLeft).toBe(0);
-    expect(onFinish).toHaveBeenCalledTimes(1);
-    expect(onFinish).toHaveBeenCalledWith(
-      expect.objectContaining({
-        durationSeconds: 5,
-      })
-    );
-  });
-
-  it('extends the passage when the trainee reaches the available text', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
-
-    act(() => result.current.handleInput('abc def'));
-
-    expect(result.current.status).toBe('running');
-    expect(result.current.typed).toBe('abc def');
-    expect(result.current.passage).toContain('abc def abc def');
-  });
-
-  it('does not finish when the available passage is completed', () => {
-    const onFinish = vi.fn();
-    const { result } = renderHook(() => useTypingTest(30, onFinish));
-
-    act(() => result.current.handleInput('abc def'));
-
-    expect(result.current.status).toBe('running');
-    expect(onFinish).not.toHaveBeenCalled();
-  });
-
-  it('ignores input after the test has finished', () => {
-    const onFinish = vi.fn();
-    const { result } = renderHook(() => useTypingTest(5, onFinish));
-
-    act(() => result.current.handleInput('a'));
-
-    act(() => {
-      vi.advanceTimersByTime(5_000);
-    });
-
-    expect(result.current.status).toBe('finished');
-
-    act(() => result.current.handleInput('abc def'));
-
-    expect(result.current.status).toBe('finished');
-    expect(onFinish).toHaveBeenCalledTimes(1);
-  });
-
-  it('never types past the end of the passage before it is extended', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
-
-    act(() => result.current.handleInput('abc def and more'));
-
-    expect(result.current.typed).toBe('abc def');
-  });
-
-  it('restarts with a new duration', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
-
-    act(() => result.current.handleInput('ab'));
-
-    act(() => result.current.restart(60));
-
-    expect(result.current.status).toBe('idle');
-    expect(result.current.typed).toBe('');
-    expect(result.current.durationSeconds).toBe(60);
-    expect(result.current.secondsLeft).toBe(60);
-  });
-
-  it('restarts when Enter is pressed', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
-
-    act(() => result.current.handleInput('ab'));
-
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-    });
-
-    expect(result.current.status).toBe('idle');
-    expect(result.current.typed).toBe('');
-  });
-
-  it('does not restart when Escape is pressed', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
-
-    act(() => result.current.handleInput('ab'));
-
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    });
-
-    expect(result.current.status).toBe('running');
-    expect(result.current.typed).toBe('ab');
-  });
-
-  it('starts with punctuation and numbers off', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
-
-    expect(result.current.options).toEqual({
-      punctuation: false,
-      numbers: false,
+      expect(result.current.progress.skippedPositions.size).toBe(0);
+      expect(result.current.progress.correctedMistakes).toBe(0);
     });
   });
 
-  it('builds new text with the option turned on and resets the test', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+  describe('typing', () => {
+    it('records a correctly typed character', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    act(() => result.current.handleInput('ab'));
+      const expectedCharacter = result.current.passage[0];
 
-    act(() => result.current.toggleOption('punctuation'));
+      pressKey(result.current.handleKeyDown, expectedCharacter);
 
-    expect(result.current.options).toEqual({
-      punctuation: true,
-      numbers: false,
+      expect(result.current.progress.typedCharacters[0]).toBe(expectedCharacter);
+      expect(result.current.cursorPosition).toBe(1);
+      expect(result.current.status).toBe('running');
     });
 
-    expect(result.current.typed).toBe('');
-    expect(result.current.status).toBe('idle');
+    it('records an incorrectly typed character', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    expect(buildPassage).toHaveBeenLastCalledWith(30, {
-      punctuation: true,
-      numbers: false,
+      const expectedCharacter = result.current.passage[0];
+      const incorrectCharacter = expectedCharacter === 'a' ? 'b' : 'a';
+
+      pressKey(result.current.handleKeyDown, incorrectCharacter);
+
+      expect(result.current.progress.typedCharacters[0]).toBe(incorrectCharacter);
+      expect(result.current.cursorPosition).toBe(1);
+    });
+
+    it('does not start the timer for an invalid key', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      pressKey(result.current.handleKeyDown, 'Shift');
+
+      expect(result.current.status).toBe('idle');
+      expect(result.current.cursorPosition).toBe(0);
+    });
+
+    it('starts the countdown after the first valid character', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      expect(result.current.status).toBe('running');
+
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(result.current.secondsLeft).toBe(29);
+    });
+
+    it('ignores letters when the cursor reaches a word boundary', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      const firstSpace = result.current.passage.indexOf(' ');
+
+      expect(firstSpace).toBeGreaterThan(0);
+
+      for (let i = 0; i < firstSpace; i++) {
+        pressKey(result.current.handleKeyDown, result.current.passage[i]);
+      }
+
+      expect(result.current.cursorPosition).toBe(firstSpace);
+
+      const cursorBefore = result.current.cursorPosition;
+
+      pressKey(result.current.handleKeyDown, 'x');
+
+      expect(result.current.cursorPosition).toBe(cursorBefore);
+      expect(result.current.progress.typedCharacters[firstSpace]).toBeNull();
     });
   });
 
-  it('turns an option off again when it is toggled twice', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+  describe('word navigation', () => {
+    it('ignores leading spaces', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    act(() => result.current.toggleOption('numbers'));
-    act(() => result.current.toggleOption('numbers'));
+      pressKey(result.current.handleKeyDown, ' ');
 
-    expect(result.current.options.numbers).toBe(false);
-  });
+      expect(result.current.cursorPosition).toBe(0);
+      expect(result.current.status).toBe('idle');
+    });
 
-  it('keeps the chosen options when the test is restarted', () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+    it('advances to the next word when Space is pressed', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    act(() => result.current.toggleOption('numbers'));
+      const firstSpace = result.current.passage.indexOf(' ');
 
-    act(() => result.current.restart(60));
+      for (let i = 0; i < firstSpace; i++) {
+        pressKey(result.current.handleKeyDown, result.current.passage[i]);
+      }
 
-    expect(buildPassage).toHaveBeenLastCalledWith(60, {
-      punctuation: false,
-      numbers: true,
+      pressKey(result.current.handleKeyDown, ' ');
+
+      expect(result.current.cursorPosition).toBe(firstSpace + 1);
+      expect(result.current.progress.typedCharacters[firstSpace]).toBe(' ');
+    });
+
+    it('marks unfinished characters as missed when skipping a word', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      const firstSpace = result.current.passage.indexOf(' ');
+
+      // Type only the first character.
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      // Skip the rest of the word.
+      pressKey(result.current.handleKeyDown, ' ');
+
+      expect(result.current.cursorPosition).toBe(firstSpace + 1);
+
+      for (let i = 1; i < firstSpace; i++) {
+        expect(result.current.progress.skippedPositions.has(i)).toBe(true);
+      }
+    });
+
+    it('ignores repeated spaces', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      const firstSpace = result.current.passage.indexOf(' ');
+
+      // Complete the first word and advance.
+      for (let i = 0; i < firstSpace; i++) {
+        pressKey(result.current.handleKeyDown, result.current.passage[i]);
+      }
+
+      pressKey(result.current.handleKeyDown, ' ');
+
+      const cursorAfterAdvance = result.current.cursorPosition;
+
+      // Try pressing Space again at the beginning of the next word.
+      pressKey(result.current.handleKeyDown, ' ');
+
+      expect(result.current.cursorPosition).toBe(cursorAfterAdvance);
     });
   });
 
-  it('pauses after 5 seconds of inactivity', async () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+  describe('backspace', () => {
+    it('moves the cursor backwards and clears the previous character', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    act(() => {
-      result.current.handleInput('a');
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      pressKey(result.current.handleKeyDown, 'Backspace');
+
+      expect(result.current.cursorPosition).toBe(0);
+      expect(result.current.progress.typedCharacters[0]).toBeNull();
     });
 
-    expect(result.current.status).toBe('running');
-    expect(result.current.isPaused).toBe(false);
+    it('increments correctedMistakes when deleting an incorrect character', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_200);
+      const expectedCharacter = result.current.passage[0];
+      const incorrectCharacter = expectedCharacter === 'a' ? 'b' : 'a';
+
+      pressKey(result.current.handleKeyDown, incorrectCharacter);
+      pressKey(result.current.handleKeyDown, 'Backspace');
+
+      expect(result.current.progress.correctedMistakes).toBe(1);
+      expect(result.current.progress.typedCharacters[0]).toBeNull();
     });
 
-    expect(result.current.isPaused).toBe(true);
-    expect(result.current.status).toBe('running');
+    it('does not increment correctedMistakes for a correct character', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      pressKey(result.current.handleKeyDown, 'Backspace');
+
+      expect(result.current.progress.correctedMistakes).toBe(0);
+    });
+
+    it('does nothing when Backspace is pressed at the beginning', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      pressKey(result.current.handleKeyDown, 'Backspace');
+
+      expect(result.current.cursorPosition).toBe(0);
+      expect(result.current.status).toBe('idle');
+    });
   });
 
-  it('resumes when any key is pressed after inactivity', async () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+  describe('inactivity pause', () => {
+    it('pauses after five seconds of inactivity', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    act(() => {
-      result.current.handleInput('a');
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(result.current.isPaused).toBe(true);
     });
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_200);
+    it('resumes when any key is pressed without typing that key', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(result.current.isPaused).toBe(true);
+
+      const cursorBeforeResume = result.current.cursorPosition;
+
+      act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'x',
+            bubbles: true,
+          })
+        );
+      });
+
+      expect(result.current.isPaused).toBe(false);
+      expect(result.current.cursorPosition).toBe(cursorBeforeResume);
     });
-
-    expect(result.current.isPaused).toBe(true);
-
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
-    });
-
-    expect(result.current.isPaused).toBe(false);
-    expect(result.current.status).toBe('running');
   });
 
-  it('does not count paused time toward the test duration', async () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+  describe('completion', () => {
+    it('finishes when the countdown reaches zero', () => {
+      const { result } = renderHook(() => useTypingTest(5, onFinish));
 
-    act(() => {
-      result.current.handleInput('a');
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(result.current.status).toBe('finished');
+      expect(result.current.secondsLeft).toBe(0);
+      expect(onFinish).toHaveBeenCalledTimes(1);
+
+      expect(onFinish).toHaveBeenCalledTimes(1);
+
+      const stats = vi.mocked(onFinish).mock.calls[0][0];
+
+      expect(typeof stats.wpm).toBe('number');
+      expect(typeof stats.accuracy).toBe('number');
     });
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_200);
+    it('does not accept additional typing after completion', () => {
+      const { result } = renderHook(() => useTypingTest(5, onFinish));
+
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      const cursorAfterFinish = result.current.cursorPosition;
+
+      pressKey(result.current.handleKeyDown, 'x');
+
+      expect(result.current.cursorPosition).toBe(cursorAfterFinish);
+      expect(onFinish).toHaveBeenCalledTimes(1);
     });
-
-    expect(result.current.isPaused).toBe(true);
-
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
-    });
-
-    expect(result.current.isPaused).toBe(false);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
-
-    expect(result.current.status).toBe('running');
-    expect(result.current.isPaused).toBe(false);
   });
 
-  it('does not type the key used to resume a paused test', async () => {
-    const { result } = renderHook(() => useTypingTest(30, vi.fn()));
+  describe('restart and options', () => {
+    it('resets the test to its initial state', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    act(() => {
-      result.current.handleInput('a');
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      act(() => {
+        result.current.restart();
+      });
+
+      expect(result.current.cursorPosition).toBe(0);
+      expect(result.current.status).toBe('idle');
+      expect(result.current.secondsLeft).toBe(30);
+      expect(result.current.isPaused).toBe(false);
+
+      expect(result.current.progress.typedCharacters.every((character) => character === null)).toBe(
+        true
+      );
+
+      expect(result.current.progress.skippedPositions.size).toBe(0);
+      expect(result.current.progress.correctedMistakes).toBe(0);
     });
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_200);
+    it('restarts with a new duration', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
+
+      act(() => {
+        result.current.restart(60);
+      });
+
+      expect(result.current.durationSeconds).toBe(60);
+      expect(result.current.secondsLeft).toBe(60);
+      expect(result.current.status).toBe('idle');
+      expect(result.current.cursorPosition).toBe(0);
     });
 
-    expect(result.current.isPaused).toBe(true);
+    it('toggles a passage option and resets the test', () => {
+      const { result } = renderHook(() => useTypingTest(30, onFinish));
 
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+      const optionKey = Object.keys(
+        result.current.options
+      )[0] as keyof typeof result.current.options;
+
+      const previousValue = result.current.options[optionKey];
+
+      pressKey(result.current.handleKeyDown, result.current.passage[0]);
+
+      act(() => {
+        result.current.toggleOption(optionKey);
+      });
+
+      expect(result.current.options[optionKey]).toBe(!previousValue);
+      expect(result.current.cursorPosition).toBe(0);
+      expect(result.current.status).toBe('idle');
+      expect(result.current.secondsLeft).toBe(30);
     });
-
-    expect(result.current.isPaused).toBe(false);
-    expect(result.current.typed).toBe('a');
   });
 });
