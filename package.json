@@ -5,6 +5,7 @@
   "workspaces": [
     "frontend",
     "backend",
+    "desktop",
     "packages/*"
   ],
   "engines": {
@@ -16,6 +17,10 @@
     "format": "prettier --write .",
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
+    "dev:desktop": "concurrently -k -n frontend,desktop -c cyan,magenta \"vite frontend --port 5173 --strictPort\" \"wait-on tcp:127.0.0.1:5173 && npm run dev -w desktop\"",
+    "build:desktop": "npm run build -w desktop",
+    "start:desktop": "npm run start -w desktop",
+    "dist:desktop": "npm run build -w frontend && npm run dist -w desktop",
     "prepare": "husky || true",
     "test": "npm run test --workspaces --if-present -- --passWithNoTests"
   },
@@ -31,6 +36,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
+    "concurrently": "^10.0.7",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
@@ -41,6 +47,7 @@
     "lint-staged": "^17.5.1",
     "prettier": "^3.9.9",
     "typescript-eslint": "^8.70.1",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "wait-on": "^9.5.1"
   }
 }

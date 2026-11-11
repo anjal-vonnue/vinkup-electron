@@ -1,0 +1,43 @@
+appId: com.vinkup.desktop
+productName: Vinkup
+copyright: Copyright © Vinkup
+
+directories:
+  output: release
+  buildResources: build
+
+# Replaces the packaged binary with a wrapper that forces XWayland on Wayland.
+afterPack: ./scripts/after-pack.mjs
+
+# Only the bundled main/preload output ships inside the ASAR archive.
+files:
+  - dist/**/*
+  - package.json
+
+# The Vite build is served from resources/frontend by the local HTTP server.
+extraResources:
+  - from: ../frontend/dist
+    to: frontend
+
+linux:
+  target:
+    - AppImage
+    - deb
+  executableName: vinkup
+  syncDesktopName: true
+  category: Development
+  maintainer: Vinkup
+  synopsis: Vinkup desktop
+  description: Vinkup desktop app for students.
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+appImage:
+  # Do not put --no-sandbox in the desktop entry. AppRun still falls back to it
+  # only when the kernel blocks unprivileged user namespaces.
+  executableArgs: []
+
+deb:
+  packageName: vinkup
+
+# No icons are committed yet; electron-builder falls back to the default Electron icon.
+# Add build/icon.png (512x512) before the first release build.
