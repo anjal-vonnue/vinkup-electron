@@ -1,18 +1,21 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'; // changed: + beforeEach
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
-import type { CourseCertificate, ProfileData } from '@itp/types'; // changed: + CourseCertificate
+import type { CourseCertificate, ProfileData, TypingStats } from '@itp/types';
 
 import ProfilePage from './ProfilePage';
 import { getProfile } from '../../api/profile';
 import { getActivityTime } from '../../api/activity';
-import { useEarnedCertificates } from '../../hooks/useEarnedCerificates'; // new
+import { getTypingStats } from '../../api/typingTest';
+import { useEarnedCertificates } from '../../hooks/useEarnedCerificates';
 
-vi.mock('../../api/activity', () => ({ getActivityTime: vi.fn() }));
+vi.mock('../../api/activity', () => ({
+  getActivityTime: vi.fn(),
+}));
 
-beforeEach(() => {
-  vi.mocked(getActivityTime).mockResolvedValue([]);
-});
+vi.mock('../../api/typingTest', () => ({
+  getTypingStats: vi.fn(),
+}));
 
 vi.mock('../../context/Useauth', () => ({
   useAuth: () => ({
@@ -33,10 +36,21 @@ vi.mock('../../api/profile', () => ({
   getProfile: vi.fn(),
 }));
 
-// new: the certificates row has its own tests; here it is a plain list of data
 vi.mock('../../hooks/useEarnedCerificates', () => ({
   useEarnedCertificates: vi.fn(),
 }));
+
+const typingStats: TypingStats = {
+  averageWpm: 68.5,
+  averageAccuracy: 97.2,
+  highestWpm: 85,
+  highestWpmAccuracy: 99.1,
+};
+
+beforeEach(() => {
+  vi.mocked(getActivityTime).mockResolvedValue([]);
+  vi.mocked(getTypingStats).mockResolvedValue(typingStats);
+});
 
 afterEach(() => {
   cleanup();
@@ -52,7 +66,6 @@ function renderProfilePage() {
 }
 
 describe('ProfilePage', () => {
-  // new: by default the trainee has earned no certificates
   beforeEach(() => {
     vi.mocked(useEarnedCertificates).mockReturnValue([]);
   });
@@ -89,7 +102,6 @@ describe('ProfilePage', () => {
     ],
   };
 
-  // new
   const certificates: CourseCertificate[] = [
     {
       courseId: 'html',
@@ -130,13 +142,14 @@ describe('ProfilePage', () => {
     expect(within(main).getByText('RS')).toBeInTheDocument();
     expect(within(main).getByText('JavaScript')).toBeInTheDocument();
     expect(within(main).getByText('Day 6 of 12')).toBeInTheDocument();
+
     expect(within(main).getByRole('progressbar', { name: 'JavaScript progress' })).toHaveAttribute(
       'aria-valuenow',
       '6'
     );
   });
 
-  it('renders the stats from the profile data', async () => {
+  it('renders the training statistics', async () => {
     vi.mocked(getProfile).mockResolvedValue(profile);
 
     renderProfilePage();
@@ -145,24 +158,27 @@ describe('ProfilePage', () => {
       name: 'Training statistics',
     });
 
-    expect(within(stats).getByText('TOTAL TIME')).toBeInTheDocument();
-    expect(within(stats).getByText('ACTIVE CODING')).toBeInTheDocument();
-    expect(within(stats).getByText('READING & LESSONS')).toBeInTheDocument();
-
-    // Total time: activeSeconds = 42h 30m
+    // Total time
     const totalCard = within(stats).getByText('TOTAL TIME').parentElement!;
     expect(within(totalCard).getByText('42h 30m')).toBeInTheDocument();
 
-    // Active coding: codingSeconds = 14h 15m
+    // Active coding
     const codingCard = within(stats).getByText('ACTIVE CODING').parentElement!;
     expect(within(codingCard).getByText('14h 15m')).toBeInTheDocument();
 
-    // Reading: activeSeconds - codingSeconds = 28h 15m
+    // Reading and lessons
     const readingCard = within(stats).getByText('READING & LESSONS').parentElement!;
     expect(within(readingCard).getByText('28h 15m')).toBeInTheDocument();
 
-    expect(within(stats).getByText('74 WPM')).toBeInTheDocument();
-    expect(within(stats).getByText('98.4% accuracy')).toBeInTheDocument();
+    // Average typing statistics
+    expect(within(stats).getByText('AVERAGE WPM (LAST 10 TESTS)')).toBeInTheDocument();
+    expect(within(stats).getByText('68.5 WPM')).toBeInTheDocument();
+    expect(within(stats).getByText('97.2% accuracy')).toBeInTheDocument();
+
+    // Highest typing statistics
+    expect(within(stats).getByText('HIGHEST WPM')).toBeInTheDocument();
+    expect(within(stats).getByText('85 WPM')).toBeInTheDocument();
+    expect(within(stats).getByText('99.1% accuracy')).toBeInTheDocument();
   });
 
   it('renders the daily activity from the profile data', async () => {
@@ -175,11 +191,10 @@ describe('ProfilePage', () => {
     expect(screen.getByText('4h 10m')).toBeInTheDocument();
     expect(screen.getByText('3h 45m')).toBeInTheDocument();
 
-    expect(screen.getAllByText('74 WPM')).toHaveLength(2);
+    expect(screen.getAllByText('74 WPM')).toHaveLength(1);
     expect(screen.getByText('72 WPM')).toBeInTheDocument();
   });
 
-  // new
   it('lists the earned certificates, each linking to its page', async () => {
     vi.mocked(getProfile).mockResolvedValue(profile);
     vi.mocked(useEarnedCertificates).mockReturnValue(certificates);
@@ -196,13 +211,13 @@ describe('ProfilePage', () => {
     expect(css).toHaveTextContent('6 October 2026');
   });
 
-  // new
   it('hides the Certificates row when there are none', async () => {
     vi.mocked(getProfile).mockResolvedValue(profile);
 
     renderProfilePage();
 
     await screen.findByText('rahul.sharma@vonnue.com');
+
     expect(screen.queryByRole('region', { name: 'Certificates' })).not.toBeInTheDocument();
   });
 
@@ -214,13 +229,23 @@ describe('ProfilePage', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 
-  it('calls getProfile once when the page loads', async () => {
+  it('renders an error state when loading typing statistics fails', async () => {
+    vi.mocked(getProfile).mockResolvedValue(profile);
+    vi.mocked(getTypingStats).mockRejectedValue(new Error('Failed to load typing statistics'));
+
+    renderProfilePage();
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('calls both profile and typing statistics APIs when the page loads', async () => {
     vi.mocked(getProfile).mockResolvedValue(profile);
 
     renderProfilePage();
 
     await waitFor(() => {
       expect(getProfile).toHaveBeenCalledTimes(1);
+      expect(getTypingStats).toHaveBeenCalledTimes(1);
     });
   });
 });
