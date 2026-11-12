@@ -11,6 +11,10 @@ const allowlist: ResourcesAllowlist = {
   version: 2,
   updatedAt: '2026-01-01',
   domains: ['developer.mozilla.org', 'github.com'],
+  categories: [
+    { id: 'html', label: 'HTML', domains: ['developer.mozilla.org'] },
+    { id: 'git', label: 'Git & GitHub', domains: ['github.com'] },
+  ],
 };
 
 describe('isHostAllowed', () => {
@@ -83,22 +87,61 @@ describe('resolveNavigationInput', () => {
 
 describe('parseAllowlist', () => {
   it('accepts the bundled file and has no search provider', () => {
-    expect(parseAllowlist(BUNDLED_ALLOWLIST)).not.toBeNull();
-    expect(BUNDLED_ALLOWLIST.domains).not.toContain('duckduckgo.com');
+    const parsed = parseAllowlist(BUNDLED_ALLOWLIST);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.domains).not.toContain('duckduckgo.com');
+    expect(parsed?.categories.length).toBeGreaterThan(0);
   });
 
-  it('normalizes and de-duplicates domains', () => {
+  it('builds a unique domain union from categories that repeat sites', () => {
     const parsed = parseAllowlist({
-      ...allowlist,
-      domains: ['GitHub.com', 'github.com', 'docs.github.com.'],
+      version: 2,
+      updatedAt: '2026-01-01',
+      categories: [
+        { id: 'html', label: 'HTML', domains: ['GitHub.com', 'github.com'] },
+        { id: 'git', label: 'Git & GitHub', domains: ['github.com', 'docs.github.com.'] },
+      ],
     });
+
     expect(parsed?.domains).toEqual(['github.com', 'docs.github.com']);
+    expect(parsed?.categories[0]?.domains).toEqual(['github.com']);
+    expect(parsed?.categories[1]?.domains).toEqual(['github.com', 'docs.github.com']);
   });
 
   it('rejects malformed or incomplete data', () => {
     expect(parseAllowlist(null)).toBeNull();
     expect(parseAllowlist({ ...allowlist, version: '2' })).toBeNull();
-    expect(parseAllowlist({ ...allowlist, domains: ['bad domain'] })).toBeNull();
-    expect(parseAllowlist({ ...allowlist, domains: [] })).toBeNull();
+    expect(parseAllowlist({ ...allowlist, categories: [] })).toBeNull();
+    expect(
+      parseAllowlist({
+        ...allowlist,
+        categories: [{ id: 'html', label: 'HTML', domains: ['bad domain'] }],
+      })
+    ).toBeNull();
+    expect(
+      parseAllowlist({
+        ...allowlist,
+        categories: [{ id: 'html', label: '  ', domains: ['github.com'] }],
+      })
+    ).toBeNull();
+    expect(
+      parseAllowlist({
+        ...allowlist,
+        categories: [{ id: 'HTML', label: 'HTML', domains: ['github.com'] }],
+      })
+    ).toBeNull();
+  });
+
+  it('rejects duplicate category ids', () => {
+    const parsed = parseAllowlist({
+      version: 2,
+      updatedAt: '2026-01-01',
+      categories: [
+        { id: 'html', label: 'HTML', domains: ['github.com'] },
+        { id: 'html', label: 'HTML again', domains: ['react.dev'] },
+      ],
+    });
+
+    expect(parsed).toBeNull();
   });
 });
