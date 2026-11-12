@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: vinkup-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=vinkup_db
+      - POSTGRES_USER=vinkup_user
+      - POSTGRES_PASSWORD=vinkup_password
+    ports:
+      - '5433:5432'
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vinkup_user -d vinkup_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
