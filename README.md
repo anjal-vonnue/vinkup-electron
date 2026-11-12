@@ -63,6 +63,8 @@ Create `backend/.env` from `backend/.env.example` and fill in **every** value (a
 ```bash
 cd backend
 npx prisma migrate deploy --config prisma7.config.ts
+docker compose up -d
+npx prisma migrate dev --name init
 cd ..
 npm run db:seed -w backend
 ```
