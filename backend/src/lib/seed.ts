@@ -28,6 +28,10 @@ const trainees = [
   { email: 'fathima.fadwah@vonnue.com', name: 'Fathima Fadwah' },
   { email: 'ameesha.t@vonnue.com', name: 'Ameesha T' },
   { email: 'akshay.antony@vonnue.com', name: 'Akshay Antony' },
+  { email: 'christo.jose@vonnue.com', name: 'Christo Jose' },
+  { email: 'sona.kajal@vonnue.com', name: 'Sona Kajal' },
+  { email: 'gauresh.pa@vonnue.com', name: 'Gauresh PA' },
+  { email: 'anjal.biju@vonnue.com', name: 'Anjal K Biju' },
 ];
 
 type SeedTaskFile = { path: string; content: string };
