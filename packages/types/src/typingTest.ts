@@ -23,3 +23,11 @@ export type TypingSummaryResponse = {
   todayAverageWpm: number | null;
   trend: { date: string; averageWpm: number }[];
 };
+
+// Updated stats for Typing Tests
+export type TypingStats = {
+  averageWpm: number;
+  averageAccuracy: number;
+  highestWpm: number | null;
+  highestWpmAccuracy: number | null;
+};

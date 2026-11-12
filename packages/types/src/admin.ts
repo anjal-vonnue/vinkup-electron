@@ -1,6 +1,7 @@
 import type { DayStatus } from './dashboard';
 import type { FlagEventType } from './activity';
 import type { ProfileData } from './profile';
+import type { TypingStats } from './typingTest';
 import type { TaskFile, TaskStatus } from './tasks';
 
 export type TraineeIntegrityItem = {
@@ -62,7 +63,8 @@ export type AdminJournalEntry = {
 /** GET /api/admin/trainees/:traineeId */
 export type AdminTraineeDetail = {
   id: string;
-  profile: ProfileData; // same object the trainee's own profile page gets
+  profile: ProfileData;
+  typingStats: TypingStats;
   courses: { id: string; title: string; days: AdminDay[] }[];
   tasks: AdminTaskRow[];
   totalTasks: number;

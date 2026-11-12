@@ -169,6 +169,18 @@ export class AdminRepository {
     });
   };
 
+  /** The trainee's 10 most recent typing results. */
+  typingResultsForTrainee = (traineeId: string) =>
+    prisma.typing_test_result.findMany({
+      where: { trainee_id: traineeId },
+      orderBy: { taken_at: 'desc' },
+      take: 10,
+      select: {
+        wpm: true,
+        accuracy: true,
+      },
+    });
+
   /**
    * All flag events for these trainees, submitted or not, with the task's day.
    * `context_data` is deliberately NOT selected (mentor-only, and not needed for a score).

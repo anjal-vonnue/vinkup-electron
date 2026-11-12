@@ -10,6 +10,8 @@ typingRoutes.post(
   validate({ body: saveTypingResultBodySchema }),
   typingController.createResult
 );
+
 typingRoutes.get('/results', typingController.getResults);
+typingRoutes.get('/stats', typingController.getStats);
 
 export default typingRoutes;

@@ -325,6 +325,12 @@ export function buildAdminTraineeDetail(traineeId: string): AdminTraineeDetail |
       typing: { latestWpm: t.latestWpm, latestAccuracy: t.latestAccuracy },
       dailyActivity: buildProfileDays(t),
     },
+    typingStats: {
+      averageWpm: t.latestWpm ?? 0,
+      averageAccuracy: t.latestAccuracy ?? 0,
+      highestWpm: t.latestWpm,
+      highestWpmAccuracy: t.latestAccuracy,
+    },
     courses: buildCourses(t),
     tasks: buildTaskRows(t),
     totalTasks: 7,
