@@ -1,11 +1,15 @@
-import type { ResourcesAllowlist } from '@itp/types';
+import type { ResourcesAllowlist, ResourcesCategory } from '@itp/types';
 import bundledAllowlist from '../../../resources/resources-allowlist.json';
 
 const MAX_INPUT_LENGTH = 2048;
+const CATEGORY_ID = /^[a-z0-9-]+$/;
 
 /**
  * Validates a bundled or remotely hosted allowlist. Anything malformed is
  * rejected as a whole rather than partially applied.
+ *
+ * Categories may repeat a domain; the returned `domains` list is the unique
+ * union used for navigation checks.
  */
 export function parseAllowlist(value: unknown): ResourcesAllowlist | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
@@ -13,22 +17,47 @@ export function parseAllowlist(value: unknown): ResourcesAllowlist | null {
   const record = value as Record<string, unknown>;
   const version = record.version;
   const updatedAt = record.updatedAt;
-  const rawDomains = record.domains;
+  const rawCategories = record.categories;
 
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return null;
   if (typeof updatedAt !== 'string' || updatedAt.trim() === '') return null;
-  if (!Array.isArray(rawDomains)) return null;
+  if (!Array.isArray(rawCategories) || rawCategories.length === 0) return null;
 
+  const categories: ResourcesCategory[] = [];
   const domains: string[] = [];
-  for (const rawDomain of rawDomains) {
-    if (typeof rawDomain !== 'string') return null;
-    const domain = normalizeHost(rawDomain);
-    if (!domain) return null;
-    if (!domains.includes(domain)) domains.push(domain);
+  const categoryIds = new Set<string>();
+
+  for (const rawCategory of rawCategories) {
+    if (typeof rawCategory !== 'object' || rawCategory === null || Array.isArray(rawCategory)) {
+      return null;
+    }
+
+    const category = rawCategory as Record<string, unknown>;
+    const id = category.id;
+    const label = category.label;
+    const rawDomains = category.domains;
+
+    if (typeof id !== 'string' || !CATEGORY_ID.test(id) || categoryIds.has(id)) return null;
+    if (typeof label !== 'string' || label.trim() === '') return null;
+    if (!Array.isArray(rawDomains) || rawDomains.length === 0) return null;
+
+    const categoryDomains: string[] = [];
+    for (const rawDomain of rawDomains) {
+      if (typeof rawDomain !== 'string') return null;
+      const domain = normalizeHost(rawDomain);
+      if (!domain) return null;
+      if (!categoryDomains.includes(domain)) categoryDomains.push(domain);
+      if (!domains.includes(domain)) domains.push(domain);
+    }
+    if (categoryDomains.length === 0) return null;
+
+    categoryIds.add(id);
+    categories.push({ id, label: label.trim(), domains: categoryDomains });
   }
+
   if (domains.length === 0) return null;
 
-  return { version, updatedAt, domains };
+  return { version, updatedAt, domains, categories };
 }
 
 /** Lowercases and trims a configured host; returns null for anything malformed. */

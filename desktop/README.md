@@ -63,7 +63,10 @@ The Resources tab opens an embedded browser layered over the renderer. It is a
 `X-Frame-Options` headers that prevent framing.
 
 The allowlist lives in `resources/resources-allowlist.json` and is enforced in
-the main process:
+the main process. Sites are grouped into categories for the Resources start page
+(HTML, CSS, JavaScript, TypeScript, React, backend, testing, Git and practice).
+The same site can appear in more than one category; navigation checks use the
+deduplicated union of every category.
 
 - every address-bar entry is resolved and checked there;
 - links, server redirects, `target="_blank"` popups and in-page navigations are

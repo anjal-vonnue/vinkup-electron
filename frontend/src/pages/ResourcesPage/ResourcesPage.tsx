@@ -354,22 +354,38 @@ export default function ResourcesPage() {
                   </header>
 
                   {allowlist ? (
-                    <ul className={styles.sites}>
-                      {allowlist.domains.map((domain) => (
-                        <li key={domain}>
-                          <button
-                            type="button"
-                            className={styles.site}
-                            onClick={() => openSite(domain)}
+                    <div className={styles.categories}>
+                      {allowlist.categories.map((category) => (
+                        <section
+                          key={category.id}
+                          className={styles.category}
+                          aria-labelledby={`resources-category-${category.id}`}
+                        >
+                          <h2
+                            id={`resources-category-${category.id}`}
+                            className={styles.categoryTitle}
                           >
-                            <span className={styles.siteName}>{domain}</span>
-                            <span className={styles.siteHint} aria-hidden="true">
-                              Open
-                            </span>
-                          </button>
-                        </li>
+                            {category.label}
+                          </h2>
+                          <ul className={styles.sites}>
+                            {category.domains.map((domain) => (
+                              <li key={domain}>
+                                <button
+                                  type="button"
+                                  className={styles.site}
+                                  onClick={() => openSite(domain)}
+                                >
+                                  <span className={styles.siteName}>{domain}</span>
+                                  <span className={styles.siteHint} aria-hidden="true">
+                                    Open
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
                       ))}
-                    </ul>
+                    </div>
                   ) : (
                     <p className={styles.muted}>Loading approved sites…</p>
                   )}
