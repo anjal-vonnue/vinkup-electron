@@ -1,6 +1,6 @@
 # Vinkup database
 
-The PostgreSQL database behind the Vinkup API: 13 tables in three groups. **Curriculum tables** (`course`, `curriculum_day`, `learning_objective`, `self_check_item`, `task`) are the same for every trainee and are loaded by the seed script. **Trainee tables** hold each trainee's work, progress and activity, and are written by the API. **Accounts:** `trainee` (also a trainee table) and `admin` (mentors, added in v0.2.0). The source of truth is `backend/prisma/schema.prisma`; update this document in the same PR as any schema change.
+The PostgreSQL database behind the Vinkup API: 15 tables in four groups. **Curriculum tables** (`course`, `curriculum_day`, `learning_objective`, `self_check_item`, `task`) are the same for every trainee and are loaded by the seed script. **Trainee tables** hold each trainee's work, progress and activity, and are written by the API. **Accounts:** `trainee` (also a trainee table) and `admin` (mentors, added in v0.2.0). **Desktop auth:** `desktop_auth_transaction` (short-lived sign-in attempts) and `desktop_session` (rotating refresh sessions). The source of truth is `backend/prisma/schema.prisma`; update this document in the same PR as any schema change.
 
 ## 1. Entity relationship diagram
 
@@ -9,6 +9,9 @@ Every table in the database and how they relate. A crow's foot marks the many si
 ![Entity relationship diagram of the training platform database](./images/er-diagram.svg)
 
 _Figure 1: Entity relationship diagram of the training platform database._
+
+The diagram predates the desktop auth tables. `desktop_auth_transaction` and `desktop_session` are
+standalone (they store user snapshots rather than foreign keys) and are described in §2.
 
 ## 2. Data dictionary
 
@@ -208,6 +211,51 @@ _Time a trainee spent on the platform each day._
 | coding_seconds | INTEGER | -   | No    | Seconds spent coding that day. Default: 0.        |
 
 **Constraints:** UNIQUE (trainee_id, date) — one row per trainee per day.
+
+### desktop_auth_transaction
+
+_A short-lived Electron sign-in attempt (`docs/authentication.md`). Created by the main process, claimed by the Google callback, and consumed when the one-time code is exchanged. Expired rows are rejected and can be pruned._
+
+| Column                | Type        | Key | Null? | Description                                                                  |
+| :-------------------- | :---------- | :-- | :---- | :--------------------------------------------------------------------------- |
+| id                    | UUID        | PK  | No    | Unique transaction id, also used in the browser start URL.                   |
+| state                 | TEXT        | UK  | No    | Random OAuth state bound to the transaction and checked on callback.         |
+| code_challenge        | TEXT        | -   | No    | PKCE S256 challenge from the Electron main process.                          |
+| code_challenge_method | TEXT        | -   | No    | Always `S256`.                                                               |
+| loopback_redirect_uri | TEXT        | -   | No    | `http://127.0.0.1:<port>/...` callback on the desktop app.                   |
+| status                | TEXT        | -   | No    | `pending`, `processing`, `authenticated`, `failed` or `consumed`.            |
+| user_id               | UUID        | -   | Yes   | Snapshot of the verified trainee/admin id; no foreign key (accounts differ). |
+| user_email            | TEXT        | -   | Yes   | Snapshot of the verified email.                                              |
+| user_name             | TEXT        | -   | Yes   | Snapshot of the verified name.                                               |
+| user_role             | TEXT        | -   | Yes   | `trainee` or `admin`.                                                        |
+| error_code            | TEXT        | -   | Yes   | Backend error returned to the loopback when the attempt failed.              |
+| handoff_code_hash     | TEXT        | UK  | Yes   | SHA-256 of the one-time code; the plain code is never stored.                |
+| handoff_expires_at    | TIMESTAMPTZ | -   | Yes   | Expiry of the handoff code (60 seconds after completion).                    |
+| handoff_consumed_at   | TIMESTAMPTZ | -   | Yes   | When the code was exchanged; prevents replay.                                |
+| expires_at            | TIMESTAMPTZ | -   | No    | Transaction expiry (5 minutes after creation).                               |
+| consumed_at           | TIMESTAMPTZ | -   | Yes   | When the transaction was claimed/finished.                                   |
+| created_at            | TIMESTAMPTZ | -   | No    | When the transaction was created. Default: now.                              |
+
+**Constraints:** UNIQUE (state), UNIQUE (handoff_code_hash), INDEX (expires_at).
+
+### desktop_session
+
+_An Electron refresh session. Only the SHA-256 hash of the refresh token is stored; the token rotates on every use and slides for 30 days._
+
+| Column             | Type        | Key | Null? | Description                                              |
+| :----------------- | :---------- | :-- | :---- | :------------------------------------------------------- |
+| id                 | UUID        | PK  | No    | Session id, also the `sid` claim in desktop access JWTs. |
+| user_id            | UUID        | -   | No    | Trainee/admin id captured at sign-in.                    |
+| user_email         | TEXT        | -   | No    | Email captured at sign-in.                               |
+| user_name          | TEXT        | -   | No    | Name captured at sign-in.                                |
+| user_role          | TEXT        | -   | No    | `trainee` or `admin`.                                    |
+| refresh_token_hash | TEXT        | UK  | No    | SHA-256 of the current refresh token.                    |
+| expires_at         | TIMESTAMPTZ | -   | No    | Sliding expiry (30 days from the last rotation).         |
+| last_used_at       | TIMESTAMPTZ | -   | No    | Last successful use/rotation. Default: now.              |
+| revoked_at         | TIMESTAMPTZ | -   | Yes   | Set on logout, rotation reuse or account removal.        |
+| created_at         | TIMESTAMPTZ | -   | No    | When the session was created. Default: now.              |
+
+**Constraints:** UNIQUE (refresh_token_hash), INDEX (user_id), INDEX (expires_at).
 
 ## 3. Enumerations
 

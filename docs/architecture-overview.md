@@ -54,6 +54,8 @@ In every environment the frontend calls a relative `/api` path. Because Netlify 
 
 There are no server sessions: the JWT is the session. Its lifetime is `JWT_EXPIRES_IN` (default 1 hour), so production must set it to `7d` to match the cookie.
 
+**Electron** signs in through the system browser and a loopback listener under `/api/auth/desktop` (see `docs/authentication.md`). The backend still owns the Google Web client; the browser leg ends with a one-time PKCE-protected handoff code, and only the main process exchanges it for credentials. Desktop sessions do use a server table: a short-lived access JWT is set as the renderer's `auth_token` cookie, while a hashed, rotating refresh token lives in `desktop_session`. The renderer receives only user/state over IPC.
+
 ### Cross-origin isolation
 
 WebContainer needs the page to be cross-origin isolated. Every route is served with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless`: by `frontend/public/_headers` on Netlify and by `vite.config.ts` locally. It must be every route, not only task pages, because the app is a single-page app and the first page loaded decides the isolation. Anything the app embeds from another origin must work under these headers.
@@ -344,7 +346,9 @@ There is no CI pipeline yet; the hooks are the only automatic gate.
 | ------------------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------- |
 | `DATABASE_URL`                             | Neon connection string                                                 | Required                                              |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth app                                                       | Required                                              |
-| `GOOGLE_CALLBACK_URL`                      | Where Google returns                                                   | `https://vinkup.netlify.app/api/auth/google/callback` |
+| `GOOGLE_CALLBACK_URL`                      | Where Google returns for the web app                                   | `https://vinkup.netlify.app/api/auth/google/callback` |
+| `GOOGLE_DESKTOP_CALLBACK_URL`              | Second redirect URI for Electron (optional; derived by default)        | Register it on the same Google Web client             |
+| `DESKTOP_ACCESS_TOKEN_TTL`                 | Desktop access JWT lifetime                                            | `15m`                                                 |
 | `ALLOWED_EMAIL_DOMAIN`                     | Sign-in domain check                                                   | `vonnue.com`                                          |
 | `FRONTEND_URL`                             | CORS origin and redirects after sign-in                                | `https://vinkup.netlify.app`                          |
 | `JWT_SECRET`, `JWT_EXPIRES_IN`             | Signing the session token                                              | At least 16 characters; set `7d`                      |

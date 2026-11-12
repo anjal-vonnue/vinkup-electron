@@ -27,6 +27,7 @@ function fakeAuth(overrides: Partial<AuthContextValue>): AuthContextValue {
   return {
     user: null,
     status: 'unauthenticated',
+    error: null,
     isAuthenticated: false,
     login: vi.fn(),
     logout: vi.fn(),

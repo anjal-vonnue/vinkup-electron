@@ -17,9 +17,9 @@ All paths below include the `/api` prefix. The frontend axios client uses the re
 
 ### Authentication
 
-- **Mechanism:** a JWT in an HTTP cookie. There is no `Authorization` header support.
+- **Mechanism:** a JWT in an HTTP cookie. Web routes have no `Authorization` header support; the desktop-only `/api/auth/desktop/session` and `/logout` use a Bearer access token instead.
 - **Cookie name:** `auth_token` (`AUTH_COOKIE_NAME`, `auth.constants.ts:3`).
-- **How it is set:** only by `GET /api/auth/google/callback` after a successful Google OAuth login. The JWT payload is `{ id, name, email, role }` of the trainee or mentor, signed with `JWT_SECRET`, `expiresIn: JWT_EXPIRES_IN` (env, default `'1h'`; set it to `7d` in production to match the cookie).
+- **How it is set:** by `GET /api/auth/google/callback` after a web Google login, or by the Electron main process after a successful desktop exchange. The web JWT payload is `{ id, name, email, role }` of the trainee or mentor, signed with `JWT_SECRET`, `expiresIn: JWT_EXPIRES_IN` (env, default `'1h'`; set it to `7d` in production to match the cookie). The desktop cookie is a short-lived access JWT (`typ: "desktop"`; see the desktop section below).
 - **requireAuth** (`middleware/authMiddleware.ts`): reads `req.cookies.auth_token`.
   - Missing cookie: `401 UNAUTHENTICATED`, message `"Not authenticated"`.
   - Invalid/expired JWT: `401 UNAUTHENTICATED`, message `"Invalid or expired token"`.
@@ -28,7 +28,7 @@ All paths below include the `/api` prefix. The frontend axios client uses the re
   - **requireTrainee:** signed in **and** `role === 'trainee'`. A mentor gets `403 FORBIDDEN` `"This page is for trainees."`.
   - **requireAdmin:** signed in **and** `role === 'admin'` **and** an `admin` row with that id and `is_active = true` still exists (checked on every request, so switching an admin off takes effect at once). Otherwise `403 FORBIDDEN` `"You don't have access to this."`.
 - **Which routes require what** (`app.ts`):
-  - Public: `GET /api/health`, `GET /api/auth/google`, `GET /api/auth/google/callback`.
+  - Public: `GET /api/health`, `GET /api/auth/google`, `GET /api/auth/google/callback`, and the desktop transaction/google/callback/exchange/refresh endpoints (the desktop `session` and `logout` endpoints use a Bearer token).
   - Any signed-in user (`requireAuth` on the route, `auth.routes.ts`): `POST /api/auth/logout`, `GET /api/auth/me`.
   - Trainees only (`requireTrainee`): everything under `/api/profile`, `/api/activity`, `/api/dashboard`, `/api/courses`, `/api/tasks`, `/api/days`, `/api/journal`, `/api/typing-test` (at the mount), and `POST /api/activity/:taskId/events` (on the route, `flag.routes.ts`).
   - Mentors only (`requireAdmin`): everything under `/api/admin`.
@@ -232,6 +232,24 @@ Google OAuth 2.0 via `passport-google-oauth20`, `session: false`, scope `['profi
 ```
 
 - **Errors:** 401 `UNAUTHENTICATED`. The frontend calls this with `skipUnauthorizedHandler: true` (401 is an expected "not logged in" answer).
+
+### Desktop (Electron) sign-in
+
+The desktop app uses a separate flow under `/api/auth/desktop`. It shares the same Google **Web** OAuth client but uses a second callback URL, `GOOGLE_DESKTOP_CALLBACK_URL` (default: `<GOOGLE_CALLBACK_URL host>/api/auth/desktop/callback`). The browser leg ends with a one-time handoff code on `127.0.0.1`; tokens are only released to the Electron main process after PKCE verification. The full flow and security model are in [authentication.md](authentication.md).
+
+| Method | Path                             | Auth          | Purpose                                                                                                                                                        |
+| ------ | -------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/auth/desktop/transactions` | none          | Create a 5-minute transaction; body `{ redirectUri, codeChallenge, codeChallengeMethod: "S256" }`; 201 `{ transactionId, state, authorizationUrl, expiresAt }` |
+| GET    | `/api/auth/desktop/google`       | none          | Browser entry point: `?transaction=<uuid>` starts Google (`prompt=select_account`)                                                                             |
+| GET    | `/api/auth/desktop/callback`     | none          | Google redirect; verifies `state`, binds the user, 302s to the loopback with `?code&state` or `?error&state`                                                   |
+| POST   | `/api/auth/desktop/exchange`     | none          | Body `{ code, codeVerifier }`; verifies PKCE, consumes the code once, returns `DesktopAuthSessionResponse`                                                     |
+| GET    | `/api/auth/desktop/session`      | Bearer        | Returns `{ user }` for a desktop access token; a web cookie is not accepted                                                                                    |
+| POST   | `/api/auth/desktop/refresh`      | none          | Body `{ refreshToken }`; rotates the token and returns a new session                                                                                           |
+| POST   | `/api/auth/desktop/logout`       | Bearer + body | Revokes by access token and/or `{ refreshToken }`; always 204                                                                                                  |
+
+`DesktopAuthSessionResponse` is `{ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, user }`. Access tokens are JWTs (`typ: "desktop"`, `sid`) with a `DESKTOP_ACCESS_TOKEN_TTL` lifetime (default `15m`); refresh tokens are opaque, stored hashed, rotate on every use, and slide for 30 days.
+
+Desktop error codes: `DESKTOP_AUTH_INVALID_STATE`, `DESKTOP_AUTH_INVALID_PKCE`, `DESKTOP_AUTH_INVALID_CODE`, `DESKTOP_AUTH_EXPIRED`, `DESKTOP_AUTH_CODE_USED`, `DESKTOP_AUTH_FAILED`, `DESKTOP_AUTH_CANCELLED`, `DESKTOP_SESSION_EXPIRED`, `DESKTOP_SESSION_REVOKED` (plus `DOMAIN_NOT_PERMITTED` / `NOT_PROVISIONED` for rejected accounts). The renderer maps these to its own smaller `DesktopAuthErrorCode` set.
 
 ---
 
