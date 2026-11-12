@@ -1,0 +1,169 @@
+import type { ResourcesAllowlist } from '@itp/types';
+import bundledAllowlist from '../../../resources/resources-allowlist.json';
+
+const MAX_INPUT_LENGTH = 2048;
+
+/**
+ * Validates a bundled or remotely hosted allowlist. Anything malformed is
+ * rejected as a whole rather than partially applied.
+ */
+export function parseAllowlist(value: unknown): ResourcesAllowlist | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+
+  const record = value as Record<string, unknown>;
+  const version = record.version;
+  const updatedAt = record.updatedAt;
+  const template = record.searchUrlTemplate;
+  const rawDomains = record.domains;
+
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return null;
+  if (typeof updatedAt !== 'string' || updatedAt.trim() === '') return null;
+  if (typeof template !== 'string' || !template.includes('{query}')) return null;
+  if (!Array.isArray(rawDomains)) return null;
+
+  const domains: string[] = [];
+  for (const rawDomain of rawDomains) {
+    if (typeof rawDomain !== 'string') return null;
+    const domain = normalizeHost(rawDomain);
+    if (!domain) return null;
+    if (!domains.includes(domain)) domains.push(domain);
+  }
+  if (domains.length === 0) return null;
+
+  let searchHost: string;
+  try {
+    const searchUrl = new URL(template.replace('{query}', 'vinkup'));
+    if (searchUrl.protocol !== 'https:') return null;
+    searchHost = searchUrl.hostname;
+  } catch {
+    return null;
+  }
+
+  // A search template pointing at a blocked host would produce a dead address
+  // bar, so require the provider itself to be approved.
+  if (!isHostAllowed(searchHost, domains)) return null;
+
+  return { version, updatedAt, searchUrlTemplate: template, domains };
+}
+
+/** Lowercases and trims a configured host; returns null for anything malformed. */
+export function normalizeHost(value: string): string | null {
+  const host = value.trim().toLowerCase().replace(/\.$/, '');
+  if (host === '' || host.length > 253) return null;
+  if (!/^[a-z0-9.-]+$/.test(host)) return null;
+  if (host.startsWith('.') || host.includes('..')) return null;
+  return host;
+}
+
+/** A host is allowed when it matches an entry exactly or is one of its subdomains. */
+export function isHostAllowed(host: string, domains: readonly string[]): boolean {
+  const normalized = host.trim().toLowerCase().replace(/\.$/, '');
+  if (normalized === '') return false;
+  return domains.some((domain) => normalized === domain || normalized.endsWith(`.${domain}`));
+}
+
+export function isAllowedNavigationUrl(rawUrl: string, allowlist: ResourcesAllowlist): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+    return isHostAllowed(url.hostname, allowlist.domains);
+  } catch {
+    return false;
+  }
+}
+
+export function hostFromUrl(rawUrl: string): string | null {
+  try {
+    return new URL(rawUrl).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turns whatever the student typed into a navigation target (or a rejection).
+ * The renderer must treat both outcomes as authoritative; it never builds URLs
+ * for the browser itself.
+ */
+export type ResourcesNavigationTarget =
+  | { kind: 'navigate'; url: string }
+  | { kind: 'blocked'; url: string; host: string }
+  | { kind: 'invalid'; message: string };
+
+export function resolveNavigationInput(
+  input: string,
+  allowlist: ResourcesAllowlist
+): ResourcesNavigationTarget {
+  const trimmed = input.trim().slice(0, MAX_INPUT_LENGTH);
+  if (trimmed === '') return invalid('Enter a web address or a search term.');
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    let url: URL;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      return invalid('That address is not valid.');
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return invalid('Only http and https addresses can be opened.');
+    }
+    if (url.username !== '' || url.password !== '') {
+      return invalid('Addresses with a username or password are not allowed.');
+    }
+    return checkUrl(url, allowlist);
+  }
+
+  if (looksLikeHost(trimmed)) {
+    let url: URL;
+    try {
+      url = new URL(`https://${trimmed}`);
+    } catch {
+      return invalid('That address is not valid.');
+    }
+    return checkUrl(url, allowlist);
+  }
+
+  return search(trimmed, allowlist);
+}
+
+export function formatBlockedMessage(host: string): string {
+  return `${host} is not on the approved resources list. Ask your mentor if it should be added.`;
+}
+
+function checkUrl(url: URL, allowlist: ResourcesAllowlist): ResourcesNavigationTarget {
+  if (!isHostAllowed(url.hostname, allowlist.domains)) {
+    return { kind: 'blocked', url: url.toString(), host: url.hostname };
+  }
+  return { kind: 'navigate', url: url.toString() };
+}
+
+function search(query: string, allowlist: ResourcesAllowlist): ResourcesNavigationTarget {
+  let url: URL;
+  try {
+    url = new URL(allowlist.searchUrlTemplate.replace('{query}', encodeURIComponent(query)));
+  } catch {
+    return invalid('Search is not available right now.');
+  }
+  if (!isHostAllowed(url.hostname, allowlist.domains)) {
+    return invalid('Search is not available right now.');
+  }
+  return { kind: 'navigate', url: url.toString() };
+}
+
+function looksLikeHost(value: string): boolean {
+  if (/\s/.test(value)) return false;
+  // Something like `react.dev`, `developer.mozilla.org/en-US`, or `192.168.0.1`.
+  return /^[^\s/?#]+(\.[^\s/?#.]+)+/.test(value);
+}
+
+function invalid(message: string): ResourcesNavigationTarget {
+  return { kind: 'invalid', message };
+}
+
+const parsedBundledAllowlist = parseAllowlist(bundledAllowlist);
+
+if (!parsedBundledAllowlist) {
+  throw new Error('The bundled resources allowlist is invalid.');
+}
+
+export const BUNDLED_ALLOWLIST: ResourcesAllowlist = parsedBundledAllowlist;

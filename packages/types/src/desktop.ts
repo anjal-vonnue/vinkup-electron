@@ -1,4 +1,9 @@
 import type { DesktopAuthState } from './auth';
+import type {
+  ResourcesAllowlist,
+  ResourcesBrowserBounds,
+  ResourcesBrowserState,
+} from './resources';
 
 /** Desktop platforms the shell is built for. Linux is the only supported target for now. */
 export type DesktopPlatform = 'linux' | 'darwin' | 'win32';
@@ -36,5 +41,30 @@ export interface DesktopApi {
     isFullscreen: () => Promise<boolean>;
     /** Returns an unsubscribe function. */
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => () => void;
+  };
+  /**
+   * The in-app browser used by the Resources page. Navigation is validated
+   * against the allowlist in the main process, so the renderer cannot bypass it.
+   */
+  resources: {
+    getAllowlist: () => Promise<ResourcesAllowlist>;
+    getState: () => Promise<ResourcesBrowserState>;
+    /** Positions and shows the embedded browser over the given rectangle. */
+    open: (bounds: ResourcesBrowserBounds) => Promise<ResourcesBrowserState>;
+    setBounds: (bounds: ResourcesBrowserBounds) => Promise<void>;
+    /** Hides the browser but keeps the current page alive for the next visit. */
+    close: () => Promise<void>;
+    /** Returns to the approved-sites start page without clearing history. */
+    home: () => Promise<void>;
+    /** Accepts a URL or a search query; resolves it in the main process. */
+    navigate: (input: string) => Promise<ResourcesBrowserState>;
+    goBack: () => Promise<void>;
+    goForward: () => Promise<void>;
+    reload: () => Promise<void>;
+    stop: () => Promise<void>;
+    /** Returns an unsubscribe function. */
+    onChange: (listener: (state: ResourcesBrowserState) => void) => () => void;
+    /** Returns an unsubscribe function. Ctrl+L from inside the page. */
+    onFocusAddress: (listener: () => void) => () => void;
   };
 }

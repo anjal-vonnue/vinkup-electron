@@ -11,12 +11,20 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import path from 'node:path';
-import type { DesktopAppInfo, DesktopAuthState, DesktopPlatform } from '@itp/types';
-import { APP_NAME, DEV_RENDERER_URL, getApiUrl } from './config';
+import type {
+  DesktopAppInfo,
+  DesktopAuthState,
+  DesktopPlatform,
+  ResourcesBrowserBounds,
+} from '@itp/types';
+import { APP_NAME, DEV_RENDERER_URL, getApiUrl, getResourcesAllowlistUrl } from './config';
 import { startLocalServer, type LocalServer } from './server';
 import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager';
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
+import { BUNDLED_ALLOWLIST } from './resources/allowlist';
+import { loadResourcesAllowlist } from './resources/allowlist-source';
+import { ResourcesBrowser } from './resources/browser';
 import {
   assertTrustedSender as assertTrustedSenderForOrigin,
   isAllowedExternalUrl,
@@ -31,6 +39,7 @@ let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
+let resourcesBrowser: ResourcesBrowser | null = null;
 
 // Set the name before `ready` so userData, cache and config use the product name.
 app.setName(APP_NAME);
@@ -77,7 +86,38 @@ async function bootstrap(): Promise<void> {
   });
 
   mainWindow = createMainWindow();
+  resourcesBrowser = new ResourcesBrowser(mainWindow, BUNDLED_ALLOWLIST, {
+    onState: (state) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:state-changed', state);
+    },
+    onFocusAddress: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:focus-address');
+    },
+  });
+
+  // The shared allowlist can be updated without shipping a release. This never
+  // blocks startup: the bundled copy is already in use.
+  void refreshResourcesAllowlist();
+
   await loadRenderer(mainWindow);
+}
+
+async function refreshResourcesAllowlist(): Promise<void> {
+  try {
+    const { allowlist, source } = await loadResourcesAllowlist({
+      bundled: BUNDLED_ALLOWLIST,
+      remoteUrl: getResourcesAllowlistUrl(),
+      cacheFile: path.join(app.getPath('userData'), 'resources', 'allowlist.json'),
+    });
+    resourcesBrowser?.setAllowlist(allowlist);
+    if (source !== 'bundled') {
+      console.info(`[resources] Using the ${source} allowlist (v${allowlist.version}).`);
+    }
+  } catch (error) {
+    console.warn('[resources] Failed to refresh the allowlist', error);
+  }
 }
 
 function createDesktopAuthManager(): DesktopAuthManager {
@@ -162,6 +202,15 @@ function createMainWindow(): BrowserWindow {
 
   window.on('closed', () => {
     mainWindow = null;
+  });
+
+  window.on('close', () => {
+    resourcesBrowser?.dispose();
+    resourcesBrowser = null;
+  });
+
+  window.on('resize', () => {
+    resourcesBrowser?.handleWindowResize();
   });
 
   window.on('enter-full-screen', () => {
@@ -262,11 +311,95 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     await getAuthManager().logout();
   });
+
+  ipcMain.handle('resources:get-allowlist', (event) => {
+    assertTrustedSender(event);
+    return getResourcesBrowser().getAllowlist();
+  });
+
+  ipcMain.handle('resources:get-state', (event) => {
+    assertTrustedSender(event);
+    return getResourcesBrowser().getState();
+  });
+
+  ipcMain.handle('resources:open', (event, bounds: unknown) => {
+    assertTrustedSender(event);
+    return getResourcesBrowser().open(parseBrowserBounds(bounds));
+  });
+
+  ipcMain.handle('resources:set-bounds', (event, bounds: unknown) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().setBounds(parseBrowserBounds(bounds));
+  });
+
+  ipcMain.handle('resources:close', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().close();
+  });
+
+  ipcMain.handle('resources:home', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().home();
+  });
+
+  ipcMain.handle('resources:navigate', (event, input: unknown) => {
+    assertTrustedSender(event);
+    if (typeof input !== 'string') throw new Error('Invalid navigation input.');
+    return getResourcesBrowser().navigate(input);
+  });
+
+  ipcMain.handle('resources:back', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().goBack();
+  });
+
+  ipcMain.handle('resources:forward', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().goForward();
+  });
+
+  ipcMain.handle('resources:reload', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().reload();
+  });
+
+  ipcMain.handle('resources:stop', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().stop();
+  });
 }
 
 function getAuthManager(): DesktopAuthManager {
   if (!authManager) throw new Error('The authentication manager is not ready.');
   return authManager;
+}
+
+function getResourcesBrowser(): ResourcesBrowser {
+  if (!resourcesBrowser) throw new Error('The resources browser is not ready.');
+  return resourcesBrowser;
+}
+
+function parseBrowserBounds(value: unknown): ResourcesBrowserBounds {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Invalid browser bounds.');
+  }
+
+  const record = value as Record<string, unknown>;
+  const { x, y, width, height } = record;
+  if (
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height)
+  ) {
+    throw new Error('Invalid browser bounds.');
+  }
+
+  return { x, y, width, height };
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {

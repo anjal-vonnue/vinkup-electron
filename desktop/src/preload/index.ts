@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { DesktopApi, DesktopAppInfo, DesktopAuthState } from '@itp/types';
+import type {
+  DesktopApi,
+  DesktopAppInfo,
+  DesktopAuthState,
+  ResourcesAllowlist,
+  ResourcesBrowserState,
+} from '@itp/types';
 
 const api: DesktopApi = {
   app: {
@@ -32,6 +38,40 @@ const api: DesktopApi = {
       ipcRenderer.on('window:fullscreen-changed', handler);
       return () => {
         ipcRenderer.removeListener('window:fullscreen-changed', handler);
+      };
+    },
+  },
+  resources: {
+    getAllowlist: () =>
+      ipcRenderer.invoke('resources:get-allowlist') as Promise<ResourcesAllowlist>,
+    getState: () => ipcRenderer.invoke('resources:get-state') as Promise<ResourcesBrowserState>,
+    open: (bounds) =>
+      ipcRenderer.invoke('resources:open', bounds) as Promise<ResourcesBrowserState>,
+    setBounds: (bounds) => ipcRenderer.invoke('resources:set-bounds', bounds) as Promise<void>,
+    close: () => ipcRenderer.invoke('resources:close') as Promise<void>,
+    home: () => ipcRenderer.invoke('resources:home') as Promise<void>,
+    navigate: (input: string) =>
+      ipcRenderer.invoke('resources:navigate', input) as Promise<ResourcesBrowserState>,
+    goBack: () => ipcRenderer.invoke('resources:back') as Promise<void>,
+    goForward: () => ipcRenderer.invoke('resources:forward') as Promise<void>,
+    reload: () => ipcRenderer.invoke('resources:reload') as Promise<void>,
+    stop: () => ipcRenderer.invoke('resources:stop') as Promise<void>,
+    onChange: (listener: (state: ResourcesBrowserState) => void) => {
+      const handler = (_event: IpcRendererEvent, state: ResourcesBrowserState): void => {
+        listener(state);
+      };
+      ipcRenderer.on('resources:state-changed', handler);
+      return () => {
+        ipcRenderer.removeListener('resources:state-changed', handler);
+      };
+    },
+    onFocusAddress: (listener: () => void) => {
+      const handler = (): void => {
+        listener();
+      };
+      ipcRenderer.on('resources:focus-address', handler);
+      return () => {
+        ipcRenderer.removeListener('resources:focus-address', handler);
       };
     },
   },
