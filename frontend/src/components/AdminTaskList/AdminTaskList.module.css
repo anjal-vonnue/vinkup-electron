@@ -122,6 +122,22 @@
   background: var(--color-bg-green-fill);
 }
 
+.approved {
+  color: var(--color-text-green);
+  background: var(--color-bg-green-fill);
+}
+
+.rework {
+  color: #fb923c;
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.pending {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
+}
+
 .progress {
   font-family: var(--font-mono);
   font-size: 12px;

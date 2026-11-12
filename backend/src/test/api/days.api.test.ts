@@ -137,6 +137,7 @@ describe('GET /api/days/:dayId/tasks', () => {
         title: 'Profile page',
         status: 'not_started',
         isStretchGoal: false,
+        reviewStatus: null,
       },
       {
         id: TASK.html1Stretch,
@@ -144,6 +145,7 @@ describe('GET /api/days/:dayId/tasks', () => {
         title: 'Printable version',
         status: 'not_started',
         isStretchGoal: true,
+        reviewStatus: null,
       },
     ]);
   });

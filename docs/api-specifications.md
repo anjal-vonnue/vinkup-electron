@@ -131,42 +131,50 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 
 ## Endpoint summary
 
-| Method | Path                                                | Auth    | Purpose                                                                             |
-| ------ | --------------------------------------------------- | ------- | ----------------------------------------------------------------------------------- |
-| GET    | `/api/health`                                       | No      | Liveness check                                                                      |
-| GET    | `/api/auth/google`                                  | No      | Start Google OAuth (redirect)                                                       |
-| GET    | `/api/auth/google/callback`                         | No      | OAuth callback; sets `auth_token` cookie and redirects                              |
-| POST   | `/api/auth/logout`                                  | Any     | Clear the auth cookie                                                               |
-| GET    | `/api/auth/me`                                      | Any     | Current user (trainee or mentor) and role from the token                            |
-| GET    | `/api/dashboard`                                    | Trainee | Dashboard: next day, progress counts, time totals, typing summary, finished courses |
-| GET    | `/api/courses/:courseId/days`                       | Trainee | Days of one course with this trainee's status                                       |
-| GET    | `/api/courses/:courseId/certificate`                | Trainee | Certificate for a finished course                                                   |
-| GET    | `/api/days/:dayId`                                  | Trainee | Day lesson content (readable even when locked)                                      |
-| GET    | `/api/days/:dayId/status`                           | Trainee | Lock/completion state of a day                                                      |
-| PATCH  | `/api/days/:dayId/complete`                         | Trainee | Complete a day; returns status and next day id                                      |
-| PATCH  | `/api/days/:dayId/status`                           | Trainee | Legacy alias of complete; returns status only                                       |
-| GET    | `/api/days/:dayId/journal`                          | Trainee | Trainee's journal response for a day                                                |
-| PUT    | `/api/days/:dayId/journal`                          | Trainee | Create/replace journal response                                                     |
-| GET    | `/api/days/:dayId/tasks`                            | Trainee | Task list of a day with per-trainee status                                          |
-| GET    | `/api/days/:dayId/integrity`                        | Trainee | The day's integrity score (0–100) from its focus events                             |
-| GET    | `/api/tasks/:taskId`                                | Trainee | Task details                                                                        |
-| GET    | `/api/tasks/:taskId/code`                           | Trainee | Saved files, or starter files                                                       |
-| PUT    | `/api/tasks/:taskId/code`                           | Trainee | Replace the saved file set                                                          |
-| POST   | `/api/tasks/:taskId/submit`                         | Trainee | Mark task completed (repeatable)                                                    |
-| POST   | `/api/activity/time`                                | Trainee | Add active/coding seconds to a day                                                  |
-| GET    | `/api/activity/time`                                | Trainee | Per-day activity for the last N days                                                |
-| POST   | `/api/activity/:taskId/events`                      | Trainee | Log an integrity flag event for a task                                              |
-| POST   | `/api/typing-test/results`                          | Trainee | Save a typing test result                                                           |
-| GET    | `/api/typing-test/results`                          | Trainee | All typing results, newest first                                                    |
-| GET    | `/api/profile`                                      | Trainee | Profile page data                                                                   |
-| GET    | `/api/journal`                                      | Trainee | Accessible journal entries, newest curriculum day first                             |
-| GET    | `/api/admin/trainees`                               | Admin   | Every trainee with progress, time, typing, flags and integrity                      |
-| POST   | `/api/admin/trainees`                               | Admin   | Add a trainee                                                                       |
-| GET    | `/api/admin/trainees/:traineeId`                    | Admin   | One trainee: profile, course progress, worked-on tasks, journal                     |
-| GET    | `/api/admin/trainees/:traineeId/flags`              | Admin   | The trainee's flag events, newest first                                             |
-| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code` | Admin   | The trainee's saved files for a task (read-only)                                    |
+| Method | Path                                                   | Auth    | Purpose                                                                             |
+| ------ | ------------------------------------------------------ | ------- | ----------------------------------------------------------------------------------- |
+| GET    | `/api/health`                                          | No      | Liveness check                                                                      |
+| GET    | `/api/auth/google`                                     | No      | Start Google OAuth (redirect)                                                       |
+| GET    | `/api/auth/google/callback`                            | No      | OAuth callback; sets `auth_token` cookie and redirects                              |
+| POST   | `/api/auth/logout`                                     | Any     | Clear the auth cookie                                                               |
+| GET    | `/api/auth/me`                                         | Any     | Current user (trainee or mentor) and role from the token                            |
+| GET    | `/api/dashboard`                                       | Trainee | Dashboard: next day, progress counts, time totals, typing summary, finished courses |
+| GET    | `/api/courses/:courseId/days`                          | Trainee | Days of one course with this trainee's status                                       |
+| GET    | `/api/courses/:courseId/certificate`                   | Trainee | Certificate for a finished course                                                   |
+| GET    | `/api/days/:dayId`                                     | Trainee | Day lesson content (readable even when locked)                                      |
+| GET    | `/api/days/:dayId/status`                              | Trainee | Lock/completion state of a day                                                      |
+| PATCH  | `/api/days/:dayId/complete`                            | Trainee | Complete a day; returns status and next day id                                      |
+| PATCH  | `/api/days/:dayId/status`                              | Trainee | Legacy alias of complete; returns status only                                       |
+| GET    | `/api/days/:dayId/journal`                             | Trainee | Trainee's journal response for a day                                                |
+| PUT    | `/api/days/:dayId/journal`                             | Trainee | Create/replace journal response                                                     |
+| GET    | `/api/days/:dayId/tasks`                               | Trainee | Task list of a day with per-trainee status                                          |
+| GET    | `/api/days/:dayId/integrity`                           | Trainee | The day's integrity score (0–100) from its focus events                             |
+| GET    | `/api/tasks/:taskId`                                   | Trainee | Task details                                                                        |
+| GET    | `/api/tasks/:taskId/code`                              | Trainee | Saved files, or starter files                                                       |
+| PUT    | `/api/tasks/:taskId/code`                              | Trainee | Replace the saved file set                                                          |
+| POST   | `/api/tasks/:taskId/submit`                            | Trainee | Mark task completed and queue it for review                                         |
+| GET    | `/api/tasks/:taskId/review`                            | Trainee | Own review state and latest review feedback                                         |
+| GET    | `/api/tasks/:taskId/reviews`                           | Trainee | Own review history, newest first                                                    |
+| POST   | `/api/activity/time`                                   | Trainee | Add active/coding seconds to a day                                                  |
+| GET    | `/api/activity/time`                                   | Trainee | Per-day activity for the last N days                                                |
+| POST   | `/api/activity/:taskId/events`                         | Trainee | Log an integrity flag event for a task                                              |
+| POST   | `/api/typing-test/results`                             | Trainee | Save a typing test result                                                           |
+| GET    | `/api/typing-test/results`                             | Trainee | All typing results, newest first                                                    |
+| GET    | `/api/profile`                                         | Trainee | Profile page data                                                                   |
+| GET    | `/api/journal`                                         | Trainee | Accessible journal entries, newest curriculum day first                             |
+| GET    | `/api/admin/trainees`                                  | Admin   | Every trainee with progress, time, typing, flags and integrity                      |
+| POST   | `/api/admin/trainees`                                  | Admin   | Add a trainee                                                                       |
+| GET    | `/api/admin/trainees/:traineeId`                       | Admin   | One trainee: profile, course progress, worked-on tasks, journal                     |
+| GET    | `/api/admin/trainees/:traineeId/flags`                 | Admin   | The trainee's flag events, newest first                                             |
+| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Admin   | The trainee's saved files for a task (read-only)                                    |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Admin   | Approve the current submission                                                      |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Admin   | Send the current submission back for rework                                         |
+| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Admin   | Review history for one task                                                         |
+| GET    | `/api/admin/trainees/:traineeId/feedback`              | Admin   | Every feedback-bearing review for a trainee, newest first                           |
 
-32 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Admin" = `requireAdmin`.
+38 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Admin" = `requireAdmin`.
+
+Task review rules, schema and UI are documented in [task-review-workflow.md](./task-review-workflow.md).
 
 ---
 
@@ -646,13 +654,51 @@ The whole request is also capped by the 5 MB JSON body limit, which is reached l
 
 - **Auth:** required.
 - **Request body:** none.
-- **Business rules:** repeatable ("Resubmit"); never locks editing and never completes the day. Upserts `task_progress` with `status: 'completed'` and `last_submitted_at = now`; `first_submitted_at` is set only on the first submit (same transaction). No code is required to submit.
+- **Business rules:** repeatable ("Resubmit"), except after approval; never locks editing and never completes the day. Upserts `task_progress` with `status: 'completed'`, `review_status: 'pending'`, `submission_count = submission_count + 1` and `last_submitted_at = now`; `first_submitted_at` is set only on the first submit. No code is required to submit. A resubmission waits for a new review and preserves the earlier review history.
 - **Response 200** (`SubmitTaskResponse`):
 
 ```json
-{ "status": "completed", "submittedAt": "2026-10-04T06:15:40.002Z" }
+{
+  "status": "completed",
+  "submittedAt": "2026-10-04T06:15:40.002Z",
+  "reviewStatus": "pending",
+  "submissionCount": 2
+}
 ```
 
+- **Errors:** 400; 401; 403 `DAY_LOCKED`; 404 `"Task not found."`; 409 `ALREADY_APPROVED` (`"This task has already been approved and cannot be resubmitted."`).
+
+### GET /api/tasks/:taskId/review
+
+- **Auth:** trainee (own task only).
+- **Business rules:** checks the task belongs to an unlocked day. Returns the current review state and the latest decision, if any.
+- **Response 200** (`TaskReviewSummary`):
+
+```json
+{
+  "reviewStatus": "rework",
+  "submissionCount": 2,
+  "latestReview": {
+    "id": "8d2f0d2a-…",
+    "taskId": "html-day-01-t-1",
+    "adminId": "8f1c…",
+    "adminName": "Mentor Alice",
+    "submissionNo": 2,
+    "decision": "rework",
+    "feedback": "Please fix the heading hierarchy.",
+    "reviewedAt": "2026-11-12T09:30:00.000Z"
+  }
+}
+```
+
+`reviewStatus` and `latestReview` are `null` when nothing has been submitted or reviewed.
+
+- **Errors:** 400; 401; 403 `DAY_LOCKED`; 404 `"Task not found."`.
+
+### GET /api/tasks/:taskId/reviews
+
+- **Auth:** trainee (own task only).
+- **Response 200** (`TaskReview[]`): every review of this task, newest first.
 - **Errors:** 400; 401; 403 `DAY_LOCKED`; 404 `"Task not found."`.
 
 ---
@@ -1013,6 +1059,8 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
   "taskId": "html-day-01-t-1",
   "title": "Semantic page skeleton",
   "status": "completed",
+  "reviewStatus": "pending",
+  "submissionCount": 2,
   "isStarterCode": false,
   "files": [{ "path": "index.html", "content": "<!doctype html>…" }],
   "codeUpdatedAt": "2026-09-29T10:40:12.000Z",
@@ -1020,6 +1068,67 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 }
 ```
 
-`isStarterCode: true` and `status: "not_started"` mean the trainee never saved this task; `files` are then the task's starter files.
+`isStarterCode: true` and `status: "not_started"` mean the trainee never saved this task; `files` are then the task's starter files. `reviewStatus: null` means the submission has never been reviewed.
 
 - **Errors:** 400; 401; 403; 404 `"Trainee not found."` / `"Task not found."`.
+
+### POST /api/admin/trainees/:traineeId/tasks/:taskId/approve
+
+- **Auth:** admin.
+- **Request body:** optional `{ "feedback": "Optional note" }`; the whole body may be omitted. Trimmed, max 5,000 characters.
+- **Business rules:** creates a `task_review` row for the current `submission_no` and sets `task_progress.review_status = 'approved'` in one transaction. Only a `completed` submission that is still `pending` (or legacy `NULL`) can be approved.
+- **Response 201** (`TaskReview`):
+
+```json
+{
+  "id": "8d2f0d2a-…",
+  "taskId": "html-day-01-t-1",
+  "adminId": "8f1c…",
+  "adminName": "Mentor Alice",
+  "submissionNo": 2,
+  "decision": "approved",
+  "feedback": "",
+  "reviewedAt": "2026-11-12T09:35:00.000Z"
+}
+```
+
+- **Errors:** 400 `VALIDATION_FAILED`; 401; 403; 404 `"Trainee not found."` / `"Task not found."`; 409 `TASK_NOT_SUBMITTED`; 409 `ALREADY_REVIEWED`.
+
+### POST /api/admin/trainees/:traineeId/tasks/:taskId/rework
+
+- **Auth:** admin.
+- **Request body:** `{ "feedback": "What must change" }` — trimmed, required, 1–5,000 characters.
+- **Business rules:** same transaction and state checks as approve, with `decision: 'rework'`. The trainee must edit and resubmit before the task can be reviewed again.
+- **Response 201** (`TaskReview`), identical shape to approve with `"decision": "rework"` and the given feedback.
+- **Errors:** 400 `VALIDATION_FAILED`; 401; 403; 404; 409 `TASK_NOT_SUBMITTED`; 409 `ALREADY_REVIEWED`.
+
+### GET /api/admin/trainees/:traineeId/tasks/:taskId/reviews
+
+- **Auth:** admin.
+- **Response 200** (`TaskReview[]`): every review of this task, newest first (created or legacy).
+- **Errors:** 400; 401; 403; 404 `"Trainee not found."` / `"Task not found."`.
+
+### GET /api/admin/trainees/:traineeId/feedback
+
+- **Auth:** admin.
+- **Business rules:** every review with non-empty feedback, newest first. Plain approvals without a note are omitted.
+- **Response 200** (`AdminFeedbackEntry[]`):
+
+```json
+[
+  {
+    "id": "8d2f0d2a-…",
+    "taskId": "html-day-01-t-1",
+    "taskTitle": "Semantic page skeleton",
+    "dayId": "html-day-01",
+    "adminId": "8f1c…",
+    "adminName": "Mentor Alice",
+    "submissionNo": 2,
+    "decision": "rework",
+    "feedback": "Please fix the heading hierarchy.",
+    "reviewedAt": "2026-11-12T09:30:00.000Z"
+  }
+]
+```
+
+- **Errors:** 400; 401; 403; 404 `"Trainee not found."`.

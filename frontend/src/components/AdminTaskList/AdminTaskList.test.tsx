@@ -23,6 +23,8 @@ const tasks: AdminTaskRow[] = [
     dayId: 'html-1',
     isStretchGoal: false,
     status: 'completed',
+    reviewStatus: null,
+    submissionCount: 1,
     codeUpdatedAt: '2026-10-01T12:12:00.000Z',
     lastSubmittedAt: '2026-10-01T12:12:00.000Z',
   },
@@ -32,6 +34,8 @@ const tasks: AdminTaskRow[] = [
     dayId: 'html-2',
     isStretchGoal: true,
     status: 'completed',
+    reviewStatus: null,
+    submissionCount: 1,
     codeUpdatedAt: '2026-10-02T12:12:00.000Z',
     lastSubmittedAt: '2026-10-02T12:12:00.000Z',
   },
@@ -60,6 +64,34 @@ describe('AdminTaskList', () => {
 
     expect(screen.queryByText('In progress')).not.toBeInTheDocument();
     expect(screen.queryByText('Not started')).not.toBeInTheDocument();
+  });
+
+  it('shows the review state instead of a plain Completed label', () => {
+    const reviewedTasks: AdminTaskRow[] = [
+      { ...tasks[0], taskId: 'a', title: 'Approved task', reviewStatus: 'approved' },
+      { ...tasks[0], taskId: 'p', title: 'Pending task', reviewStatus: 'pending' },
+      {
+        ...tasks[0],
+        taskId: 'r',
+        title: 'Rework task',
+        reviewStatus: 'rework',
+        submissionCount: 2,
+      },
+    ];
+
+    render(
+      <AdminTaskList
+        tasks={reviewedTasks}
+        courses={courses}
+        selectedTaskId={null}
+        onViewCode={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Rework')).toBeInTheDocument();
+    expect(screen.getByText(/Attempt #2/)).toBeInTheDocument();
   });
 
   it('leaves finished days closed by default', () => {

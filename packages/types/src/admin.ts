@@ -1,7 +1,7 @@
 import type { DayStatus } from './dashboard';
 import type { FlagEventType } from './activity';
 import type { ProfileData } from './profile';
-import type { TaskFile, TaskStatus } from './tasks';
+import type { ReviewStatus, TaskFile, TaskStatus } from './tasks';
 
 export type TraineeIntegrityItem = {
   traineeId: string;
@@ -46,6 +46,10 @@ export type AdminTaskRow = {
   dayId: string;
   isStretchGoal: boolean;
   status: TaskStatus;
+  /** Current review state: pending = waiting for a review, approved, rework. null = no review yet. */
+  reviewStatus: ReviewStatus | null;
+  /** Which submission attempt is current (1 = first submission). */
+  submissionCount: number;
   codeUpdatedAt: string | null;
   lastSubmittedAt: string | null;
 };
@@ -89,10 +93,30 @@ export type AdminTaskCode = {
   title: string;
   status: TaskStatus;
   isStarterCode: boolean; // true = never saved; files are the task's starter files
+  reviewStatus: ReviewStatus | null;
+  submissionCount: number;
   files: TaskFile[];
   codeUpdatedAt: string | null;
   lastSubmittedAt: string | null;
 };
+
+/** One feedback-bearing review for a trainee (feedback text is not empty). */
+export type AdminFeedbackEntry = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  dayId: string;
+  adminId: string;
+  adminName: string;
+  /** The submission attempt this feedback was written for. */
+  submissionNo: number;
+  decision: 'approved' | 'rework';
+  feedback: string;
+  reviewedAt: string;
+};
+
+/** GET /api/admin/trainees/:traineeId/feedback — newest review first. */
+export type AdminFeedbackListResponse = AdminFeedbackEntry[];
 
 /** POST /api/admin/trainees. The response is the new trainee's AdminTraineeSummary (201). */
 export type CreateTraineeRequest = {
