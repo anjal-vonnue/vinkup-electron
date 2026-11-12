@@ -72,8 +72,8 @@ the main process:
 - subdomains of an approved host are allowed (`docs.github.com` covers
   `docs.github.com` and any deeper subdomain), but look-alike domains are not.
 
-Typing a term that is not a URL searches DuckDuckGo; its host is part of the
-bundled allowlist.
+Only web addresses can be entered; there is no search box. Text that is not an
+address is rejected, so students use the approved sites directly.
 
 The app also fetches a newer copy from `VINKUP_API_URL` + `/api/resources/allowlist`
 at startup, validates it, and caches it in `userData`. A failed fetch or an
