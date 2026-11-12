@@ -131,6 +131,7 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
+  displayWindowManager?.setAuthenticationInProgress(state.status === 'pending');
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
 }

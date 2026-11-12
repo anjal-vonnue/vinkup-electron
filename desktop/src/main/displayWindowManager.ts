@@ -36,6 +36,7 @@ export class DisplayWindowManager {
   private pendingDisplayId: number | null = null;
   private isMoving = false;
   private isRelocatingByManager = false;
+  private isAuthenticationInProgress = false;
   private isQuitting = false;
   private isStarted = false;
   private areAlertsOpen = false;
@@ -112,6 +113,29 @@ export class DisplayWindowManager {
     }
   }
 
+  setAuthenticationInProgress(inProgress: boolean): void {
+    if (this.isQuitting || this.isAuthenticationInProgress === inProgress) return;
+
+    this.isAuthenticationInProgress = inProgress;
+    this.focusLostAt = null;
+
+    if (inProgress) {
+      this.clearAlerts();
+      this.destroyAllOverlays();
+      return;
+    }
+
+    if (this.isMoving) return;
+
+    if (isAlive(this.mainWindow)) {
+      if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
+      this.mainWindow.show();
+      this.keepOnAllWorkspaces(this.mainWindow);
+      this.mainWindow.focus();
+    }
+    this.reconcile();
+  }
+
   private readonly onDisplayAdded = (): void => {
     this.scheduleReconcile();
   };
@@ -133,7 +157,7 @@ export class DisplayWindowManager {
   private readonly onMainWindowWillMove = (): void => {
     if (this.isQuitting || this.isMoving || !isAlive(this.mainWindow)) return;
     this.isMoving = true;
-    this.coverAppDisplay();
+    if (!this.isAuthenticationInProgress) this.coverAppDisplay();
     this.scheduleAppDisplaySync();
   };
 
@@ -145,13 +169,14 @@ export class DisplayWindowManager {
     }
     if (!this.isMoving) {
       this.isMoving = true;
-      this.coverAppDisplay();
+      if (!this.isAuthenticationInProgress) this.coverAppDisplay();
     }
     this.keepOnAllWorkspaces(this.mainWindow);
     this.scheduleAppDisplaySync();
   };
 
   private readonly onMainWindowBlur = (): void => {
+    if (this.isAuthenticationInProgress) return;
     if (this.focusLostAt === null) this.focusLostAt = Date.now();
   };
 
@@ -170,7 +195,7 @@ export class DisplayWindowManager {
 
   private readonly onMainWindowLeaveFullscreen = (): void => {
     if (this.isMoving || this.isQuitting || !isAlive(this.mainWindow)) return;
-    this.coverAppDisplay();
+    if (!this.isAuthenticationInProgress) this.coverAppDisplay();
     this.mainWindow.setFullScreen(true);
     this.keepOnAllWorkspaces(this.mainWindow);
   };
@@ -187,10 +212,19 @@ export class DisplayWindowManager {
 
     this.launchFocusTimers.push(
       setTimeout(() => {
-        if (isAlive(this.mainWindow) && !this.isQuitting) this.mainWindow.focus();
+        if (isAlive(this.mainWindow) && !this.isQuitting && !this.isAuthenticationInProgress) {
+          this.mainWindow.focus();
+        }
       }, 800),
       setTimeout(() => {
-        if (this.isQuitting || !isAlive(this.mainWindow) || this.mainWindow.isFocused()) return;
+        if (
+          this.isQuitting ||
+          this.isAuthenticationInProgress ||
+          !isAlive(this.mainWindow) ||
+          this.mainWindow.isFocused()
+        ) {
+          return;
+        }
         this.focusLostAt = Date.now() - FOCUS_LOSS_GRACE_MS;
         this.openAlerts();
       }, 1600)
@@ -198,7 +232,13 @@ export class DisplayWindowManager {
   };
 
   private readonly checkFocus = (): void => {
-    if (this.isQuitting || this.isMoving || !isAlive(this.mainWindow) || this.areAlertsOpen) {
+    if (
+      this.isQuitting ||
+      this.isAuthenticationInProgress ||
+      this.isMoving ||
+      !isAlive(this.mainWindow) ||
+      this.areAlertsOpen
+    ) {
       this.focusLostAt = null;
       return;
     }
@@ -227,7 +267,14 @@ export class DisplayWindowManager {
   }
 
   private readonly reconcile = (): void => {
-    if (this.isQuitting || !isAlive(this.mainWindow)) return;
+    if (
+      this.isQuitting ||
+      this.isAuthenticationInProgress ||
+      this.isMoving ||
+      !isAlive(this.mainWindow)
+    ) {
+      return;
+    }
 
     const displays = screen.getAllDisplays();
     if (!displays.some((display) => display.id === this.appDisplayId)) {
@@ -288,8 +335,11 @@ export class DisplayWindowManager {
       const currentDisplay = screen
         .getAllDisplays()
         .find((display) => display.id === this.appDisplayId);
-      const coverWindows = [this.ensureOverlay(target)];
-      if (currentDisplay) coverWindows.push(this.ensureOverlay(currentDisplay));
+      const coverWindows: BrowserWindow[] = [];
+      if (!this.isAuthenticationInProgress) {
+        coverWindows.push(this.ensureOverlay(target));
+        if (currentDisplay) coverWindows.push(this.ensureOverlay(currentDisplay));
+      }
       await Promise.all(coverWindows.map((window) => this.waitUntilVisible(window)));
       await this.setFullscreen(false);
       if (!isAlive(this.mainWindow) || this.isQuitting) return;
@@ -319,7 +369,9 @@ export class DisplayWindowManager {
       this.isRelocatingByManager = false;
       this.isMoving = false;
       this.reconcile();
-      if (isAlive(this.mainWindow) && !this.isQuitting) this.mainWindow.focus();
+      if (isAlive(this.mainWindow) && !this.isQuitting && !this.isAuthenticationInProgress) {
+        this.mainWindow.focus();
+      }
       this.moveToPendingDisplay();
     }
   }
@@ -370,14 +422,14 @@ export class DisplayWindowManager {
     try {
       let current = screen.getDisplayMatching(this.mainWindow.getBounds());
       if (current.id !== this.appDisplayId) {
-        this.coverAppDisplay();
+        if (!this.isAuthenticationInProgress) this.coverAppDisplay();
         if (!this.mainWindow.isFullScreen()) await this.setFullscreen(true);
         if (!isAlive(this.mainWindow) || this.isQuitting) return;
         current = screen.getDisplayMatching(this.mainWindow.getBounds());
         this.appDisplayId = current.id;
         this.destroyOverlay(current.id);
       }
-      this.mainWindow.focus();
+      if (!this.isAuthenticationInProgress) this.mainWindow.focus();
     } finally {
       this.isMoving = false;
       this.reconcile();
@@ -472,7 +524,15 @@ export class DisplayWindowManager {
   }
 
   private openAlerts(): void {
-    if (this.areAlertsOpen || this.isQuitting || this.isMoving || !isAlive(this.mainWindow)) return;
+    if (
+      this.areAlertsOpen ||
+      this.isQuitting ||
+      this.isAuthenticationInProgress ||
+      this.isMoving ||
+      !isAlive(this.mainWindow)
+    ) {
+      return;
+    }
     this.areAlertsOpen = true;
     this.reconcileAlerts(screen.getAllDisplays());
     const primaryAlert = this.alerts.get(screen.getPrimaryDisplay().id);
