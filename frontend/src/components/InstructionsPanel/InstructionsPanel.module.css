@@ -4,6 +4,9 @@
   font-size: 15px;
   line-height: 1.6;
   color: var(--color-text-secondary);
+  /*students can't highlight instruction text with the mouse. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .instructions :global(h2) {
