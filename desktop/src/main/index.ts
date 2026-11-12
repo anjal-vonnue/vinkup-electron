@@ -27,6 +27,7 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const AUTH_COOKIE_NAME = 'auth_token';
+const DISABLE_SCREEN_PROTECTION: boolean = true;
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
@@ -80,7 +81,11 @@ async function bootstrap(): Promise<void> {
 
   const window = createMainWindow();
   mainWindow = window;
-  displayWindowManager = new DisplayWindowManager(window, handleExitChoice);
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION
+  );
   await displayWindowManager.start();
   await loadRenderer(window);
 }
@@ -144,7 +149,7 @@ function createMainWindow(): BrowserWindow {
     y,
     width,
     height,
-    fullscreen: true,
+    fullscreen: !DISABLE_SCREEN_PROTECTION,
     useContentSize: true,
     frame: false,
     title: APP_NAME,
@@ -159,7 +164,9 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  window.on('minimize', () => window.restore());
+  window.on('minimize', () => {
+    if (!DISABLE_SCREEN_PROTECTION) window.restore();
+  });
 
   window.once('ready-to-show', () => {
     window.show();
@@ -194,7 +201,12 @@ function createMainWindow(): BrowserWindow {
   window.webContents.on('before-input-event', (event, input) => {
     const key = input.key.toLowerCase();
     const moveToNextDisplay =
-      input.type === 'keyDown' && input.control && input.shift && input.alt && key === 'm';
+      !DISABLE_SCREEN_PROTECTION &&
+      input.type === 'keyDown' &&
+      input.control &&
+      input.shift &&
+      input.alt &&
+      key === 'm';
     if (moveToNextDisplay) {
       event.preventDefault();
       void displayWindowManager?.moveToNextDisplay().catch((error: unknown) => {
@@ -390,7 +402,11 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length > 0) return;
   const window = createMainWindow();
   mainWindow = window;
-  displayWindowManager = new DisplayWindowManager(window, handleExitChoice);
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION
+  );
   void displayWindowManager
     .start()
     .then(() => loadRenderer(window))

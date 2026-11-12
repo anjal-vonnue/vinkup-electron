@@ -41,14 +41,18 @@ export class DisplayWindowManager {
   private isStarted = false;
   private areAlertsOpen = false;
 
-  constructor(mainWindow: BrowserWindow, onExitChoice: () => void) {
+  constructor(
+    mainWindow: BrowserWindow,
+    onExitChoice: () => void,
+    private readonly enabled: boolean
+  ) {
     this.mainWindow = mainWindow;
     this.onExitChoice = onExitChoice;
     this.appDisplayId = screen.getDisplayMatching(mainWindow.getBounds()).id;
   }
 
   async start(): Promise<void> {
-    if (this.isStarted) return;
+    if (!this.enabled || this.isStarted) return;
     this.isStarted = true;
 
     screen.on('display-added', this.onDisplayAdded);
@@ -91,6 +95,7 @@ export class DisplayWindowManager {
   }
 
   async moveToNextDisplay(): Promise<void> {
+    if (!this.enabled) return;
     const displays = screen.getAllDisplays();
     if (displays.length < 2) return;
 
@@ -114,7 +119,7 @@ export class DisplayWindowManager {
   }
 
   setAuthenticationInProgress(inProgress: boolean): void {
-    if (this.isQuitting || this.isAuthenticationInProgress === inProgress) return;
+    if (!this.enabled || this.isQuitting || this.isAuthenticationInProgress === inProgress) return;
 
     this.isAuthenticationInProgress = inProgress;
     this.focusLostAt = null;

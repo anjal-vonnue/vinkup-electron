@@ -34,6 +34,11 @@ moving the app away from focus opens a return-or-exit alert on every display.
 Display covers and focus alerts are paused while Google sign-in is active in the
 system browser, then restored when sign-in completes or fails.
 
+To temporarily disable the entire screen-protection feature for a developer
+build, change `DISABLE_SCREEN_PROTECTION` in `desktop/src/main/index.ts` to
+`false` and rebuild. This source-only flag is not exposed to the renderer or as
+an application setting.
+
 If you want to run them separately (for example, to restart only the shell):
 
 ```bash
