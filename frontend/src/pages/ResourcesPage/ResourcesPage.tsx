@@ -253,7 +253,7 @@ export default function ResourcesPage() {
                 {browser.isLoading ? <StopIcon /> : <ReloadIcon />}
               </button>
 
-              <form className={styles.addressForm} onSubmit={handleSubmit} role="search">
+              <form className={styles.addressForm} onSubmit={handleSubmit}>
                 <span className={styles.addressIcon} aria-hidden="true">
                   <LockIcon />
                 </span>
@@ -262,8 +262,8 @@ export default function ResourcesPage() {
                   className={styles.addressInput}
                   value={address}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Search or enter a web address"
-                  aria-label="Search or enter a web address"
+                  placeholder="Enter a web address"
+                  aria-label="Enter a web address"
                   spellCheck={false}
                   autoComplete="off"
                 />
@@ -375,8 +375,7 @@ export default function ResourcesPage() {
                   )}
 
                   <p className={styles.footnote}>
-                    Type a search term or web address above and press Enter. Ctrl+L focuses the
-                    address bar.
+                    Type a web address above and press Enter. Ctrl+L focuses the address bar.
                   </p>
                 </section>
               )}

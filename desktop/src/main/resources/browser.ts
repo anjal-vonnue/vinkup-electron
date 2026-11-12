@@ -207,7 +207,7 @@ export class ResourcesBrowser {
     });
     resourcesSession.setPermissionCheckHandler(() => false);
 
-    // DuckDuckGo and GitHub render better without the Electron token in the UA.
+    // GitHub renders better without the Electron token in the UA.
     resourcesSession.setUserAgent(
       app.userAgentFallback.replace(/\s(?:Electron|Vinkup|vinkup)\/\S+/g, '')
     );

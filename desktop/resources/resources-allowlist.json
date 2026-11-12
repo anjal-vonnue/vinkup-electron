@@ -1,9 +1,7 @@
 {
   "version": 1,
   "updatedAt": "2026-11-12",
-  "searchUrlTemplate": "https://duckduckgo.com/?q={query}",
   "domains": [
-    "duckduckgo.com",
     "developer.mozilla.org",
     "web.dev",
     "developer.chrome.com",

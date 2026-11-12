@@ -13,12 +13,10 @@ export function parseAllowlist(value: unknown): ResourcesAllowlist | null {
   const record = value as Record<string, unknown>;
   const version = record.version;
   const updatedAt = record.updatedAt;
-  const template = record.searchUrlTemplate;
   const rawDomains = record.domains;
 
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return null;
   if (typeof updatedAt !== 'string' || updatedAt.trim() === '') return null;
-  if (typeof template !== 'string' || !template.includes('{query}')) return null;
   if (!Array.isArray(rawDomains)) return null;
 
   const domains: string[] = [];
@@ -30,20 +28,7 @@ export function parseAllowlist(value: unknown): ResourcesAllowlist | null {
   }
   if (domains.length === 0) return null;
 
-  let searchHost: string;
-  try {
-    const searchUrl = new URL(template.replace('{query}', 'vinkup'));
-    if (searchUrl.protocol !== 'https:') return null;
-    searchHost = searchUrl.hostname;
-  } catch {
-    return null;
-  }
-
-  // A search template pointing at a blocked host would produce a dead address
-  // bar, so require the provider itself to be approved.
-  if (!isHostAllowed(searchHost, domains)) return null;
-
-  return { version, updatedAt, searchUrlTemplate: template, domains };
+  return { version, updatedAt, domains };
 }
 
 /** Lowercases and trims a configured host; returns null for anything malformed. */
@@ -81,7 +66,7 @@ export function hostFromUrl(rawUrl: string): string | null {
 }
 
 /**
- * Turns whatever the student typed into a navigation target (or a rejection).
+ * Turns the web address the student typed into a navigation target (or a rejection).
  * The renderer must treat both outcomes as authoritative; it never builds URLs
  * for the browser itself.
  */
@@ -95,7 +80,7 @@ export function resolveNavigationInput(
   allowlist: ResourcesAllowlist
 ): ResourcesNavigationTarget {
   const trimmed = input.trim().slice(0, MAX_INPUT_LENGTH);
-  if (trimmed === '') return invalid('Enter a web address or a search term.');
+  if (trimmed === '') return invalid('Enter a web address.');
 
   if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
     let url: URL;
@@ -123,7 +108,7 @@ export function resolveNavigationInput(
     return checkUrl(url, allowlist);
   }
 
-  return search(trimmed, allowlist);
+  return invalid('Enter a web address. Searching is not available here.');
 }
 
 export function formatBlockedMessage(host: string): string {
@@ -133,19 +118,6 @@ export function formatBlockedMessage(host: string): string {
 function checkUrl(url: URL, allowlist: ResourcesAllowlist): ResourcesNavigationTarget {
   if (!isHostAllowed(url.hostname, allowlist.domains)) {
     return { kind: 'blocked', url: url.toString(), host: url.hostname };
-  }
-  return { kind: 'navigate', url: url.toString() };
-}
-
-function search(query: string, allowlist: ResourcesAllowlist): ResourcesNavigationTarget {
-  let url: URL;
-  try {
-    url = new URL(allowlist.searchUrlTemplate.replace('{query}', encodeURIComponent(query)));
-  } catch {
-    return invalid('Search is not available right now.');
-  }
-  if (!isHostAllowed(url.hostname, allowlist.domains)) {
-    return invalid('Search is not available right now.');
   }
   return { kind: 'navigate', url: url.toString() };
 }

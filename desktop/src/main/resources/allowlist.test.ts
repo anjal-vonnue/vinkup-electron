@@ -10,8 +10,7 @@ import {
 const allowlist: ResourcesAllowlist = {
   version: 2,
   updatedAt: '2026-01-01',
-  searchUrlTemplate: 'https://duckduckgo.com/?q={query}',
-  domains: ['developer.mozilla.org', 'github.com', 'duckduckgo.com'],
+  domains: ['developer.mozilla.org', 'github.com'],
 };
 
 describe('isHostAllowed', () => {
@@ -72,11 +71,9 @@ describe('resolveNavigationInput', () => {
     expect(resolveNavigationInput('https://user:pass@github.com', allowlist).kind).toBe('invalid');
   });
 
-  it('turns plain text into a search', () => {
-    expect(resolveNavigationInput('react hooks', allowlist)).toEqual({
-      kind: 'navigate',
-      url: 'https://duckduckgo.com/?q=react%20hooks',
-    });
+  it('rejects plain text instead of searching', () => {
+    expect(resolveNavigationInput('react hooks', allowlist).kind).toBe('invalid');
+    expect(resolveNavigationInput('how do I center a div', allowlist).kind).toBe('invalid');
   });
 
   it('rejects an empty address', () => {
@@ -85,17 +82,17 @@ describe('resolveNavigationInput', () => {
 });
 
 describe('parseAllowlist', () => {
-  it('accepts the bundled file and includes the search provider', () => {
+  it('accepts the bundled file and has no search provider', () => {
     expect(parseAllowlist(BUNDLED_ALLOWLIST)).not.toBeNull();
-    expect(BUNDLED_ALLOWLIST.domains).toContain('duckduckgo.com');
+    expect(BUNDLED_ALLOWLIST.domains).not.toContain('duckduckgo.com');
   });
 
   it('normalizes and de-duplicates domains', () => {
     const parsed = parseAllowlist({
       ...allowlist,
-      domains: ['GitHub.com', 'github.com', 'docs.github.com.', 'duckduckgo.com'],
+      domains: ['GitHub.com', 'github.com', 'docs.github.com.'],
     });
-    expect(parsed?.domains).toEqual(['github.com', 'docs.github.com', 'duckduckgo.com']);
+    expect(parsed?.domains).toEqual(['github.com', 'docs.github.com']);
   });
 
   it('rejects malformed or incomplete data', () => {
@@ -103,11 +100,5 @@ describe('parseAllowlist', () => {
     expect(parseAllowlist({ ...allowlist, version: '2' })).toBeNull();
     expect(parseAllowlist({ ...allowlist, domains: ['bad domain'] })).toBeNull();
     expect(parseAllowlist({ ...allowlist, domains: [] })).toBeNull();
-    expect(
-      parseAllowlist({ ...allowlist, searchUrlTemplate: 'https://example.com/?q={query}' })
-    ).toBeNull();
-    expect(
-      parseAllowlist({ ...allowlist, searchUrlTemplate: 'https://duckduckgo.com/?q=' })
-    ).toBeNull();
   });
 });

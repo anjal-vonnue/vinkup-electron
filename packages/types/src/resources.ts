@@ -10,8 +10,6 @@ export interface ResourcesAllowlist {
   version: number;
   /** ISO date of the last change, shown in the UI and logs. */
   updatedAt: string;
-  /** Search URL with a `{query}` placeholder. Must point at an allowed host. */
-  searchUrlTemplate: string;
   /** Approved hosts. Subdomains are allowed automatically. */
   domains: string[];
 }
