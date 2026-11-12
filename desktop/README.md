@@ -28,6 +28,9 @@ npm run dev:desktop
 
 This starts Vite on port `5173` and then launches Electron. Closing either one
 stops both. Electron loads `http://localhost:5173` so frontend changes hot-reload.
+On multi-display setups, other displays are covered while the app is running.
+Press `Ctrl+Alt+Shift+M` to move the fullscreen app to the next display;
+moving the app away from focus opens a return-or-exit alert on every display.
 
 If you want to run them separately (for example, to restart only the shell):
 

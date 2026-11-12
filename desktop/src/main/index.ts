@@ -17,6 +17,7 @@ import { startLocalServer, type LocalServer } from './server';
 import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager';
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
+import { DisplayWindowManager } from './displayWindowManager';
 import {
   assertTrustedSender as assertTrustedSenderForOrigin,
   isAllowedExternalUrl,
@@ -31,6 +32,7 @@ let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
+let displayWindowManager: DisplayWindowManager | null = null;
 
 // Set the name before `ready` so userData, cache and config use the product name.
 app.setName(APP_NAME);
@@ -76,8 +78,11 @@ async function bootstrap(): Promise<void> {
     console.error('[auth] Failed to restore the session', error);
   });
 
-  mainWindow = createMainWindow();
-  await loadRenderer(mainWindow);
+  const window = createMainWindow();
+  mainWindow = window;
+  displayWindowManager = new DisplayWindowManager(window, handleExitChoice);
+  await displayWindowManager.start();
+  await loadRenderer(window);
 }
 
 function createDesktopAuthManager(): DesktopAuthManager {
@@ -154,14 +159,16 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.on('minimize', () => window.restore());
-  window.on('leave-full-screen', () => window.setFullScreen(true));
 
   window.once('ready-to-show', () => {
     window.show();
   });
 
   window.on('closed', () => {
+    displayWindowManager?.dispose();
+    displayWindowManager = null;
     mainWindow = null;
+    app.quit();
   });
 
   window.on('enter-full-screen', () => {
@@ -184,6 +191,17 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.webContents.on('before-input-event', (event, input) => {
+    const key = input.key.toLowerCase();
+    const moveToNextDisplay =
+      input.type === 'keyDown' && input.control && input.shift && input.alt && key === 'm';
+    if (moveToNextDisplay) {
+      event.preventDefault();
+      void displayWindowManager?.moveToNextDisplay().catch((error: unknown) => {
+        console.error('[desktop] Failed to move to the next display', error);
+      });
+      return;
+    }
+
     if (!isDevToolsShortcut(input)) return;
     event.preventDefault();
     // The custom menu below replaces Electron's default menu, so the built-in
@@ -262,6 +280,12 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     await getAuthManager().logout();
   });
+
+  ipcMain.on('display-alert:choice', (event, choice: unknown) => {
+    const manager = displayWindowManager;
+    if (!manager?.ownsAlertSender(event.sender)) return;
+    manager.handleAlertChoice(choice);
+  });
 }
 
 function getAuthManager(): DesktopAuthManager {
@@ -288,6 +312,11 @@ function isTrusted(url: string): boolean {
 function openExternal(url: string): void {
   if (!isAllowedExternalUrl(url)) return;
   void shell.openExternal(url);
+}
+
+function handleExitChoice(): void {
+  // TODO: report the student's exit choice when the backend supports it.
+  app.quit();
 }
 
 function isDevToolsShortcut(input: Electron.Input): boolean {
@@ -358,12 +387,19 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length > 0) return;
-  mainWindow = createMainWindow();
-  void loadRenderer(mainWindow);
+  const window = createMainWindow();
+  mainWindow = window;
+  displayWindowManager = new DisplayWindowManager(window, handleExitChoice);
+  void displayWindowManager
+    .start()
+    .then(() => loadRenderer(window))
+    .catch(handleStartupError);
 });
 
 app.on('before-quit', () => {
   // TODO: ask the renderer to flush activity time before the app exits.
+  displayWindowManager?.dispose();
+  displayWindowManager = null;
   authManager?.dispose();
   authManager = null;
   if (!localServer) return;
