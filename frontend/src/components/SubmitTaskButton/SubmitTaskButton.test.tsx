@@ -158,4 +158,25 @@ describe('SubmitTaskButton', () => {
     renderButton();
     expect(submitButton()).toHaveTextContent('Submit Task');
   });
+
+  it('is disabled and reads "Approved" once an admin approves the task', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderButton({ reviewStatus: 'approved', hasSubmitted: true });
+
+    const button = screen.getByRole('button', { name: 'Approved' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      'title',
+      'This task has been approved and cannot be resubmitted.'
+    );
+
+    await user.click(button);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('asks to resubmit when the task is in rework', () => {
+    renderButton({ reviewStatus: 'rework', hasSubmitted: true });
+    expect(submitButton()).toHaveTextContent('Resubmit');
+  });
 });

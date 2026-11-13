@@ -40,6 +40,8 @@ describe('GET /api/tasks/:taskId', () => {
       sequenceOrder: 1,
       estimatedMinutes: 45,
       status: 'not_started',
+      reviewStatus: null,
+      submissionCount: 0,
       day: { id: DAY.html1, dayNumber: 1, courseTitle: 'HTML' },
       runtime: 'browser',
       runCommand: null,

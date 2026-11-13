@@ -1,10 +1,16 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, UserX } from 'lucide-react';
-import { getAdminFlags, getAdminTaskCode, getAdminTrainee } from '../../api/admin';
+import {
+  getAdminFlags,
+  getAdminTaskCode,
+  getAdminTrainee,
+  getAdminTraineeFeedback,
+} from '../../api/admin';
 import AdminHeader from '../../components/AdminHeader';
 import AdminCodePanel from '../../components/AdminCodePanel';
 import AdminDayGrid from '../../components/AdminDayGrid';
+import AdminFeedbackList from '../../components/AdminFeedbackList';
 import AdminFlagTable from '../../components/AdminFlagTable';
 import AdminJournalList from '../../components/AdminJournalList';
 import AdminTaskList from '../../components/AdminTaskList';
@@ -22,7 +28,7 @@ import { DEFAULT_PRINT_OPTIONS, reportDocumentTitle } from '../../lib/printRepor
 import { useAdminResource } from './hooks/useAdminResource';
 import styles from './AdminTraineePage.module.css';
 
-type TabId = 'tasks' | 'journal' | 'flags';
+type TabId = 'tasks' | 'journal' | 'flags' | 'feedbacks';
 
 export default function AdminTraineePage() {
   const { traineeId = '' } = useParams();
@@ -53,13 +59,24 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
     () => (traineeId && selectedTaskId ? () => getAdminTaskCode(traineeId, selectedTaskId) : null),
     [traineeId, selectedTaskId]
   );
+  const loadFeedback = useMemo(
+    () => (traineeId ? () => getAdminTraineeFeedback(traineeId) : null),
+    [traineeId]
+  );
 
-  // The flags load beside the detail, so a failure there doesn't hide the rest of the page.
+  // The flags and feedback load beside the detail, so a failure there doesn't hide the rest of the page.
   const detail = useAdminResource(loadDetail);
   const flags = useAdminResource(loadFlags);
   const code = useAdminResource(loadCode);
+  const feedback = useAdminResource(loadFeedback);
 
   const handleCloseCode = useCallback(() => setSelectedTaskId(null), []);
+
+  const handleReviewSuccess = useCallback(() => {
+    detail.retry();
+    code.retry();
+    feedback.retry();
+  }, [detail, code, feedback]);
 
   const { user } = useAuth();
   const { printJob, print } = usePrintMode({
@@ -134,6 +151,10 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
       id: 'flags',
       label: `Flags (${flags.data ? flags.data.filter((flag) => flag.reviewPriority !== 'LOW').length : '…'})`,
     },
+    {
+      id: 'feedbacks',
+      label: `Feedbacks (${feedback.data ? feedback.data.length : '…'})`,
+    },
   ];
 
   return (
@@ -183,6 +204,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
               <>
                 {selectedTaskId && (
                   <AdminCodePanel
+                    key={selectedTaskId}
                     traineeId={traineeId}
                     taskTitle={selectedTask?.title ?? 'Task code'}
                     code={code.data}
@@ -190,6 +212,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                     error={code.error}
                     onRetry={code.retry}
                     onClose={handleCloseCode}
+                    onReviewSuccess={handleReviewSuccess}
                   />
                 )}
                 <AdminTaskList
@@ -218,6 +241,24 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                   />
                 )}
                 {flags.data && <AdminFlagTable flags={flags.data} dayLabels={dayLabels} />}
+              </>
+            )}
+
+            {activeTab === 'feedbacks' && (
+              <>
+                {feedback.isLoading && (
+                  <div className={styles.state}>
+                    <LoaderOverlay label="Loading feedback…" />
+                  </div>
+                )}
+                {feedback.error && (
+                  <ErrorState
+                    title="Unable to load feedback"
+                    message={feedback.error.message}
+                    onRetry={feedback.retry}
+                  />
+                )}
+                {feedback.data && <AdminFeedbackList feedback={feedback.data} />}
               </>
             )}
           </div>

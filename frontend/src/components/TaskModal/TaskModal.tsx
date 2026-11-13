@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { DayTask } from '@itp/types';
+import TaskFeedbackModal from '../TaskFeedbackModal';
 import styles from './TaskModal.module.css';
 
 type TaskModalProps = {
@@ -19,6 +20,8 @@ export default function TaskModal({
   onClose,
   onSelectTask,
 }: TaskModalProps) {
+  const [feedbackTask, setFeedbackTask] = useState<DayTask | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -50,15 +53,20 @@ export default function TaskModal({
 
   if (!isOpen) return null;
 
-  function getStatusLabel(status: DayTask['status']) {
-    switch (status) {
-      case 'completed':
-        return 'Completed';
-      case 'in_progress':
-        return 'In progress';
-      case 'not_started':
-        return 'Not started';
+  function getTaskStatusTag(task: DayTask) {
+    if (task.status === 'completed') {
+      if (task.reviewStatus === 'approved') {
+        return { label: 'Approved', className: styles.approved, isRework: false };
+      }
+      if (task.reviewStatus === 'rework') {
+        return { label: 'Rework', className: styles.rework, isRework: true };
+      }
+      return { label: 'Completed', className: styles.completed, isRework: false };
     }
+    if (task.status === 'in_progress') {
+      return { label: 'In progress', className: styles.in_progress, isRework: false };
+    }
+    return { label: 'Not started', className: styles.not_started, isRework: false };
   }
 
   return (
@@ -104,36 +112,60 @@ export default function TaskModal({
           {tasks.length === 0 ? (
             <p className={styles.emptyMessage}>No tasks are available for this day.</p>
           ) : (
-            tasks.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                className={styles.taskItem}
-                onClick={() => onSelectTask(task)}
-              >
-                <span className={styles.taskNumber}>
-                  {String(task.sequenceOrder).padStart(2, '0')}
-                </span>
+            tasks.map((task) => {
+              const tag = getTaskStatusTag(task);
 
-                <span className={styles.taskInfo}>
-                  <span className={styles.taskTitle}>{task.title}</span>
-
-                  <span className={styles.taskMeta}>
-                    <span className={`${styles.status} ${styles[task.status]}`}>
-                      {getStatusLabel(task.status)}
-                    </span>
-
-                    {task.isStretchGoal && (
-                      <span className={styles.stretchBadge}>Stretch goal</span>
-                    )}
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  className={styles.taskItem}
+                  onClick={() => onSelectTask(task)}
+                >
+                  <span className={styles.taskNumber}>
+                    {String(task.sequenceOrder).padStart(2, '0')}
                   </span>
-                </span>
 
-                <span className={styles.arrow} aria-hidden="true">
-                  &rarr;
-                </span>
-              </button>
-            ))
+                  <span className={styles.taskInfo}>
+                    <span className={styles.taskTitle}>{task.title}</span>
+
+                    <span className={styles.taskMeta}>
+                      {tag.isRework ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className={`${styles.status} ${tag.className} ${styles.clickableStatus}`}
+                          title="Modifications requested. Click to view feedback."
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFeedbackTask(task);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setFeedbackTask(task);
+                            }
+                          }}
+                        >
+                          {tag.label}
+                        </span>
+                      ) : (
+                        <span className={`${styles.status} ${tag.className}`}>{tag.label}</span>
+                      )}
+
+                      {task.isStretchGoal && (
+                        <span className={styles.stretchBadge}>Stretch goal</span>
+                      )}
+                    </span>
+                  </span>
+
+                  <span className={styles.arrow} aria-hidden="true">
+                    &rarr;
+                  </span>
+                </button>
+              );
+            })
           )}
         </div>
 
@@ -143,6 +175,19 @@ export default function TaskModal({
           </span>
         </footer>
       </section>
+
+      {feedbackTask && (
+        <TaskFeedbackModal
+          isOpen={feedbackTask !== null}
+          onClose={() => setFeedbackTask(null)}
+          taskId={feedbackTask.id}
+          taskTitle={feedbackTask.title}
+          onOpenEditor={() => {
+            onClose();
+            onSelectTask(feedbackTask);
+          }}
+        />
+      )}
     </div>
   );
 }

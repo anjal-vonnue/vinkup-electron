@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { DayTask } from '@itp/types';
+import { getTaskReview } from '../../api/tasks';
 import TaskModal from './TaskModal';
+
+vi.mock('../../api/tasks', () => ({ getTaskReview: vi.fn() }));
 
 afterEach(() => {
   cleanup();
@@ -104,6 +107,65 @@ describe('TaskModal: task list', () => {
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByText('In progress')).toBeInTheDocument();
     expect(screen.getByText('Not started')).toBeInTheDocument();
+  });
+
+  it('shows review status tags for approved, pending and rework submissions', () => {
+    renderModal({
+      tasks: [
+        makeTask({
+          id: 'approved',
+          title: 'Approved task',
+          status: 'completed',
+          reviewStatus: 'approved',
+        }),
+        makeTask({
+          id: 'pending',
+          title: 'Pending task',
+          status: 'completed',
+          reviewStatus: 'pending',
+        }),
+        makeTask({
+          id: 'rework',
+          title: 'Rework task',
+          status: 'completed',
+          reviewStatus: 'rework',
+        }),
+      ],
+    });
+
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Rework')).toBeInTheDocument();
+  });
+
+  it('opens the feedback modal from the Rework tag without selecting the task', async () => {
+    const reworkTask = makeTask({
+      id: 'rework',
+      title: 'Rework task',
+      status: 'completed',
+      reviewStatus: 'rework',
+    });
+    vi.mocked(getTaskReview).mockResolvedValue({
+      reviewStatus: 'rework',
+      submissionCount: 2,
+      latestReview: {
+        id: 'rev-1',
+        taskId: 'rework',
+        adminId: 'admin-1',
+        adminName: 'Mentor Jane',
+        submissionNo: 2,
+        decision: 'rework',
+        feedback: 'Tighten the spacing.',
+        reviewedAt: '2026-11-12T10:00:00.000Z',
+      },
+    });
+    const { onSelectTask } = renderModal({ tasks: [reworkTask] });
+
+    fireEvent.click(screen.getByText('Rework'));
+
+    expect(await screen.findByRole('dialog', { name: /Rework task/ })).toBeInTheDocument();
+    expect(await screen.findByText('Tighten the spacing.')).toBeInTheDocument();
+    expect(onSelectTask).not.toHaveBeenCalled();
   });
 
   it('shows the stretch badge only on stretch goals', () => {

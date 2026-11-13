@@ -205,6 +205,29 @@
   color: var(--color-status-success);
 }
 
+.approved {
+  background: var(--color-bg-green-fill);
+  color: var(--color-status-success);
+}
+
+.rework {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.clickableStatus {
+  cursor: pointer;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.clickableStatus:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
 .taskArrow {
   display: grid;
   flex: 0 0 32px;

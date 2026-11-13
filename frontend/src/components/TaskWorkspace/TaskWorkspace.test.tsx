@@ -146,6 +146,8 @@ describe('TaskWorkspace', () => {
     vi.mocked(submitTask).mockResolvedValue({
       status: 'completed',
       submittedAt: new Date(2026, 8, 28, 14, 32).toISOString(),
+      reviewStatus: 'pending',
+      submissionCount: 1,
     });
     renderWorkspace();
 

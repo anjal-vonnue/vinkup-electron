@@ -14,9 +14,11 @@ import {
   saveJournal,
   getDayIntegrity,
 } from '../../api/days';
+import { getTaskReview } from '../../api/tasks';
 import DayOverviewPage from './DayOverviewPage';
 
 vi.mock('../../api/days');
+vi.mock('../../api/tasks');
 // The header needs providers we don't care about here.
 vi.mock('../../components/Header', () => ({ default: () => null }));
 // The self-check checklist stores its ticks per trainee, so it needs a user.
@@ -109,6 +111,64 @@ describe('DayOverviewPage: loading', () => {
     renderPage();
 
     expect(await screen.findByText("Couldn't load this day")).toBeInTheDocument();
+  });
+});
+
+describe('DayOverviewPage: review status', () => {
+  const approvedTask = {
+    ...completedTask,
+    id: 't-approved',
+    title: 'Approved task',
+    reviewStatus: 'approved' as const,
+  };
+  const pendingTask = {
+    ...completedTask,
+    id: 't-pending',
+    title: 'Pending task',
+    reviewStatus: 'pending' as const,
+  };
+  const reworkTask = {
+    ...completedTask,
+    id: 't-rework',
+    title: 'Rework task',
+    reviewStatus: 'rework' as const,
+  };
+
+  it('shows Approved, Completed and Rework tags on submitted tasks', async () => {
+    vi.mocked(getDayTasks).mockResolvedValue([approvedTask, pendingTask, reworkTask]);
+    renderPage();
+
+    expect(await screen.findByText('Approved task')).toBeInTheDocument();
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Rework')).toBeInTheDocument();
+  });
+
+  it('opens the feedback modal when the Rework tag is clicked', async () => {
+    vi.mocked(getDayTasks).mockResolvedValue([reworkTask]);
+    vi.mocked(getTaskReview).mockResolvedValue({
+      reviewStatus: 'rework',
+      submissionCount: 2,
+      latestReview: {
+        id: 'rev-1',
+        taskId: reworkTask.id,
+        adminId: 'admin-1',
+        adminName: 'Mentor Jane',
+        submissionNo: 2,
+        decision: 'rework',
+        feedback: 'Please fix the heading hierarchy.',
+        reviewedAt: '2026-11-12T10:00:00.000Z',
+      },
+    });
+    renderPage();
+
+    await screen.findByText('Rework task');
+    fireEvent.click(screen.getByText('Rework'));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByText('Please fix the heading hierarchy.')).toBeInTheDocument();
+    expect(screen.getByText('Reviewed by Mentor Jane')).toBeInTheDocument();
+    expect(getTaskReview).toHaveBeenCalledWith(reworkTask.id);
   });
 });
 

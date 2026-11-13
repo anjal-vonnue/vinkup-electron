@@ -12,6 +12,9 @@ import type {
   TaskFile,
   TaskResponse,
   SaveJournalRequest,
+  TaskReview,
+  TaskReviewSummary,
+  AdminFeedbackEntry,
 } from '@itp/types';
 import { mockUser } from '../test/fixtures/user';
 import {
@@ -49,6 +52,7 @@ function currentMockUser() {
 }
 
 const savedFiles = new Map<string, TaskFile[]>();
+const mockReviews: TaskReview[] = [];
 const JOURNAL_STORAGE_KEY = 'itp-mock-journals-v1';
 
 function readSavedJournals(): Record<string, string | null> {
@@ -142,6 +146,8 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
   const codeMatch = /^\/?tasks\/([^/]+)\/code$/.exec(url);
   const taskMatch = /^\/tasks\/([^/]+)$/.exec(url);
   const submitMatch = /^\/tasks\/([^/]+)\/submit$/.exec(url);
+  const taskReviewMatch = /^\/tasks\/([^/]+)\/review$/.exec(url);
+  const taskReviewsMatch = /^\/tasks\/([^/]+)\/reviews$/.exec(url);
   const activityMatch = /^\/activity\/([^/]+)\/events$/.exec(url);
   const dayContentMatch = /^\/days\/([^/]+)$/.exec(url);
   const dayTasksMatch = /^\/days\/([^/]+)\/tasks$/.exec(url);
@@ -152,6 +158,10 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
   const adminTraineeMatch = /^\/admin\/trainees\/([^/]+)$/.exec(url);
   const adminFlagsMatch = /^\/admin\/trainees\/([^/]+)\/flags$/.exec(url);
   const adminCodeMatch = /^\/admin\/trainees\/([^/]+)\/tasks\/([^/]+)\/code$/.exec(url);
+  const adminApproveMatch = /^\/admin\/trainees\/([^/]+)\/tasks\/([^/]+)\/approve$/.exec(url);
+  const adminReworkMatch = /^\/admin\/trainees\/([^/]+)\/tasks\/([^/]+)\/rework$/.exec(url);
+  const adminTaskReviewsMatch = /^\/admin\/trainees\/([^/]+)\/tasks\/([^/]+)\/reviews$/.exec(url);
+  const adminFeedbackMatch = /^\/admin\/trainees\/([^/]+)\/feedback$/.exec(url);
   const courseCertificateMatch = /^\/courses\/([^/]+)\/certificate$/.exec(url);
 
   if (method === 'get' && codeMatch) {
@@ -184,8 +194,31 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
   if (method === 'post' && submitMatch) {
     const failure = scenarioFailure(config, submitMatch[1], 'submit');
     if (failure) return failure;
-    const data: SubmitTaskResponse = { status: 'completed', submittedAt: new Date().toISOString() };
+    const data: SubmitTaskResponse = {
+      status: 'completed',
+      submittedAt: new Date().toISOString(),
+      reviewStatus: 'pending',
+      submissionCount: 1,
+    };
     return respond(config, 200, data);
+  }
+
+  if (method === 'get' && taskReviewMatch) {
+    const taskId = taskReviewMatch[1];
+    const reviews = mockReviews.filter((r) => r.taskId === taskId);
+    const latestReview = reviews[0] ?? null;
+    const data: TaskReviewSummary = {
+      reviewStatus: latestReview ? latestReview.decision : null,
+      submissionCount: reviews.length,
+      latestReview,
+    };
+    return respond(config, 200, data);
+  }
+
+  if (method === 'get' && taskReviewsMatch) {
+    const taskId = taskReviewsMatch[1];
+    const reviews = mockReviews.filter((r) => r.taskId === taskId);
+    return respond(config, 200, reviews);
   }
 
   if (method === 'get' && taskMatch) {
@@ -357,12 +390,73 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
       return respond(config, 201, result.trainee);
     }
 
+    if (method === 'post' && adminApproveMatch) {
+      const [, , taskId] = adminApproveMatch;
+      const body = config.data ? (JSON.parse(config.data as string) as { feedback?: string }) : {};
+      const newReview: TaskReview = {
+        id: `rev-${Date.now()}`,
+        taskId,
+        adminId: currentMockUser().id,
+        adminName: currentMockUser().name,
+        submissionNo: 1,
+        decision: 'approved',
+        feedback: body.feedback ?? '',
+        reviewedAt: new Date().toISOString(),
+      };
+      mockReviews.unshift(newReview);
+      return respond(config, 201, newReview);
+    }
+
+    if (method === 'post' && adminReworkMatch) {
+      const [, , taskId] = adminReworkMatch;
+      const body = JSON.parse(config.data as string) as { feedback: string };
+      if (!body.feedback || !body.feedback.trim()) {
+        return errorResponse(config, 400, 'VALIDATION_FAILED', 'Feedback is required.');
+      }
+      const newReview: TaskReview = {
+        id: `rev-${Date.now()}`,
+        taskId,
+        adminId: currentMockUser().id,
+        adminName: currentMockUser().name,
+        submissionNo: 1,
+        decision: 'rework',
+        feedback: body.feedback.trim(),
+        reviewedAt: new Date().toISOString(),
+      };
+      mockReviews.unshift(newReview);
+      return respond(config, 201, newReview);
+    }
+
     if (method !== 'get') {
       return errorResponse(config, 404, 'NOT_FOUND', 'Not found.');
     }
 
     if (url === '/admin/trainees') {
       return respond(config, 200, buildAdminTrainees());
+    }
+
+    if (adminTaskReviewsMatch) {
+      const [, , taskId] = adminTaskReviewsMatch;
+      const reviews = mockReviews.filter((r) => r.taskId === taskId);
+      return respond(config, 200, reviews);
+    }
+
+    if (adminFeedbackMatch) {
+      const feedbacks: AdminFeedbackEntry[] = mockReviews
+        .filter((r) => r.feedback)
+        .map((r) => ({
+          id: r.id,
+          taskId: r.taskId,
+          taskTitle: 'Day Task',
+          dayId: 'html-day-01',
+          adminId: r.adminId,
+          adminName: r.adminName,
+          submissionNo: r.submissionNo,
+          decision: r.decision,
+          feedback: r.feedback,
+          reviewedAt: r.reviewedAt,
+        }));
+      return respond(config, 200, feedbacks);
     }
 
     if (adminFlagsMatch) {

@@ -114,6 +114,8 @@ describe('GET /api/admin/trainees', () => {
       lastActiveDate: null,
       latestWpm: null,
       flagsLast7Days: 0,
+      averageScore: null,
+      daysScored: 0,
     });
   });
 
@@ -375,6 +377,8 @@ describe('GET /api/admin/trainees/:traineeId/tasks/:taskId/code', () => {
       title: 'Profile page',
       status: 'not_started',
       isStarterCode: true,
+      reviewStatus: null,
+      submissionCount: 0,
       files: STARTER_FILES,
       codeUpdatedAt: null,
       lastSubmittedAt: null,

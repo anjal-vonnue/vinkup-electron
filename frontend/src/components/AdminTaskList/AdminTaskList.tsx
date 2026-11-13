@@ -12,9 +12,26 @@ type AdminTaskListProps = {
 };
 
 function describeProgress(task: AdminTaskRow): string {
+  const attempt = task.submissionCount > 1 ? ` (Attempt #${task.submissionCount})` : '';
   return task.lastSubmittedAt
-    ? `Submitted ${formatIstDateTime(task.lastSubmittedAt)}`
+    ? `Submitted ${formatIstDateTime(task.lastSubmittedAt)}${attempt}`
     : 'Completed';
+}
+
+function getTaskStatusInfo(task: AdminTaskRow): { label: string; className: string } {
+  if (task.status === 'completed') {
+    if (task.reviewStatus === 'approved') {
+      return { label: 'Approved', className: styles.approved };
+    }
+    if (task.reviewStatus === 'rework') {
+      return { label: 'Rework', className: styles.rework };
+    }
+    return { label: 'Completed', className: styles.completed };
+  }
+  return {
+    label: TASK_STATUS_LABELS[task.status],
+    className: styles[task.status] ?? styles.not_started,
+  };
 }
 
 /** The tasks the trainee has started, grouped by course and day. Days still in progress start open. */
@@ -68,8 +85,8 @@ export default function AdminTaskList({
                         {task.isStretchGoal && <span className={styles.stretch}>Stretch</span>}
                       </div>
 
-                      <span className={`${styles.status} ${styles[task.status]}`}>
-                        {TASK_STATUS_LABELS[task.status]}
+                      <span className={`${styles.status} ${getTaskStatusInfo(task).className}`}>
+                        {getTaskStatusInfo(task).label}
                       </span>
 
                       <span className={styles.progress}>{describeProgress(task)}</span>
