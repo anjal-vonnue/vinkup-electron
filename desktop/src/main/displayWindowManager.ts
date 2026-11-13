@@ -6,6 +6,15 @@ const DISPLAY_EVENT_DEBOUNCE_MS = 200;
 const FOCUS_LOSS_GRACE_MS = 700;
 const ALERT_RETRY_DELAY_MS = 1000;
 const FULLSCREEN_CHANGE_TIMEOUT_MS = 2000;
+const CERTIFICATE_PRINT_TIMEOUT_MS = 120_000;
+
+function isCertificatePageUrl(url: string): boolean {
+  try {
+    return /^\/certificates\/[^/]+\/?$/.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
 
 function isAlive(window: BrowserWindow | null | undefined): window is BrowserWindow {
   return Boolean(window && !window.isDestroyed());
@@ -30,6 +39,7 @@ export class DisplayWindowManager {
   private reconcileTimer: NodeJS.Timeout | null = null;
   private focusWatchdog: NodeJS.Timeout | null = null;
   private appDisplaySyncTimer: NodeJS.Timeout | null = null;
+  private certificatePrintTimer: NodeJS.Timeout | null = null;
   private launchFocusTimers: NodeJS.Timeout[] = [];
   private focusLostAt: number | null = null;
   private alertDismissedAt = 0;
@@ -37,6 +47,7 @@ export class DisplayWindowManager {
   private isMoving = false;
   private isRelocatingByManager = false;
   private isAuthenticationInProgress = false;
+  private isCertificatePrintInProgress = false;
   private isQuitting = false;
   private isStarted = false;
   private areAlertsOpen = false;
@@ -69,6 +80,8 @@ export class DisplayWindowManager {
     this.mainWindow.on('closed', this.onMainWindowClosed);
     this.mainWindow.once('ready-to-show', this.focusAtLaunch);
     this.mainWindow.webContents.on('did-finish-load', this.reconcile);
+    this.mainWindow.webContents.on('did-start-navigation', this.onMainFrameNavigationStart);
+    this.mainWindow.webContents.on('did-navigate-in-page', this.onMainFrameNavigation);
 
     this.focusWatchdog = setInterval(this.checkFocus, 100);
     this.keepOnAllWorkspaces(this.mainWindow);
@@ -83,15 +96,55 @@ export class DisplayWindowManager {
     screen.removeListener('display-added', this.onDisplayAdded);
     screen.removeListener('display-removed', this.onDisplayRemoved);
     screen.removeListener('display-metrics-changed', this.onDisplayMetricsChanged);
+    this.mainWindow.webContents.removeListener(
+      'did-start-navigation',
+      this.onMainFrameNavigationStart
+    );
+    this.mainWindow.webContents.removeListener('did-navigate-in-page', this.onMainFrameNavigation);
 
     if (this.reconcileTimer) clearTimeout(this.reconcileTimer);
     if (this.appDisplaySyncTimer) clearTimeout(this.appDisplaySyncTimer);
+    if (this.certificatePrintTimer) clearTimeout(this.certificatePrintTimer);
     if (this.focusWatchdog) clearInterval(this.focusWatchdog);
     for (const timer of this.launchFocusTimers) clearTimeout(timer);
     this.launchFocusTimers = [];
 
     this.clearAlerts();
     this.destroyAllOverlays();
+  }
+
+  beginCertificatePrint(): void {
+    if (
+      !this.enabled ||
+      this.isQuitting ||
+      this.isAuthenticationInProgress ||
+      !isAlive(this.mainWindow)
+    ) {
+      return;
+    }
+
+    this.isCertificatePrintInProgress = true;
+    this.focusLostAt = null;
+    if (this.certificatePrintTimer) clearTimeout(this.certificatePrintTimer);
+    this.certificatePrintTimer = setTimeout(() => {
+      console.warn('[desktop] Certificate print protection exception expired.');
+      this.endCertificatePrint();
+    }, CERTIFICATE_PRINT_TIMEOUT_MS);
+  }
+
+  endCertificatePrint(): void {
+    if (!this.isCertificatePrintInProgress) return;
+    this.isCertificatePrintInProgress = false;
+    if (this.certificatePrintTimer) clearTimeout(this.certificatePrintTimer);
+    this.certificatePrintTimer = null;
+
+    if (this.isQuitting || this.isAuthenticationInProgress || this.isMoving) return;
+    if (isAlive(this.mainWindow)) {
+      if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
+      this.keepOnAllWorkspaces(this.mainWindow);
+      this.focusLostAt = this.mainWindow.isFocused() ? null : Date.now();
+    }
+    this.reconcile();
   }
 
   async moveToNextDisplay(): Promise<void> {
@@ -131,6 +184,10 @@ export class DisplayWindowManager {
     }
 
     if (this.isMoving) return;
+    if (this.isCertificatePrintInProgress) {
+      this.reconcile();
+      return;
+    }
 
     if (isAlive(this.mainWindow)) {
       if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
@@ -181,7 +238,7 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowBlur = (): void => {
-    if (this.isAuthenticationInProgress) return;
+    if (this.isAuthenticationInProgress || this.isCertificatePrintInProgress) return;
     if (this.focusLostAt === null) this.focusLostAt = Date.now();
   };
 
@@ -199,7 +256,14 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowLeaveFullscreen = (): void => {
-    if (this.isMoving || this.isQuitting || !isAlive(this.mainWindow)) return;
+    if (
+      this.isMoving ||
+      this.isCertificatePrintInProgress ||
+      this.isQuitting ||
+      !isAlive(this.mainWindow)
+    ) {
+      return;
+    }
     if (!this.isAuthenticationInProgress) this.coverAppDisplay();
     this.mainWindow.setFullScreen(true);
     this.keepOnAllWorkspaces(this.mainWindow);
@@ -207,6 +271,23 @@ export class DisplayWindowManager {
 
   private readonly onMainWindowClosed = (): void => {
     this.dispose();
+  };
+
+  private readonly onMainFrameNavigation = (
+    _event: Electron.Event,
+    url: string,
+    isMainFrame: boolean
+  ): void => {
+    if (isMainFrame && !isCertificatePageUrl(url)) this.endCertificatePrint();
+  };
+
+  private readonly onMainFrameNavigationStart = (
+    _event: Electron.Event,
+    url: string,
+    _isInPlace: boolean,
+    isMainFrame: boolean
+  ): void => {
+    if (isMainFrame && !isCertificatePageUrl(url)) this.endCertificatePrint();
   };
 
   private readonly focusAtLaunch = (): void => {
@@ -240,6 +321,7 @@ export class DisplayWindowManager {
     if (
       this.isQuitting ||
       this.isAuthenticationInProgress ||
+      this.isCertificatePrintInProgress ||
       this.isMoving ||
       !isAlive(this.mainWindow) ||
       this.areAlertsOpen

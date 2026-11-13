@@ -269,6 +269,22 @@ function registerIpcHandlers(): void {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
 
+  ipcMain.handle('window:begin-certificate-print', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    const frameUrl = event.senderFrame?.url;
+    if (!frameUrl || !isCertificatePageUrl(frameUrl)) {
+      throw new Error('Certificate printing can only start from the certificate page.');
+    }
+    displayWindowManager?.beginCertificatePrint();
+  });
+
+  ipcMain.handle('window:end-certificate-print', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    displayWindowManager?.endCertificatePrint();
+  });
+
   ipcMain.handle('auth:get-state', (event) => {
     assertTrustedSender(event);
     return getAuthManager().getState();
@@ -308,6 +324,25 @@ function getAuthManager(): DesktopAuthManager {
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
   assertTrustedSenderForOrigin(event, trustedOrigin);
+}
+
+function assertMainWindowSender(event: IpcMainInvokeEvent): void {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== mainWindow ||
+    event.senderFrame !== event.sender.mainFrame
+  ) {
+    throw new Error('IPC request is not from the main application window.');
+  }
+}
+
+function isCertificatePageUrl(url: string): boolean {
+  try {
+    return /^\/certificates\/[^/]+\/?$/.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
 }
 
 function getAppInfo(): DesktopAppInfo {

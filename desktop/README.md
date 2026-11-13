@@ -33,6 +33,10 @@ Press `Ctrl+Alt+Shift+M` to move the fullscreen app to the next display;
 moving the app away from focus opens a return-or-exit alert on every display.
 Display covers and focus alerts are paused while Google sign-in is active in the
 system browser, then restored when sign-in completes or fails.
+The certificate page's **Print / Save as PDF** button temporarily suppresses
+focus alerts while the native print dialog is open; overlays on other displays
+remain in place. Protection resumes when printing ends, the student leaves the
+certificate page, or a two-minute watchdog expires.
 
 To temporarily disable the entire screen-protection feature for a developer
 build, change `DISABLE_SCREEN_PROTECTION` in `desktop/src/main/index.ts` to
