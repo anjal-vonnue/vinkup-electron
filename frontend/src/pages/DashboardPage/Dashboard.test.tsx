@@ -215,11 +215,12 @@ describe('DashboardPage', () => {
     });
   });
 
-  it('shows the loading state while dashboard data is loading', () => {
+  it('shows the loader while dashboard data is loading and keeps the header visible', () => {
     vi.mocked(getDashboard).mockReturnValue(new Promise(() => {}));
 
     renderPage();
 
+    expect(screen.getByText('Header')).toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
@@ -305,16 +306,20 @@ describe('DashboardPage', () => {
     expect(getCourseDays).toHaveBeenCalledWith('js');
   });
 
-  it('keeps the full-page loader until the days of the first tab are loaded', async () => {
+  it('keeps the header visible and shows the main content loader until the first course days are loaded', async () => {
     vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
     vi.mocked(getCourseDays).mockReturnValue(new Promise(() => {}));
 
     renderPage();
 
-    await waitFor(() => expect(getCourseDays).toHaveBeenCalledWith('js'));
-    expect(screen.getByRole('status')).toBeInTheDocument(); // the full-page loader
-    expect(screen.queryByText('Header')).not.toBeInTheDocument(); // the page is not shown yet
-    expect(screen.queryByText('Loading days...')).not.toBeInTheDocument(); // no second loader
+    await waitFor(() => {
+      expect(getCourseDays).toHaveBeenCalledWith('js');
+    });
+
+    expect(screen.getByText('Header')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText('Closures and Higher-Order Functions')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading days...')).not.toBeInTheDocument();
   });
 
   it('shows "Loading days..." for a tab that is opened later', async () => {
