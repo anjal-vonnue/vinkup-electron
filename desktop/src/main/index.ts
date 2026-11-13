@@ -86,6 +86,7 @@ async function bootstrap(): Promise<void> {
     handleExitChoice,
     !DISABLE_SCREEN_PROTECTION
   );
+  updateProtectionContext(authManager.getState());
   await displayWindowManager.start();
   await loadRenderer(window);
 }
@@ -136,9 +137,16 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
-  displayWindowManager?.setAuthenticationInProgress(state.status === 'pending');
+  updateProtectionContext(state);
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
+}
+
+function updateProtectionContext(state: DesktopAuthState): void {
+  displayWindowManager?.setProtectionContext(
+    state.status === 'loading' || state.status === 'pending',
+    state.status === 'authenticated' ? (state.user?.role ?? null) : null
+  );
 }
 
 function createMainWindow(): BrowserWindow {
@@ -149,7 +157,7 @@ function createMainWindow(): BrowserWindow {
     y,
     width,
     height,
-    fullscreen: !DISABLE_SCREEN_PROTECTION,
+    fullscreen: false,
     useContentSize: true,
     frame: false,
     title: APP_NAME,
@@ -165,7 +173,9 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.on('minimize', () => {
-    if (!DISABLE_SCREEN_PROTECTION) window.restore();
+    if (displayWindowManager?.shouldPreventMinimize() ?? !DISABLE_SCREEN_PROTECTION) {
+      window.restore();
+    }
   });
 
   window.once('ready-to-show', () => {
@@ -201,7 +211,7 @@ function createMainWindow(): BrowserWindow {
   window.webContents.on('before-input-event', (event, input) => {
     const key = input.key.toLowerCase();
     const moveToNextDisplay =
-      !DISABLE_SCREEN_PROTECTION &&
+      (displayWindowManager?.isProtectionEnabledForCurrentUser() ?? !DISABLE_SCREEN_PROTECTION) &&
       input.type === 'keyDown' &&
       input.control &&
       input.shift &&
@@ -442,6 +452,7 @@ app.on('activate', () => {
     handleExitChoice,
     !DISABLE_SCREEN_PROTECTION
   );
+  updateProtectionContext(getAuthManager().getState());
   void displayWindowManager
     .start()
     .then(() => loadRenderer(window))

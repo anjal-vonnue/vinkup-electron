@@ -31,6 +31,9 @@ stops both. Electron loads `http://localhost:5173` so frontend changes hot-reloa
 On multi-display setups, other displays are covered while the app is running.
 Press `Ctrl+Alt+Shift+M` to move the fullscreen app to the next display;
 moving the app away from focus opens a return-or-exit alert on every display.
+Screen protection is enabled for trainee sessions and disabled for authenticated
+admin/mentor sessions. The main process bases this on the authenticated user's
+role; admins can use a normal window without display covers or focus alerts.
 Display covers and focus alerts are paused while Google sign-in is active in the
 system browser, then restored when sign-in completes or fails.
 The certificate page's **Print / Save as PDF** button temporarily suppresses

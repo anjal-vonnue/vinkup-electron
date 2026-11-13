@@ -1,4 +1,5 @@
 import { BrowserWindow, screen, type Display, type WebContents } from 'electron';
+import type { UserRole } from '@itp/types';
 import path from 'node:path';
 
 const OVERLAY_COLOR = '#10131f';
@@ -47,6 +48,7 @@ export class DisplayWindowManager {
   private isMoving = false;
   private isRelocatingByManager = false;
   private isAuthenticationInProgress = false;
+  private isAdminSession = false;
   private isCertificatePrintInProgress = false;
   private isQuitting = false;
   private isStarted = false;
@@ -84,7 +86,12 @@ export class DisplayWindowManager {
     this.mainWindow.webContents.on('did-navigate-in-page', this.onMainFrameNavigation);
 
     this.focusWatchdog = setInterval(this.checkFocus, 100);
-    this.keepOnAllWorkspaces(this.mainWindow);
+    if (this.isProtectionEnabledForCurrentUser() && !this.isAuthenticationInProgress) {
+      if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
+      this.keepOnAllWorkspaces(this.mainWindow);
+    } else {
+      this.mainWindow.setVisibleOnAllWorkspaces(false);
+    }
     this.reconcile();
     await Promise.all([...this.overlays.values()].map((window) => this.waitUntilVisible(window)));
   }
@@ -115,7 +122,7 @@ export class DisplayWindowManager {
 
   beginCertificatePrint(): void {
     if (
-      !this.enabled ||
+      !this.isProtectionEnabledForCurrentUser() ||
       this.isQuitting ||
       this.isAuthenticationInProgress ||
       !isAlive(this.mainWindow)
@@ -138,7 +145,14 @@ export class DisplayWindowManager {
     if (this.certificatePrintTimer) clearTimeout(this.certificatePrintTimer);
     this.certificatePrintTimer = null;
 
-    if (this.isQuitting || this.isAuthenticationInProgress || this.isMoving) return;
+    if (
+      this.isQuitting ||
+      this.isAuthenticationInProgress ||
+      this.isAdminSession ||
+      this.isMoving
+    ) {
+      return;
+    }
     if (isAlive(this.mainWindow)) {
       if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
       this.keepOnAllWorkspaces(this.mainWindow);
@@ -148,7 +162,7 @@ export class DisplayWindowManager {
   }
 
   async moveToNextDisplay(): Promise<void> {
-    if (!this.enabled) return;
+    if (!this.isProtectionEnabledForCurrentUser()) return;
     const displays = screen.getAllDisplays();
     if (displays.length < 2) return;
 
@@ -171,31 +185,51 @@ export class DisplayWindowManager {
     }
   }
 
-  setAuthenticationInProgress(inProgress: boolean): void {
-    if (!this.enabled || this.isQuitting || this.isAuthenticationInProgress === inProgress) return;
+  setProtectionContext(authenticationInProgress: boolean, role: UserRole | null): void {
+    if (this.isQuitting) return;
+    const wasProtectionSuspended = this.isAuthenticationInProgress || this.isAdminSession;
+    this.isAuthenticationInProgress = authenticationInProgress;
+    this.isAdminSession = role === 'admin';
+    const isProtectionSuspended = this.isAuthenticationInProgress || this.isAdminSession;
+    if (!this.enabled) return;
 
-    this.isAuthenticationInProgress = inProgress;
-    this.focusLostAt = null;
-
-    if (inProgress) {
+    if (isProtectionSuspended) {
+      this.focusLostAt = null;
       this.clearAlerts();
       this.destroyAllOverlays();
+      if (this.isAdminSession) {
+        for (const timer of this.launchFocusTimers) clearTimeout(timer);
+        this.launchFocusTimers = [];
+        if (isAlive(this.mainWindow)) {
+          if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
+          this.mainWindow.setVisibleOnAllWorkspaces(false);
+        }
+      }
       return;
     }
 
-    if (this.isMoving) return;
+    if ((!wasProtectionSuspended && !this.isAdminSession) || this.isMoving) return;
     if (this.isCertificatePrintInProgress) {
       this.reconcile();
       return;
     }
 
     if (isAlive(this.mainWindow)) {
+      this.appDisplayId = screen.getDisplayMatching(this.mainWindow.getBounds()).id;
       if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
       this.mainWindow.show();
       this.keepOnAllWorkspaces(this.mainWindow);
       this.mainWindow.focus();
     }
     this.reconcile();
+  }
+
+  isProtectionEnabledForCurrentUser(): boolean {
+    return this.enabled && !this.isAdminSession;
+  }
+
+  shouldPreventMinimize(): boolean {
+    return this.isProtectionEnabledForCurrentUser();
   }
 
   private readonly onDisplayAdded = (): void => {
@@ -207,6 +241,7 @@ export class DisplayWindowManager {
   };
 
   private readonly onDisplayRemoved = (_event: Electron.Event, removed: Display): void => {
+    if (this.isAdminSession) return;
     if (removed.id === this.appDisplayId) {
       void this.moveToDisplay(screen.getPrimaryDisplay()).catch((error: unknown) => {
         console.error('[desktop] Failed to move the app to the primary display', error);
@@ -217,28 +252,36 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowWillMove = (): void => {
-    if (this.isQuitting || this.isMoving || !isAlive(this.mainWindow)) return;
+    if (this.isQuitting || this.isAdminSession || this.isMoving || !isAlive(this.mainWindow)) {
+      return;
+    }
     this.isMoving = true;
     if (!this.isAuthenticationInProgress) this.coverAppDisplay();
     this.scheduleAppDisplaySync();
   };
 
   private readonly onMainWindowMove = (): void => {
-    if (this.isQuitting || !isAlive(this.mainWindow)) return;
+    if (this.isQuitting || this.isAdminSession || !isAlive(this.mainWindow)) return;
     if (this.isRelocatingByManager) {
-      this.keepOnAllWorkspaces(this.mainWindow);
+      this.keepMainWindowOnCorrectWorkspaces();
       return;
     }
     if (!this.isMoving) {
       this.isMoving = true;
       if (!this.isAuthenticationInProgress) this.coverAppDisplay();
     }
-    this.keepOnAllWorkspaces(this.mainWindow);
+    this.keepMainWindowOnCorrectWorkspaces();
     this.scheduleAppDisplaySync();
   };
 
   private readonly onMainWindowBlur = (): void => {
-    if (this.isAuthenticationInProgress || this.isCertificatePrintInProgress) return;
+    if (
+      this.isAuthenticationInProgress ||
+      this.isAdminSession ||
+      this.isCertificatePrintInProgress
+    ) {
+      return;
+    }
     if (this.focusLostAt === null) this.focusLostAt = Date.now();
   };
 
@@ -247,10 +290,14 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowShown = (): void => {
-    this.keepOnAllWorkspaces(this.mainWindow);
+    this.keepMainWindowOnCorrectWorkspaces();
   };
 
   private readonly onMainWindowFullscreen = (): void => {
+    if (!this.isProtectionEnabledForCurrentUser() || this.isAuthenticationInProgress) {
+      this.mainWindow.setVisibleOnAllWorkspaces(false);
+      return;
+    }
     this.keepOnAllWorkspaces(this.mainWindow);
     if (!this.isMoving) this.reconcile();
   };
@@ -259,6 +306,7 @@ export class DisplayWindowManager {
     if (
       this.isMoving ||
       this.isCertificatePrintInProgress ||
+      this.isAdminSession ||
       this.isQuitting ||
       !isAlive(this.mainWindow)
     ) {
@@ -293,12 +341,18 @@ export class DisplayWindowManager {
   private readonly focusAtLaunch = (): void => {
     if (!isAlive(this.mainWindow) || this.isQuitting) return;
     this.mainWindow.show();
-    this.keepOnAllWorkspaces(this.mainWindow);
+    this.keepMainWindowOnCorrectWorkspaces();
+    if (this.isAdminSession || this.isAuthenticationInProgress) return;
     this.mainWindow.focus();
 
     this.launchFocusTimers.push(
       setTimeout(() => {
-        if (isAlive(this.mainWindow) && !this.isQuitting && !this.isAuthenticationInProgress) {
+        if (
+          isAlive(this.mainWindow) &&
+          !this.isQuitting &&
+          !this.isAuthenticationInProgress &&
+          !this.isAdminSession
+        ) {
           this.mainWindow.focus();
         }
       }, 800),
@@ -306,6 +360,7 @@ export class DisplayWindowManager {
         if (
           this.isQuitting ||
           this.isAuthenticationInProgress ||
+          this.isAdminSession ||
           !isAlive(this.mainWindow) ||
           this.mainWindow.isFocused()
         ) {
@@ -321,6 +376,7 @@ export class DisplayWindowManager {
     if (
       this.isQuitting ||
       this.isAuthenticationInProgress ||
+      this.isAdminSession ||
       this.isCertificatePrintInProgress ||
       this.isMoving ||
       !isAlive(this.mainWindow) ||
@@ -357,6 +413,7 @@ export class DisplayWindowManager {
     if (
       this.isQuitting ||
       this.isAuthenticationInProgress ||
+      this.isAdminSession ||
       this.isMoving ||
       !isAlive(this.mainWindow)
     ) {
@@ -405,7 +462,7 @@ export class DisplayWindowManager {
   }
 
   private async moveToDisplay(requestedDisplay: Display): Promise<void> {
-    if (this.isQuitting || !isAlive(this.mainWindow)) return;
+    if (this.isQuitting || this.isAdminSession || !isAlive(this.mainWindow)) return;
     if (this.isMoving) {
       this.pendingDisplayId = requestedDisplay.id;
       return;
@@ -428,18 +485,24 @@ export class DisplayWindowManager {
         if (currentDisplay) coverWindows.push(this.ensureOverlay(currentDisplay));
       }
       await Promise.all(coverWindows.map((window) => this.waitUntilVisible(window)));
+      if (this.isAdminSession) return;
       await this.setFullscreen(false);
-      if (!isAlive(this.mainWindow) || this.isQuitting) return;
+      if (!isAlive(this.mainWindow) || this.isQuitting || this.isAdminSession) return;
 
       this.mainWindow.setBounds(target.bounds);
       await this.setFullscreen(true);
-      if (!isAlive(this.mainWindow) || this.isQuitting) return;
+      if (!isAlive(this.mainWindow) || this.isQuitting || this.isAdminSession) return;
 
       this.appDisplayId = target.id;
       this.destroyOverlay(target.id);
     } catch (error) {
       console.error('[desktop] Failed to move the app between displays', error);
-      if (isAlive(this.mainWindow) && !this.isQuitting && !this.mainWindow.isFullScreen()) {
+      if (
+        isAlive(this.mainWindow) &&
+        !this.isQuitting &&
+        !this.isAdminSession &&
+        !this.mainWindow.isFullScreen()
+      ) {
         try {
           await this.setFullscreen(true);
         } catch (fullscreenError) {
@@ -455,8 +518,17 @@ export class DisplayWindowManager {
     } finally {
       this.isRelocatingByManager = false;
       this.isMoving = false;
+      if (this.isAdminSession && isAlive(this.mainWindow)) {
+        if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
+        this.mainWindow.setVisibleOnAllWorkspaces(false);
+      }
       this.reconcile();
-      if (isAlive(this.mainWindow) && !this.isQuitting && !this.isAuthenticationInProgress) {
+      if (
+        isAlive(this.mainWindow) &&
+        !this.isQuitting &&
+        !this.isAuthenticationInProgress &&
+        !this.isAdminSession
+      ) {
         this.mainWindow.focus();
       }
       this.moveToPendingDisplay();
@@ -505,13 +577,25 @@ export class DisplayWindowManager {
   }
 
   private async syncAppDisplay(): Promise<void> {
-    if (this.isQuitting || this.isRelocatingByManager || !isAlive(this.mainWindow)) return;
+    if (
+      this.isQuitting ||
+      this.isAdminSession ||
+      this.isRelocatingByManager ||
+      !isAlive(this.mainWindow)
+    ) {
+      return;
+    }
     try {
       let current = screen.getDisplayMatching(this.mainWindow.getBounds());
       if (current.id !== this.appDisplayId) {
         if (!this.isAuthenticationInProgress) this.coverAppDisplay();
         if (!this.mainWindow.isFullScreen()) await this.setFullscreen(true);
         if (!isAlive(this.mainWindow) || this.isQuitting) return;
+        if (this.isAdminSession) {
+          if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
+          this.mainWindow.setVisibleOnAllWorkspaces(false);
+          return;
+        }
         current = screen.getDisplayMatching(this.mainWindow.getBounds());
         this.appDisplayId = current.id;
         this.destroyOverlay(current.id);
@@ -615,6 +699,7 @@ export class DisplayWindowManager {
       this.areAlertsOpen ||
       this.isQuitting ||
       this.isAuthenticationInProgress ||
+      this.isAdminSession ||
       this.isMoving ||
       !isAlive(this.mainWindow)
     ) {
@@ -735,6 +820,15 @@ export class DisplayWindowManager {
         console.warn('[desktop] Could not reapply all-workspaces visibility', error);
       }
     }, 300);
+  }
+
+  private keepMainWindowOnCorrectWorkspaces(): void {
+    if (!isAlive(this.mainWindow)) return;
+    if (this.isProtectionEnabledForCurrentUser() && !this.isAuthenticationInProgress) {
+      this.keepOnAllWorkspaces(this.mainWindow);
+    } else {
+      this.mainWindow.setVisibleOnAllWorkspaces(false);
+    }
   }
 
   private closeOwnedWindow(window: BrowserWindow): void {
