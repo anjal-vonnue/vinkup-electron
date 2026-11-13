@@ -1,0 +1,59 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border-card);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+/* Looks like a link, works like a button: it changes the filter, it doesn't navigate. */
+.name {
+  padding: 0;
+
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.name:hover,
+.name[aria-pressed='true'] {
+  color: var(--color-accent-purple);
+  text-decoration: underline;
+}
+
+.name:focus-visible {
+  outline: 2px solid var(--color-accent-purple);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.reasons {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-status-warning);
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}

@@ -1,0 +1,31 @@
+/* Two-button switch: Completion | Coding time */
+.toggle {
+  display: inline-flex;
+  padding: 2px;
+
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+}
+
+.toggleButton {
+  padding: 4px 10px;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.toggleButton[aria-pressed='true'] {
+  color: var(--color-text-on-accent);
+  background: var(--color-accent-purple);
+}
+
+.toggleButton:focus-visible {
+  outline: 2px solid var(--color-accent-purple);
+  outline-offset: 2px;
+}

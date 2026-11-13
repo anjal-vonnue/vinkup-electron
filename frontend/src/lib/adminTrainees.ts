@@ -94,8 +94,9 @@ export const ATTENTION_REASONS = {
 /** Informational only: a new trainee and one who never opens the platform look the same. */
 export const NOT_STARTED_NOTE = 'Not started yet';
 
-const INACTIVE_AFTER_DAYS = 2;
-const BEHIND_BY_MORE_THAN_DAYS = 3;
+export const INACTIVE_AFTER_DAYS = 2;
+export const BEHIND_BY_MORE_THAN_DAYS = 3;
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Whole days from one "YYYY-MM-DD" calendar day to another. */

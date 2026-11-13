@@ -1,4 +1,5 @@
 import type {
+  AdminAnalytics,
   AdminFlagEvent,
   AdminTaskCode,
   AdminTraineeDetail,
@@ -7,21 +8,30 @@ import type {
 } from '@itp/types';
 
 import { NotFoundError } from '../../errors/AppError';
-import { istDateValue } from '../../utils/istDate';
+import { istDateValue, istDayStart, toIstDateString } from '../../utils/istDate';
 import { ProfileService } from '../profile-module/profile.service';
 import { ProgressService } from '../progress-module/progress.service';
 import { AdminRepository } from './admin.repository';
 import { env } from '../../config/env';
 import { ConflictError, TraineeDomainError } from '../../errors/AppError';
-import type { CreateTraineeBody } from './admin.schema';
+import type { AnalyticsQuery, CreateTraineeBody } from './admin.schema';
 import { buildAdminIntegrity } from './integrity.overall';
+import {
+  buildIntegrityTrend,
+  buildProgressTrend,
+  buildTaskStatus,
+  buildTraineeComparison,
+  buildTypingTrend,
+  listDates,
+} from './admin.analytics';
 
 const repo = new AdminRepository();
 const profileService = new ProfileService();
 const progressService = new ProgressService();
 
 const FLAG_LIMIT = 500;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
 
 /** Prisma's unique-constraint error, without importing Prisma's error classes. */
 function isUniqueViolation(error: unknown): boolean {
@@ -203,6 +213,126 @@ export class AdminService {
       files: (saved ?? task.starter_files) as unknown as TaskFile[],
       codeUpdatedAt: progress?.code_updated_at?.toISOString() ?? null,
       lastSubmittedAt: progress?.last_submitted_at?.toISOString() ?? null,
+    };
+  };
+
+  /**
+   * GET /api/admin/analytics. `query` is already validated by analyticsQuerySchema.
+   * Like the trainee list, every active admin may see every trainee.
+   */
+  getAnalytics = async ({ from, to, traineeId }: AnalyticsQuery): Promise<AdminAnalytics> => {
+    const trainees = await repo.listTrainees();
+    if (traineeId && !trainees.some((trainee) => trainee.id === traineeId)) {
+      throw new NotFoundError('Trainee not found.');
+    }
+
+    // The trainees the charts are about: one, or the whole team.
+    const scopeIds = traineeId ? [traineeId] : trainees.map((trainee) => trainee.id);
+    const scope = new Set(scopeIds);
+
+    // Timestamp columns: from the moment `from` starts (IST) until the day after `to` starts.
+    const start = istDayStart(from);
+    const end = new Date(istDayStart(to).getTime() + DAY_MS);
+    // `date` columns store the IST day as midnight UTC.
+    const fromDate = new Date(`${from}T00:00:00.000Z`);
+    const toDate = new Date(`${to}T00:00:00.000Z`);
+
+    const [
+      allCompletions,
+      completions,
+      activity,
+      statusCounts,
+      totalTasks,
+      totalDays,
+      tasksSubmitted,
+      typingResults,
+      startedTasks,
+      flagEvents,
+    ] = await Promise.all([
+      repo.listCompletions(),
+      repo.listCompletionsBefore(scopeIds, end),
+      repo.activityTotalsBetween(fromDate, toDate),
+      repo.taskStatusCounts(scopeIds),
+      repo.getTotalTasks(),
+      repo.countDays(),
+      repo.countFirstSubmissions(scopeIds, start, end),
+      repo.listTypingResultsBefore(scopeIds, end),
+      repo.findStartedTasks(scopeIds),
+      repo.findFlagEvents(scopeIds),
+    ]);
+
+    // Completions as IST dates. Older ones are kept for the progress line's starting height.
+    const completionRows = completions.map((row) => ({
+      traineeId: row.trainee_id,
+      dayId: row.curriculum_day_id,
+      date: toIstDateString(row.completed_at),
+    }));
+    const completionsInPeriod = completionRows.filter((row) => row.date >= from);
+
+    // All-time completed days per trainee, for the comparison chart.
+    const completedDayCounts = new Map<string, number>();
+    for (const row of allCompletions) {
+      completedDayCounts.set(row.trainee_id, (completedDayCounts.get(row.trainee_id) ?? 0) + 1);
+    }
+
+    const activityRows = activity.map((row) => ({
+      traineeId: row.trainee_id,
+      activeSeconds: row._sum.active_seconds ?? 0,
+      codingSeconds: row._sum.coding_seconds ?? 0,
+    }));
+    const scopeActivity = activityRows.filter((row) => scope.has(row.traineeId));
+
+    const progressRows = startedTasks.map((row) => ({
+      traineeId: row.trainee_id,
+      taskId: row.task_id,
+      dayId: row.task.curriculum_day_id,
+    }));
+    const flagRows = flagEvents.map((row) => ({
+      traineeId: row.trainee_id,
+      taskId: row.task_id,
+      dayId: row.task.curriculum_day_id,
+      type: row.type,
+      reviewPriority: row.review_priority,
+      durationMs: row.duration_ms,
+    }));
+
+    // All results up to the end of the period; earlier ones set each trainee's starting WPM.
+    const typingRows = typingResults.map((row) => ({
+      traineeId: row.trainee_id,
+      date: toIstDateString(row.taken_at),
+      wpm: row.wpm,
+    }));
+
+    return {
+      from,
+      to,
+      traineeId: traineeId ?? null,
+      traineeCount: scopeIds.length,
+      totals: {
+        daysCompleted: completionsInPeriod.length,
+        tasksSubmitted,
+        activeSeconds: scopeActivity.reduce((sum, row) => sum + row.activeSeconds, 0),
+        codingSeconds: scopeActivity.reduce((sum, row) => sum + row.codingSeconds, 0),
+        typingTests: typingRows.filter((row) => row.date >= from).length,
+      },
+      progressTrend: buildProgressTrend(
+        listDates(from, to),
+        completionRows.map((row) => row.date),
+        scopeIds.length
+      ),
+      traineeComparison: buildTraineeComparison(
+        trainees,
+        completedDayCounts,
+        activityRows,
+        totalDays
+      ),
+      taskStatus: buildTaskStatus(
+        statusCounts.map((row) => ({ status: row.status, count: row._count._all })),
+        totalTasks,
+        scopeIds.length
+      ),
+      typingTrend: buildTypingTrend(typingRows, from),
+      integrityTrend: buildIntegrityTrend(completionRows, progressRows, flagRows, from),
     };
   };
 

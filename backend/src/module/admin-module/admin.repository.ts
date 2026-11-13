@@ -187,4 +187,48 @@ export class AdminRepository {
       orderBy: { timestamp: 'asc' },
     });
   };
+
+  // ---------- team analytics (GET /api/admin/analytics) ----------
+  // Dates: `date` columns hold an IST calendar day as midnight UTC (see istDateValue);
+  // timestamp columns are compared with the moment an IST day starts (see istDayStart).
+
+  countDays = () => prisma.curriculum_day.count();
+
+  /** Day completions of these trainees that happened before `before`, oldest first. */
+  listCompletionsBefore = (traineeIds: string[], before: Date) =>
+    prisma.day_completion.findMany({
+      where: { trainee_id: { in: traineeIds }, completed_at: { lt: before } },
+      select: { trainee_id: true, curriculum_day_id: true, completed_at: true },
+      orderBy: { completed_at: 'asc' },
+    });
+
+  /** Active and coding seconds per trainee, for the days from `fromDate` to `toDate` (both included). */
+  activityTotalsBetween = (fromDate: Date, toDate: Date) =>
+    prisma.activity_log.groupBy({
+      by: ['trainee_id'],
+      where: { date: { gte: fromDate, lte: toDate } },
+      _sum: { active_seconds: true, coding_seconds: true },
+    });
+
+  /** How many task_progress rows these trainees have in each status. */
+  taskStatusCounts = (traineeIds: string[]) =>
+    prisma.task_progress.groupBy({
+      by: ['status'],
+      where: { trainee_id: { in: traineeIds } },
+      _count: { _all: true },
+    });
+
+  /** Tasks these trainees submitted for the first time between `start` and `end`. */
+  countFirstSubmissions = (traineeIds: string[], start: Date, end: Date) =>
+    prisma.task_progress.count({
+      where: { trainee_id: { in: traineeIds }, first_submitted_at: { gte: start, lt: end } },
+    });
+
+  /** Typing results of these trainees taken before `before`, oldest first. */
+  listTypingResultsBefore = (traineeIds: string[], before: Date) =>
+    prisma.typing_test_result.findMany({
+      where: { trainee_id: { in: traineeIds }, taken_at: { lt: before } },
+      select: { trainee_id: true, wpm: true, taken_at: true },
+      orderBy: { taken_at: 'asc' },
+    });
 }

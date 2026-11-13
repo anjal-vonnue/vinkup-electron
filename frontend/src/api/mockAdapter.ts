@@ -5,6 +5,7 @@ import {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import type {
+  AdminAnalyticsQuery,
   ApiErrorResponse,
   CompleteDayResponse,
   SubmitTaskResponse,
@@ -15,6 +16,7 @@ import type {
 } from '@itp/types';
 import { mockUser } from '../test/fixtures/user';
 import {
+  buildAdminAnalytics,
   buildAdminFlags,
   buildAdminTaskCode,
   buildAdminTraineeDetail,
@@ -363,6 +365,17 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
 
     if (url === '/admin/trainees') {
       return respond(config, 200, buildAdminTrainees());
+    }
+
+    if (url === '/admin/analytics') {
+      const query = config.params as AdminAnalyticsQuery | undefined;
+      if (!query?.from || !query.to || query.from > query.to) {
+        return errorResponse(config, 400, 'VALIDATION_FAILED', 'Some fields are invalid.');
+      }
+      const analytics = buildAdminAnalytics(query);
+      return analytics
+        ? respond(config, 200, analytics)
+        : errorResponse(config, 404, 'NOT_FOUND', 'Trainee not found.');
     }
 
     if (adminFlagsMatch) {

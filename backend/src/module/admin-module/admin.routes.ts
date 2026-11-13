@@ -8,6 +8,9 @@ export const adminRoutes = Router();
 
 adminRoutes.get('/trainees', adminController.listTrainees);
 
+// Query string (from, to, traineeId) is validated in the controller.
+adminRoutes.get('/analytics', adminController.getAnalytics);
+
 adminRoutes.get(
   '/trainees/:traineeId',
   validate({ params: traineeIdParamsSchema }),
