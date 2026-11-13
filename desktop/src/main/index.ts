@@ -27,7 +27,7 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const AUTH_COOKIE_NAME = 'auth_token';
-const DISABLE_SCREEN_PROTECTION: boolean = true;
+const DISABLE_SCREEN_PROTECTION: boolean = false;
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
@@ -81,10 +81,12 @@ async function bootstrap(): Promise<void> {
 
   const window = createMainWindow();
   mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
   displayWindowManager = new DisplayWindowManager(
     window,
     handleExitChoice,
-    !DISABLE_SCREEN_PROTECTION
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
   );
   updateProtectionContext(authManager.getState());
   await displayWindowManager.start();
@@ -447,10 +449,12 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length > 0) return;
   const window = createMainWindow();
   mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
   displayWindowManager = new DisplayWindowManager(
     window,
     handleExitChoice,
-    !DISABLE_SCREEN_PROTECTION
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
   );
   updateProtectionContext(getAuthManager().getState());
   void displayWindowManager
