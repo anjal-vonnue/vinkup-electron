@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import type { DesktopApi } from '@itp/types';
 import { usePrintMode } from './usePrintMode';
 
 type Options = { includeJournal: boolean };
@@ -30,7 +31,52 @@ afterEach(() => {
   printSpy.mockRestore();
   window.localStorage.clear();
   delete document.documentElement.dataset.theme;
+  delete window.desktop;
 });
+
+function installDesktopPrintApi(begin: () => Promise<void> = () => Promise.resolve()) {
+  const end = vi.fn(() => Promise.resolve());
+  const desktopApi: DesktopApi = {
+    app: {
+      getInfo: () => Promise.resolve({ version: '0.0.0', platform: 'linux', isPackaged: false }),
+    },
+    auth: {
+      getState: () =>
+        Promise.resolve({
+          status: 'unauthenticated',
+          user: null,
+          error: null,
+          persistent: false,
+        }),
+      login: () =>
+        Promise.resolve({
+          status: 'unauthenticated',
+          user: null,
+          error: null,
+          persistent: false,
+        }),
+      cancel: () => Promise.resolve(),
+      refresh: () =>
+        Promise.resolve({
+          status: 'unauthenticated',
+          user: null,
+          error: null,
+          persistent: false,
+        }),
+      logout: () => Promise.resolve(),
+      onChange: () => () => undefined,
+    },
+    window: {
+      setFullscreen: () => Promise.resolve(false),
+      isFullscreen: () => Promise.resolve(false),
+      beginCertificatePrint: begin,
+      endCertificatePrint: end,
+      onFullscreenChange: () => () => undefined,
+    },
+  };
+  window.desktop = desktopApi;
+  return { end };
+}
 
 describe('usePrintMode', () => {
   it('starts with nothing to print', () => {
@@ -39,11 +85,11 @@ describe('usePrintMode', () => {
     expect(result.current.printJob).toBeNull();
   });
 
-  it('print() renders the job, switches to the light theme and report title, then prints', () => {
+  it('print() renders the job, switches to the light theme and report title, then prints', async () => {
     const { result } = renderPrintMode();
 
-    act(() => {
-      result.current.print({ includeJournal: false });
+    await act(async () => {
+      await result.current.print({ includeJournal: false });
     });
 
     expect(result.current.printJob?.options).toEqual({ includeJournal: false });
@@ -53,10 +99,86 @@ describe('usePrintMode', () => {
     expect(printSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('puts the theme and title back after printing and removes the job', () => {
+  it('starts the desktop print exception before opening the print dialog', async () => {
+    const begin = vi.fn(() => Promise.resolve());
+    installDesktopPrintApi(begin);
+    const { result } = renderHook(() =>
+      usePrintMode<Options>({
+        defaults: DEFAULTS,
+        documentTitle: TITLE,
+        desktopPrintException: true,
+      })
+    );
+
+    await act(async () => {
+      await result.current.print(DEFAULTS);
+    });
+
+    expect(begin).toHaveBeenCalledOnce();
+    expect(printSpy).toHaveBeenCalledOnce();
+    expect(begin.mock.invocationCallOrder[0]).toBeLessThan(
+      printSpy.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  it('ends the desktop print exception after the print dialog closes', async () => {
+    const { end } = installDesktopPrintApi();
+    const { result } = renderHook(() =>
+      usePrintMode<Options>({
+        defaults: DEFAULTS,
+        documentTitle: TITLE,
+        desktopPrintException: true,
+      })
+    );
+
+    await act(async () => {
+      await result.current.print(DEFAULTS);
+    });
+    fire('afterprint');
+
+    expect(end).toHaveBeenCalledOnce();
+  });
+
+  it('ends the desktop print exception if the hook unmounts while printing', async () => {
+    const { end } = installDesktopPrintApi();
+    const { result, unmount } = renderHook(() =>
+      usePrintMode<Options>({
+        defaults: DEFAULTS,
+        documentTitle: TITLE,
+        desktopPrintException: true,
+      })
+    );
+
+    await act(async () => {
+      await result.current.print(DEFAULTS);
+    });
+    unmount();
+
+    expect(end).toHaveBeenCalledOnce();
+  });
+
+  it('does not open the print dialog if the main process rejects the exception request', async () => {
+    installDesktopPrintApi(() => Promise.reject(new Error('Rejected')));
+    const { result } = renderHook(() =>
+      usePrintMode<Options>({
+        defaults: DEFAULTS,
+        documentTitle: TITLE,
+        desktopPrintException: true,
+      })
+    );
+
+    await act(async () => {
+      await expect(result.current.print(DEFAULTS)).rejects.toThrow('Rejected');
+    });
+
+    expect(printSpy).not.toHaveBeenCalled();
+    expect(document.title).toBe('Mentor view');
+  });
+
+  it('puts the theme and title back after printing and removes the job', async () => {
     const { result } = renderPrintMode();
-    act(() => {
-      result.current.print(DEFAULTS);
+    await act(async () => {
+      await result.current.print(DEFAULTS);
     });
 
     fire('afterprint');
@@ -66,10 +188,10 @@ describe('usePrintMode', () => {
     expect(document.title).toBe('Mentor view');
   });
 
-  it('never changes the saved theme preference', () => {
+  it('never changes the saved theme preference', async () => {
     const { result } = renderPrintMode();
-    act(() => {
-      result.current.print(DEFAULTS);
+    await act(async () => {
+      await result.current.print(DEFAULTS);
     });
     fire('afterprint');
 
@@ -90,10 +212,10 @@ describe('usePrintMode', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('keeps the chosen options when the browser fires beforeprint after print()', () => {
+  it('keeps the chosen options when the browser fires beforeprint after print()', async () => {
     const { result } = renderPrintMode();
-    act(() => {
-      result.current.print({ includeJournal: false });
+    await act(async () => {
+      await result.current.print({ includeJournal: false });
     });
 
     fire('beforeprint');
@@ -101,11 +223,11 @@ describe('usePrintMode', () => {
     expect(result.current.printJob?.options).toEqual({ includeJournal: false });
   });
 
-  it('removes the theme attribute again when there was none before', () => {
+  it('removes the theme attribute again when there was none before', async () => {
     delete document.documentElement.dataset.theme;
     const { result } = renderPrintMode();
-    act(() => {
-      result.current.print(DEFAULTS);
+    await act(async () => {
+      await result.current.print(DEFAULTS);
     });
 
     fire('afterprint');
@@ -113,10 +235,10 @@ describe('usePrintMode', () => {
     expect(document.documentElement.dataset.theme).toBeUndefined();
   });
 
-  it('restores the page when it unmounts in the middle of printing', () => {
+  it('restores the page when it unmounts in the middle of printing', async () => {
     const { result, unmount } = renderPrintMode();
-    act(() => {
-      result.current.print(DEFAULTS);
+    await act(async () => {
+      await result.current.print(DEFAULTS);
     });
 
     unmount();

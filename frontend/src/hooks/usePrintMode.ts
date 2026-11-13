@@ -12,6 +12,8 @@ type UsePrintModeOptions<T> = {
   defaults: T;
   /** Tab title while printing; browsers suggest it as the "Save as PDF" file name. */
   documentTitle: string;
+  /** Temporarily suppress desktop focus alerts for a button-triggered print dialog. */
+  desktopPrintException?: boolean;
 };
 
 type SavedPage = { theme: string | undefined; title: string };
@@ -31,11 +33,17 @@ function restorePage(saved: SavedPage): void {
  *   preference is not touched (this sets `data-theme` directly, not through useTheme).
  * - `afterprint` puts the theme and title back and removes the view.
  */
-export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions<T>) {
+export function usePrintMode<T>({
+  defaults,
+  documentTitle,
+  desktopPrintException = false,
+}: UsePrintModeOptions<T>) {
   const [job, setJob] = useState<PrintJob<T> | null>(null);
 
   const jobRef = useRef<PrintJob<T> | null>(null);
   const savedRef = useRef<SavedPage | null>(null);
+  const desktopPrintExceptionActiveRef = useRef(false);
+  const printAttemptRef = useRef(0);
   const defaultsRef = useRef(defaults);
   const titleRef = useRef(documentTitle);
 
@@ -64,6 +72,15 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
     }
     jobRef.current = null;
     setJob(null);
+    if (desktopPrintExceptionActiveRef.current) {
+      desktopPrintExceptionActiveRef.current = false;
+      const desktop = window.desktop;
+      if (desktop) {
+        void desktop.window.endCertificatePrint().catch((error: unknown) => {
+          console.error('[certificate] Failed to restore screen protection after printing', error);
+        });
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -77,6 +94,19 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', leave);
+      printAttemptRef.current += 1;
+      if (desktopPrintExceptionActiveRef.current) {
+        desktopPrintExceptionActiveRef.current = false;
+        const desktop = window.desktop;
+        if (desktop) {
+          void desktop.window.endCertificatePrint().catch((error: unknown) => {
+            console.error(
+              '[certificate] Failed to restore screen protection after leaving the page',
+              error
+            );
+          });
+        }
+      }
       // Leaving the page mid-print must not leave the app stuck in the light theme.
       if (savedRef.current) {
         restorePage(savedRef.current);
@@ -86,11 +116,26 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
   }, [enter, leave]);
 
   const print = useCallback(
-    (options: T) => {
+    async (options: T): Promise<void> => {
       enter(options);
-      window.print();
+      const attempt = ++printAttemptRef.current;
+      const desktop = desktopPrintException ? window.desktop : undefined;
+      try {
+        if (desktop) {
+          await desktop.window.beginCertificatePrint();
+          if (attempt !== printAttemptRef.current) {
+            await desktop.window.endCertificatePrint();
+            return;
+          }
+          desktopPrintExceptionActiveRef.current = true;
+        }
+        window.print();
+      } catch (error) {
+        if (attempt === printAttemptRef.current) leave();
+        throw error;
+      }
     },
-    [enter]
+    [desktopPrintException, enter, leave]
   );
 
   return { printJob: job, print };

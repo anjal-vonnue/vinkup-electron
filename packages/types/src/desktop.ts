@@ -34,6 +34,8 @@ export interface DesktopApi {
   window: {
     setFullscreen: (value: boolean) => Promise<boolean>;
     isFullscreen: () => Promise<boolean>;
+    beginCertificatePrint: () => Promise<void>;
+    endCertificatePrint: () => Promise<void>;
     /** Returns an unsubscribe function. */
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => () => void;
   };

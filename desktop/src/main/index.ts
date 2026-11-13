@@ -17,6 +17,7 @@ import { startLocalServer, type LocalServer } from './server';
 import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager';
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
+import { DisplayWindowManager } from './displayWindowManager';
 import {
   assertTrustedSender as assertTrustedSenderForOrigin,
   isAllowedExternalUrl,
@@ -26,11 +27,13 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const AUTH_COOKIE_NAME = 'auth_token';
+const DISABLE_SCREEN_PROTECTION: boolean = false;
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
+let displayWindowManager: DisplayWindowManager | null = null;
 
 // Set the name before `ready` so userData, cache and config use the product name.
 app.setName(APP_NAME);
@@ -76,8 +79,18 @@ async function bootstrap(): Promise<void> {
     console.error('[auth] Failed to restore the session', error);
   });
 
-  mainWindow = createMainWindow();
-  await loadRenderer(mainWindow);
+  const window = createMainWindow();
+  mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
+  );
+  updateProtectionContext(authManager.getState());
+  await displayWindowManager.start();
+  await loadRenderer(window);
 }
 
 function createDesktopAuthManager(): DesktopAuthManager {
@@ -126,8 +139,16 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
+  updateProtectionContext(state);
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
+}
+
+function updateProtectionContext(state: DesktopAuthState): void {
+  displayWindowManager?.setProtectionContext(
+    state.status === 'loading' || state.status === 'pending',
+    state.status === 'authenticated' ? (state.user?.role ?? null) : null
+  );
 }
 
 function createMainWindow(): BrowserWindow {
@@ -138,7 +159,7 @@ function createMainWindow(): BrowserWindow {
     y,
     width,
     height,
-    fullscreen: true,
+    fullscreen: false,
     useContentSize: true,
     frame: false,
     title: APP_NAME,
@@ -153,15 +174,21 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  window.on('minimize', () => window.restore());
-  window.on('leave-full-screen', () => window.setFullScreen(true));
+  window.on('minimize', () => {
+    if (displayWindowManager?.shouldPreventMinimize() ?? !DISABLE_SCREEN_PROTECTION) {
+      window.restore();
+    }
+  });
 
   window.once('ready-to-show', () => {
     window.show();
   });
 
   window.on('closed', () => {
+    displayWindowManager?.dispose();
+    displayWindowManager = null;
     mainWindow = null;
+    app.quit();
   });
 
   window.on('enter-full-screen', () => {
@@ -184,6 +211,22 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.webContents.on('before-input-event', (event, input) => {
+    const key = input.key.toLowerCase();
+    const moveToNextDisplay =
+      (displayWindowManager?.isProtectionEnabledForCurrentUser() ?? !DISABLE_SCREEN_PROTECTION) &&
+      input.type === 'keyDown' &&
+      input.control &&
+      input.shift &&
+      input.alt &&
+      key === 'm';
+    if (moveToNextDisplay) {
+      event.preventDefault();
+      void displayWindowManager?.moveToNextDisplay().catch((error: unknown) => {
+        console.error('[desktop] Failed to move to the next display', error);
+      });
+      return;
+    }
+
     if (!isDevToolsShortcut(input)) return;
     event.preventDefault();
     // The custom menu below replaces Electron's default menu, so the built-in
@@ -238,6 +281,22 @@ function registerIpcHandlers(): void {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
 
+  ipcMain.handle('window:begin-certificate-print', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    const frameUrl = event.senderFrame?.url;
+    if (!frameUrl || !isCertificatePageUrl(frameUrl)) {
+      throw new Error('Certificate printing can only start from the certificate page.');
+    }
+    displayWindowManager?.beginCertificatePrint();
+  });
+
+  ipcMain.handle('window:end-certificate-print', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    displayWindowManager?.endCertificatePrint();
+  });
+
   ipcMain.handle('auth:get-state', (event) => {
     assertTrustedSender(event);
     return getAuthManager().getState();
@@ -262,6 +321,12 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     await getAuthManager().logout();
   });
+
+  ipcMain.on('display-alert:choice', (event, choice: unknown) => {
+    const manager = displayWindowManager;
+    if (!manager?.ownsAlertSender(event.sender)) return;
+    manager.handleAlertChoice(choice);
+  });
 }
 
 function getAuthManager(): DesktopAuthManager {
@@ -271,6 +336,25 @@ function getAuthManager(): DesktopAuthManager {
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
   assertTrustedSenderForOrigin(event, trustedOrigin);
+}
+
+function assertMainWindowSender(event: IpcMainInvokeEvent): void {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== mainWindow ||
+    event.senderFrame !== event.sender.mainFrame
+  ) {
+    throw new Error('IPC request is not from the main application window.');
+  }
+}
+
+function isCertificatePageUrl(url: string): boolean {
+  try {
+    return /^\/certificates\/[^/]+\/?$/.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
 }
 
 function getAppInfo(): DesktopAppInfo {
@@ -288,6 +372,11 @@ function isTrusted(url: string): boolean {
 function openExternal(url: string): void {
   if (!isAllowedExternalUrl(url)) return;
   void shell.openExternal(url);
+}
+
+function handleExitChoice(): void {
+  // TODO: report the student's exit choice when the backend supports it.
+  app.quit();
 }
 
 function isDevToolsShortcut(input: Electron.Input): boolean {
@@ -358,12 +447,26 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length > 0) return;
-  mainWindow = createMainWindow();
-  void loadRenderer(mainWindow);
+  const window = createMainWindow();
+  mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
+  );
+  updateProtectionContext(getAuthManager().getState());
+  void displayWindowManager
+    .start()
+    .then(() => loadRenderer(window))
+    .catch(handleStartupError);
 });
 
 app.on('before-quit', () => {
   // TODO: ask the renderer to flush activity time before the app exits.
+  displayWindowManager?.dispose();
+  displayWindowManager = null;
   authManager?.dispose();
   authManager = null;
   if (!localServer) return;

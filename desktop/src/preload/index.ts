@@ -25,6 +25,9 @@ const api: DesktopApi = {
     setFullscreen: (value: boolean) =>
       ipcRenderer.invoke('window:set-fullscreen', value) as Promise<boolean>,
     isFullscreen: () => ipcRenderer.invoke('window:is-fullscreen') as Promise<boolean>,
+    beginCertificatePrint: () =>
+      ipcRenderer.invoke('window:begin-certificate-print') as Promise<void>,
+    endCertificatePrint: () => ipcRenderer.invoke('window:end-certificate-print') as Promise<void>,
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => {
       const handler = (_event: IpcRendererEvent, isFullscreen: boolean): void => {
         listener(isFullscreen);

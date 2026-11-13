@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, Printer } from 'lucide-react';
 import Header from '../../components/Header';
@@ -15,6 +16,7 @@ import styles from './CertificatePage.module.css';
 export default function CertificatePage() {
   const { courseId = '' } = useParams();
   const { isLoading, certificate, error, retry } = useCertificate(courseId);
+  const [printError, setPrintError] = useState<string | null>(null);
 
   useLandscapePageStyle();
   // Light theme + "Vinkup certificate – CSS – Asha Rao" as the PDF file name while printing.
@@ -23,7 +25,16 @@ export default function CertificatePage() {
     documentTitle: certificate
       ? certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
       : 'Vinkup certificate',
+    desktopPrintException: true,
   });
+
+  const handlePrint = (): void => {
+    setPrintError(null);
+    void print(null).catch((printFailure: unknown) => {
+      console.error('[certificate] Failed to open the print dialog', printFailure);
+      setPrintError('Unable to open certificate printing. Please try again.');
+    });
+  };
 
   if (isLoading) return <LoaderOverlay fullPage label="Loading certificate…" />;
 
@@ -75,11 +86,16 @@ export default function CertificatePage() {
             <ArrowLeft size={16} aria-hidden="true" />
             Back to Dashboard
           </Link>
-          <button type="button" className={styles.printButton} onClick={() => print(null)}>
+          <button type="button" className={styles.printButton} onClick={handlePrint}>
             <Printer size={16} aria-hidden="true" />
             Print / Save as PDF
           </button>
         </div>
+        {printError && (
+          <p className={`${styles.printError} ${styles.screenOnly}`} role="alert">
+            {printError}
+          </p>
+        )}
 
         <CertificateSheet certificate={certificate} />
       </main>
