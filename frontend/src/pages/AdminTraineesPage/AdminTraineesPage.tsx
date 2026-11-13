@@ -7,6 +7,7 @@ import { ErrorState } from '../../components/Common/ErrorState';
 import TraineeTable from './TraineeTable';
 import styles from './AdminTraineesPage.module.css';
 import CohortSummary from '../../components/CohortSummary';
+import TeamAnalytics from '../../components/TeamAnalytics';
 import { filterTrainees, sortTrainees } from '../../lib/traineeListState';
 import TraineeListToolbar from './TraineeListToolbar';
 import { useTraineeListParams } from './useTraineeListParams';
@@ -142,6 +143,9 @@ export default function AdminTraineesPage() {
         </button>
 
         {trainees.length > 0 && <CohortSummary trainees={trainees} />}
+        {trainees.length > 0 && (
+          <TeamAnalytics trainees={trainees} attentionReasons={attentionReasons} />
+        )}
 
         <section className={styles.card} aria-label="Trainee overview">
           {trainees.length === 0 ? (
