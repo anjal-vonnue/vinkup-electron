@@ -93,5 +93,5 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
     [enter]
   );
 
-  return { printJob: job, print };
+  return { printJob: job, print, prepare: enter, restore: leave };
 }

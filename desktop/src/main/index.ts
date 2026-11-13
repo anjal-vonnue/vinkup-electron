@@ -10,6 +10,7 @@ import {
   screen,
   type IpcMainInvokeEvent,
 } from 'electron';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { DesktopAppInfo, DesktopAuthState, DesktopPlatform } from '@itp/types';
 import { APP_NAME, DEV_RENDERER_URL, getApiUrl } from './config';
@@ -238,6 +239,35 @@ function registerIpcHandlers(): void {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
 
+  ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
+    assertTrustedSender(event);
+    if (typeof fileName !== 'string' || !fileName.trim()) {
+      throw new Error('A certificate file name is required.');
+    }
+
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) throw new Error('The certificate window is not available.');
+
+    const result = await dialog.showSaveDialog(window, {
+      defaultPath: `${sanitizePdfFileName(fileName)}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (result.canceled || !result.filePath) return false;
+
+    const filePath =
+      path.extname(result.filePath).toLowerCase() === '.pdf'
+        ? result.filePath
+        : `${result.filePath}.pdf`;
+    const pdf = await event.sender.printToPDF({
+      pageSize: 'A4',
+      landscape: true,
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
+    await writeFile(filePath, pdf);
+    return true;
+  });
+
   ipcMain.handle('auth:get-state', (event) => {
     assertTrustedSender(event);
     return getAuthManager().getState();
@@ -279,6 +309,20 @@ function getAppInfo(): DesktopAppInfo {
     platform: process.platform as DesktopPlatform,
     isPackaged: app.isPackaged,
   };
+}
+
+function sanitizePdfFileName(fileName: string): string {
+  const name = path
+    .basename(fileName)
+    .split('')
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || /[<>:"/\\|?*]/.test(character) ? '-' : character;
+    })
+    .join('')
+    .replace(/\.pdf$/i, '')
+    .trim();
+  return name || 'certificate';
 }
 
 function isTrusted(url: string): boolean {

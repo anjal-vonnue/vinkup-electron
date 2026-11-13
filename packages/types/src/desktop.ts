@@ -37,4 +37,7 @@ export interface DesktopApi {
     /** Returns an unsubscribe function. */
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => () => void;
   };
+  certificate: {
+    savePdf: (fileName: string) => Promise<boolean>;
+  };
 }
