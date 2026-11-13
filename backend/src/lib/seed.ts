@@ -20,8 +20,6 @@ const prisma = new PrismaClient({ adapter });
 const admins = [
   { email: 'hawas.backer@vonnue.com', name: 'hawas' },
   { email: 'ameesha.t@vonnue.com', name: 'Ameesha T' },
-  // { email: 'akshay.antony@vonnue.com', name: 'Akshay Antony' }
-  { email: 'akshayantony2004@gmail.com', name: 'Akshay Antony' },
 ];
 
 const trainees = [
@@ -34,7 +32,6 @@ const trainees = [
   { email: 'sona.kajal@vonnue.com', name: 'Sona Kajal' },
   { email: 'gauresh.pa@vonnue.com', name: 'Gauresh PA' },
   { email: 'anjal.biju@vonnue.com', name: 'Anjal K Biju' },
-  { email: 'developer.hornbill@gmail.com', name: 'Akshay Antony' },
 ];
 
 type SeedTaskFile = { path: string; content: string };
