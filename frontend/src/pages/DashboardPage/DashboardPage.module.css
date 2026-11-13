@@ -12,6 +12,11 @@
   gap: 2.5rem;
 }
 
+.loadingRegion {
+  position: relative;
+  min-height: max(12rem, calc(100vh - 18rem));
+}
+
 .status {
   padding: 4rem;
   text-align: center;
