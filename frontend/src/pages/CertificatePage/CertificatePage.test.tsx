@@ -101,7 +101,7 @@ describe('CertificatePage', () => {
   });
 
   describe('printing', () => {
-    it('prints in the light theme with the certificate as the file name', async () => {
+    it('prints with the current theme and certificate as the file name', async () => {
       const user = userEvent.setup();
       vi.mocked(getCertificate).mockResolvedValue(certificate);
       document.documentElement.dataset.theme = 'dark';
@@ -118,7 +118,7 @@ describe('CertificatePage', () => {
 
       expect(printMock).toHaveBeenCalledTimes(1);
       expect(titleWhilePrinting).toBe('Vinkup certificate - CSS - Asha Rao');
-      expect(themeWhilePrinting).toBe('light');
+      expect(themeWhilePrinting).toBe('dark');
     });
 
     it('saves a PDF through the desktop app instead of opening the system print flow', async () => {

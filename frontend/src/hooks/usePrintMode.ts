@@ -14,11 +14,9 @@ type UsePrintModeOptions<T> = {
   documentTitle: string;
 };
 
-type SavedPage = { theme: string | undefined; title: string };
+type SavedPage = { title: string };
 
 function restorePage(saved: SavedPage): void {
-  if (saved.theme === undefined) delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = saved.theme;
   document.title = saved.title;
 }
 
@@ -27,9 +25,9 @@ function restorePage(saved: SavedPage): void {
  *
  * - `print(options)` renders the view synchronously, then opens the browser's print dialog.
  * - Printing from the browser menu (`beforeprint`) renders it with `defaults`.
- * - While printing, the page uses the light theme and the report's title. The saved theme
- *   preference is not touched (this sets `data-theme` directly, not through useTheme).
- * - `afterprint` puts the theme and title back and removes the view.
+ * - The document title is set to the report's title while printing (browsers suggest it as
+ *   the "Save as PDF" filename). The user's theme is never changed.
+ * - `afterprint` puts the title back and removes the view.
  */
 export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions<T>) {
   const [job, setJob] = useState<PrintJob<T> | null>(null);
@@ -46,9 +44,8 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
 
   const enter = useCallback((options: T) => {
     if (!savedRef.current) {
-      savedRef.current = { theme: document.documentElement.dataset.theme, title: document.title };
+      savedRef.current = { title: document.title };
     }
-    document.documentElement.dataset.theme = 'light';
     document.title = titleRef.current;
 
     const next: PrintJob<T> = { options, startedAt: new Date() };
@@ -77,7 +74,7 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', leave);
-      // Leaving the page mid-print must not leave the app stuck in the light theme.
+      // Leaving the page mid-print must not leave the title stuck on the PDF name.
       if (savedRef.current) {
         restorePage(savedRef.current);
         savedRef.current = null;
