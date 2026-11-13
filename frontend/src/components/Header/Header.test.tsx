@@ -41,6 +41,7 @@ describe('Header', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Resources' })).toHaveAttribute('href', '/resources');
     expect(screen.getByRole('link', { name: 'Rahul Sharma' })).toHaveAttribute('href', '/profile');
     expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
   });

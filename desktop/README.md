@@ -11,9 +11,11 @@ instead of `file://` so that cookies, `localStorage`, IndexedDB, and
 
 ```
 desktop/
+  resources/resources-allowlist.json  Bundled approved-site list
   src/main/config.ts    App name, API URL, desktop port, frontend directory
   src/main/server.ts    Local static server + /api proxy (COOP/COEP headers)
   src/main/index.ts     Window, menu, IPC handlers, security defaults
+  src/main/resources/   Allowlist validation + embedded Resources browser
   src/preload/index.ts  contextBridge surface (window.desktop)
   scripts/build.mjs     esbuild bundle for main + preload
   scripts/run-electron.mjs  dev/production launcher (XWayland on Wayland)
@@ -54,6 +56,49 @@ For frontend-only UI work you can still use mock mode in
 VITE_USE_MOCKS=true
 ```
 
+## Resources browser
+
+The Resources tab opens an embedded browser layered over the renderer. It is a
+`WebContentsView`, not an `<iframe>`, because most documentation sites send
+`X-Frame-Options` headers that prevent framing.
+
+The allowlist lives in `resources/resources-allowlist.json` and is enforced in
+the main process. Sites are grouped into categories for the Resources start page
+(HTML, CSS, JavaScript, TypeScript, React, backend, testing, Git and practice).
+The same site can appear in more than one category; navigation checks use the
+deduplicated union of every category. A top-level `descriptions` map gives each
+host a one-line summary on its card; keys must be approved hosts.
+
+- every address-bar entry is resolved and checked there;
+- links, server redirects, `target="_blank"` popups and in-page navigations are
+  checked before they run;
+- the embedded session denies all permission requests and downloads;
+- subdomains of an approved host are allowed (`docs.github.com` covers
+  `docs.github.com` and any deeper subdomain), but look-alike domains are not.
+
+Only web addresses can be entered; there is no search box. Text that is not an
+address is rejected, so students use the approved sites directly.
+
+### Page tools
+
+- **Find in page** — `Ctrl+F`, `Enter` for the next match, `Shift+Enter` for the
+  previous one, `Esc` to close. Match counts come from `found-in-page`.
+- **Shortcuts** — `Ctrl+L` address bar, `Alt+←/→` back/forward, `Ctrl+R`/`F5`
+  reload, `Esc` stop loading or close the find bar.
+- **Zoom** — `Ctrl++`, `Ctrl+-` and `Ctrl+0`, clamped to three steps either side
+  of 100%. Chromium remembers the level per site.
+- **Resume reading** — the last page that opened is stored in `localStorage`
+  (`vinkup.resources.lastPage`) and offered on the start page.
+- **Blocked and error panels** — show the full address with copy actions, and
+  distinguish offline, unreachable and refused connections. The heading receives
+  focus and an `aria-live` region announces navigation changes.
+
+The app also fetches a newer copy from `VINKUP_API_URL` + `/api/resources/allowlist`
+at startup, validates it, and caches it in `userData`. A failed fetch or an
+invalid file is ignored, so the bundled list always works offline. To point at a
+different centrally hosted file, set `VINKUP_RESOURCES_ALLOWLIST_URL`; set it to
+an empty string to disable remote updates.
+
 ## Production-like run
 
 ```bash
@@ -82,12 +127,13 @@ release.
 
 ## Environment variables
 
-| Variable                | Default                               | Purpose                                                                                                            |
-| ----------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `VINKUP_API_URL`        | `https://vinkup-backend.onrender.com` | Backend the `/api` proxy and desktop sign-in use. Defaults to `http://localhost:3000` when `NODE_ENV=development`. |
-| `VINKUP_DESKTOP_PORT`   | `43110`                               | Local renderer port. Changing it changes the renderer origin, which clears stored state.                           |
-| `NODE_ENV`              | unset                                 | `development` loads the Vite dev server and enables DevTools.                                                      |
-| `VINKUP_OZONE_PLATFORM` | unset                                 | Set to `wayland` to use native Wayland instead of XWayland on Linux.                                               |
+| Variable                         | Default                               | Purpose                                                                                                            |
+| -------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `VINKUP_API_URL`                 | `https://vinkup-backend.onrender.com` | Backend the `/api` proxy and desktop sign-in use. Defaults to `http://localhost:3000` when `NODE_ENV=development`. |
+| `VINKUP_DESKTOP_PORT`            | `43110`                               | Local renderer port. Changing it changes the renderer origin, which clears stored state.                           |
+| `NODE_ENV`                       | unset                                 | `development` loads the Vite dev server and enables DevTools.                                                      |
+| `VINKUP_OZONE_PLATFORM`          | unset                                 | Set to `wayland` to use native Wayland instead of XWayland on Linux.                                               |
+| `VINKUP_RESOURCES_ALLOWLIST_URL` | API URL + `/api/resources/allowlist`  | Centrally hosted Resources allowlist JSON. An empty string disables remote updates.                                |
 
 ## Linux troubleshooting
 

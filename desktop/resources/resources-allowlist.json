@@ -1,0 +1,179 @@
+{
+  "version": 3,
+  "updatedAt": "2026-11-13",
+  "descriptions": {
+    "developer.mozilla.org": "MDN — the reference for HTML, CSS and JavaScript.",
+    "web.dev": "Google's guides for modern, accessible web apps.",
+    "developer.chrome.com": "Chrome DevTools and browser platform guides.",
+    "validator.w3.org": "Check your HTML for markup errors.",
+    "htmlreference.io": "A visual reference for every HTML element.",
+    "webaim.org": "Practical web accessibility techniques and checks.",
+    "www.deque.com": "Accessibility rules and testing with axe.",
+    "ogp.me": "How Open Graph link previews are defined.",
+    "www.opengraph.xyz": "Preview how a link looks when shared.",
+    "www.w3schools.com": "Short beginner tutorials and examples.",
+    "specifishity.com": "How CSS specificity decides which rule wins.",
+    "flukeout.github.io": "CSS Diner — practise selectors as a game.",
+    "css-tricks.com": "Articles and guides for everyday CSS problems.",
+    "flexboxfroggy.com": "Learn flexbox by guiding a frog.",
+    "codepen.io": "Write and share HTML, CSS and JS in the browser.",
+    "cssgridgarden.com": "Learn CSS grid by growing a garden.",
+    "cssgrid.io": "A free video course on CSS grid.",
+    "utopia.fyi": "Generate fluid type and spacing scales.",
+    "stylelint.io": "Catch CSS mistakes with a linter.",
+    "javascript.info": "A modern, in-depth JavaScript tutorial.",
+    "www.jsv9000.app": "Visualise the JavaScript event loop.",
+    "latentflip.com": "See how the event loop and callbacks run.",
+    "eloquentjavascript.net": "Eloquent JavaScript — a free book.",
+    "eslint.org": "Find and fix problems in JavaScript code.",
+    "www.patterns.dev": "Design patterns for modern web apps.",
+    "www.typescriptlang.org": "The official TypeScript handbook.",
+    "www.totaltypescript.com": "Practical TypeScript tips and articles.",
+    "kulshekhar.github.io": "Set up TypeScript testing with ts-jest.",
+    "ts-error-translator.vercel.app": "Turn a TypeScript error into plain English.",
+    "nodejs.org": "Node.js documentation and guides.",
+    "expressjs.com": "Build web servers and APIs with Express.",
+    "www.postgresql.org": "PostgreSQL documentation and tutorials.",
+    "www.prisma.io": "Type-safe database access with Prisma.",
+    "cheatsheetseries.owasp.org": "Security cheat sheets for common risks.",
+    "spec.openapis.org": "Describe REST APIs with OpenAPI.",
+    "open-meteo.com": "A free weather API for practice projects.",
+    "jsonplaceholder.typicode.com": "A fake REST API for testing requests.",
+    "picsum.photos": "Placeholder photos for layouts.",
+    "api.github.com": "The GitHub REST API reference.",
+    "react.dev": "The official React documentation.",
+    "vite.dev": "The Vite build tool documentation.",
+    "reactrouter.com": "Routing for React apps with React Router.",
+    "testing-library.com": "Test UI the way a user interacts with it.",
+    "jestjs.io": "The Jest testing framework documentation.",
+    "testingjavascript.com": "A course on testing JavaScript well.",
+    "docs.github.com": "GitHub help, Git basics and workflows.",
+    "github.com": "Host repositories and review code.",
+    "www.youtube.com": "Approved video lessons and talks."
+  },
+  "categories": [
+    {
+      "id": "html",
+      "label": "HTML & Accessibility",
+      "domains": [
+        "developer.mozilla.org",
+        "web.dev",
+        "developer.chrome.com",
+        "validator.w3.org",
+        "htmlreference.io",
+        "webaim.org",
+        "www.deque.com",
+        "ogp.me",
+        "www.opengraph.xyz",
+        "www.w3schools.com"
+      ]
+    },
+    {
+      "id": "css",
+      "label": "CSS & Layout",
+      "domains": [
+        "developer.mozilla.org",
+        "web.dev",
+        "developer.chrome.com",
+        "specifishity.com",
+        "flukeout.github.io",
+        "css-tricks.com",
+        "flexboxfroggy.com",
+        "codepen.io",
+        "cssgridgarden.com",
+        "cssgrid.io",
+        "utopia.fyi",
+        "stylelint.io",
+        "www.w3schools.com"
+      ]
+    },
+    {
+      "id": "javascript",
+      "label": "JavaScript",
+      "domains": [
+        "developer.mozilla.org",
+        "web.dev",
+        "developer.chrome.com",
+        "javascript.info",
+        "www.jsv9000.app",
+        "latentflip.com",
+        "eloquentjavascript.net",
+        "eslint.org",
+        "www.patterns.dev",
+        "www.w3schools.com",
+        "codepen.io"
+      ]
+    },
+    {
+      "id": "typescript",
+      "label": "TypeScript",
+      "domains": [
+        "www.typescriptlang.org",
+        "www.totaltypescript.com",
+        "kulshekhar.github.io",
+        "ts-error-translator.vercel.app",
+        "www.patterns.dev"
+      ]
+    },
+    {
+      "id": "react",
+      "label": "React & Vite",
+      "domains": [
+        "react.dev",
+        "vite.dev",
+        "reactrouter.com",
+        "www.patterns.dev",
+        "testing-library.com"
+      ]
+    },
+    {
+      "id": "backend",
+      "label": "Backend, APIs & Databases",
+      "domains": [
+        "nodejs.org",
+        "expressjs.com",
+        "www.postgresql.org",
+        "www.prisma.io",
+        "cheatsheetseries.owasp.org",
+        "spec.openapis.org",
+        "open-meteo.com",
+        "jsonplaceholder.typicode.com",
+        "picsum.photos",
+        "api.github.com"
+      ]
+    },
+    {
+      "id": "testing",
+      "label": "Testing & Tooling",
+      "domains": [
+        "jestjs.io",
+        "testingjavascript.com",
+        "testing-library.com",
+        "eslint.org",
+        "stylelint.io",
+        "kulshekhar.github.io"
+      ]
+    },
+    {
+      "id": "git",
+      "label": "Git & GitHub",
+      "domains": ["docs.github.com", "github.com", "api.github.com"]
+    },
+    {
+      "id": "practice",
+      "label": "Practice & Videos",
+      "domains": [
+        "www.youtube.com",
+        "codepen.io",
+        "flexboxfroggy.com",
+        "cssgridgarden.com",
+        "cssgrid.io",
+        "flukeout.github.io",
+        "www.jsv9000.app",
+        "latentflip.com",
+        "utopia.fyi",
+        "javascript.info"
+      ]
+    }
+  ]
+}

@@ -9,3 +9,4 @@ export * from './admin';
 export * from './journal';
 export * from './desktop';
 export * from './auth';
+export * from './resources';
