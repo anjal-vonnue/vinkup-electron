@@ -21,12 +21,19 @@
 /* ===== Toolbar ===== */
 .toolbar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
   padding: 8px;
+  overflow: hidden;
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border-card);
   border-radius: 12px;
+}
+
+.toolbarRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .iconButton {
@@ -129,6 +136,179 @@
   }
 }
 
+/* ===== Zoom, page status and loading progress ===== */
+.zoomGroup {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 2px;
+  background-color: var(--color-bg-panel);
+  border-radius: 8px;
+}
+
+.zoomButton,
+.zoomValue {
+  height: 30px;
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.zoomButton {
+  width: 28px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.zoomValue {
+  min-width: 46px;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoomButton:hover,
+.zoomValue:hover {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+
+.pageStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px 2px;
+}
+
+.pageTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zoomBadge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+  background-color: var(--color-bg-panel);
+  border-radius: 999px;
+}
+
+.progress {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  background-color: var(--color-bg-panel);
+  border-radius: 2px;
+}
+
+.progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background-color: var(--color-accent-purple);
+  border-radius: 2px;
+  animation: resources-progress 1.1s ease-in-out infinite;
+}
+
+@keyframes resources-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(350%);
+  }
+}
+
+/* ===== Find bar ===== */
+.findBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 10px;
+}
+
+.findInput {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-panel);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+
+.findInput:focus {
+  border-color: var(--color-accent-purple);
+}
+
+.findInput::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.findCount {
+  min-width: 70px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--color-text-secondary);
+}
+
+.findButton {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  font-size: 0.9375rem;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  border-radius: 6px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.findButton:hover:not(:disabled) {
+  background-color: var(--color-bg-panel);
+  color: var(--color-text-primary);
+}
+
+.findButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Visible to screen readers only. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ===== Browser surface ===== */
 .viewport {
   position: relative;
@@ -189,7 +369,7 @@
 
 .site {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
@@ -208,6 +388,14 @@
   border-color: var(--color-accent-purple-wash);
 }
 
+.siteText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
 .siteName {
   overflow: hidden;
   font-size: 0.875rem;
@@ -215,6 +403,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-text-primary);
+}
+
+.siteDescription {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .siteHint {
@@ -229,6 +427,70 @@
 .site:hover .siteHint,
 .site:focus-visible .siteHint {
   opacity: 1;
+}
+
+/* ===== Resume card ===== */
+.resumeCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+  padding: 16px 18px;
+  background-color: var(--color-accent-tint);
+  border: 1px solid var(--color-accent-purple-wash);
+  border-radius: 12px;
+}
+
+.resumeText {
+  flex: 1;
+  min-width: 0;
+}
+
+.resumeLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent-text);
+}
+
+.resumeTitle {
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+
+.resumeUrl {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+.resumeActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.urlCode {
+  max-width: min(100%, 520px);
+  padding: 6px 10px;
+  overflow-wrap: anywhere;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-panel);
+  border: 1px solid var(--color-border-card);
+  border-radius: 6px;
 }
 
 .muted {

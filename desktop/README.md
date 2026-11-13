@@ -66,7 +66,8 @@ The allowlist lives in `resources/resources-allowlist.json` and is enforced in
 the main process. Sites are grouped into categories for the Resources start page
 (HTML, CSS, JavaScript, TypeScript, React, backend, testing, Git and practice).
 The same site can appear in more than one category; navigation checks use the
-deduplicated union of every category.
+deduplicated union of every category. A top-level `descriptions` map gives each
+host a one-line summary on its card; keys must be approved hosts.
 
 - every address-bar entry is resolved and checked there;
 - links, server redirects, `target="_blank"` popups and in-page navigations are
@@ -77,6 +78,20 @@ deduplicated union of every category.
 
 Only web addresses can be entered; there is no search box. Text that is not an
 address is rejected, so students use the approved sites directly.
+
+### Page tools
+
+- **Find in page** — `Ctrl+F`, `Enter` for the next match, `Shift+Enter` for the
+  previous one, `Esc` to close. Match counts come from `found-in-page`.
+- **Shortcuts** — `Ctrl+L` address bar, `Alt+←/→` back/forward, `Ctrl+R`/`F5`
+  reload, `Esc` stop loading or close the find bar.
+- **Zoom** — `Ctrl++`, `Ctrl+-` and `Ctrl+0`, clamped to three steps either side
+  of 100%. Chromium remembers the level per site.
+- **Resume reading** — the last page that opened is stored in `localStorage`
+  (`vinkup.resources.lastPage`) and offered on the start page.
+- **Blocked and error panels** — show the full address with copy actions, and
+  distinguish offline, unreachable and refused connections. The heading receives
+  focus and an `aria-live` region announces navigation changes.
 
 The app also fetches a newer copy from `VINKUP_API_URL` + `/api/resources/allowlist`
 at startup, validates it, and caches it in `userData`. A failed fetch or an

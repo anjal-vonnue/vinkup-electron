@@ -3,6 +3,7 @@ import type {
   ResourcesAllowlist,
   ResourcesBrowserBounds,
   ResourcesBrowserState,
+  ResourcesFindResult,
 } from './resources';
 
 /** Desktop platforms the shell is built for. Linux is the only supported target for now. */
@@ -62,9 +63,23 @@ export interface DesktopApi {
     goForward: () => Promise<void>;
     reload: () => Promise<void>;
     stop: () => Promise<void>;
+    /** Highlights matches for the query in the current page. */
+    find: (query: string) => Promise<void>;
+    findNext: (forward: boolean) => Promise<void>;
+    /** Clears find highlights and the match counter. */
+    stopFind: () => Promise<void>;
+    zoomIn: () => Promise<void>;
+    zoomOut: () => Promise<void>;
+    zoomReset: () => Promise<void>;
     /** Returns an unsubscribe function. */
     onChange: (listener: (state: ResourcesBrowserState) => void) => () => void;
     /** Returns an unsubscribe function. Ctrl+L from inside the page. */
     onFocusAddress: (listener: () => void) => () => void;
+    /** Returns an unsubscribe function. Ctrl+F from inside the page. */
+    onOpenFind: (listener: () => void) => () => void;
+    /** Returns an unsubscribe function. Match updates from the find bar. */
+    onFindResult: (listener: (result: ResourcesFindResult) => void) => () => void;
+    /** Returns an unsubscribe function. Esc from inside the page. */
+    onEscape: (listener: () => void) => () => void;
   };
 }

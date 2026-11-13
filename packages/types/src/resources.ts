@@ -23,6 +23,8 @@ export interface ResourcesAllowlist {
   /** Flattened, unique hosts from every category. Navigation checks use this. */
   domains: string[];
   categories: ResourcesCategory[];
+  /** Optional one-line description per host, keyed by the host. */
+  descriptions: Record<string, string>;
 }
 
 /** Rectangle (in window content coordinates) where the embedded browser draws. */
@@ -32,6 +34,12 @@ export interface ResourcesBrowserBounds {
   width: number;
   height: number;
 }
+
+/**
+ * Why a page failed to load. The renderer picks a human-readable title and
+ * hint from this instead of showing Chromium's error string alone.
+ */
+export type ResourcesBrowserErrorKind = 'offline' | 'unreachable' | 'refused' | 'unknown';
 
 /** Everything the Resources page needs to render its toolbar and panels. */
 export interface ResourcesBrowserState {
@@ -49,4 +57,14 @@ export interface ResourcesBrowserState {
   blockedHost: string | null;
   /** Human-readable load failure, if the last load did not finish. */
   error: string | null;
+  errorKind: ResourcesBrowserErrorKind | null;
+  /** Current page zoom as a percentage (100 = original size). */
+  zoom: number;
+}
+
+/** A match update from the in-page find bar. */
+export interface ResourcesFindResult {
+  activeMatchOrdinal: number;
+  matches: number;
+  finalUpdate: boolean;
 }

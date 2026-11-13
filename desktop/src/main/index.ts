@@ -95,6 +95,18 @@ async function bootstrap(): Promise<void> {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       mainWindow.webContents.send('resources:focus-address');
     },
+    onOpenFind: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:open-find');
+    },
+    onFindResult: (result) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:find-result', result);
+    },
+    onEscape: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:escape');
+    },
   });
 
   // The shared allowlist can be updated without shipping a release. This never
@@ -366,6 +378,37 @@ function registerIpcHandlers(): void {
   ipcMain.handle('resources:stop', (event) => {
     assertTrustedSender(event);
     getResourcesBrowser().stop();
+  });
+
+  ipcMain.handle('resources:find', (event, query: unknown) => {
+    assertTrustedSender(event);
+    if (typeof query !== 'string') throw new Error('Invalid search text.');
+    getResourcesBrowser().find(query);
+  });
+
+  ipcMain.handle('resources:find-next', (event, forward: unknown) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().findNext(forward !== false);
+  });
+
+  ipcMain.handle('resources:stop-find', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().stopFind();
+  });
+
+  ipcMain.handle('resources:zoom-in', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().zoomIn();
+  });
+
+  ipcMain.handle('resources:zoom-out', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().zoomOut();
+  });
+
+  ipcMain.handle('resources:zoom-reset', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().zoomReset();
   });
 }
 

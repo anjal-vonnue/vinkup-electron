@@ -1,8 +1,18 @@
 import { app, session, WebContentsView, type BrowserWindow } from 'electron';
-import type { ResourcesAllowlist, ResourcesBrowserBounds, ResourcesBrowserState } from '@itp/types';
+import type {
+  ResourcesAllowlist,
+  ResourcesBrowserBounds,
+  ResourcesBrowserErrorKind,
+  ResourcesBrowserState,
+  ResourcesFindResult,
+} from '@itp/types';
 import { hostFromUrl, isAllowedNavigationUrl, resolveNavigationInput } from './allowlist';
 
 const PARTITION = 'persist:vinkup-resources';
+
+/** Matches Chromium's zoom steps; three steps either side of 100%. */
+const MIN_ZOOM_LEVEL = -3;
+const MAX_ZOOM_LEVEL = 3;
 
 export const EMPTY_BROWSER_STATE: ResourcesBrowserState = {
   url: '',
@@ -15,11 +25,16 @@ export const EMPTY_BROWSER_STATE: ResourcesBrowserState = {
   blockedUrl: null,
   blockedHost: null,
   error: null,
+  errorKind: null,
+  zoom: 100,
 };
 
 export interface ResourcesBrowserEvents {
   onState: (state: ResourcesBrowserState) => void;
   onFocusAddress: () => void;
+  onOpenFind: () => void;
+  onFindResult: (result: ResourcesFindResult) => void;
+  onEscape: () => void;
 }
 
 /**
@@ -37,6 +52,7 @@ export class ResourcesBrowser {
   private lastBounds: ResourcesBrowserBounds | null = null;
   private attached = false;
   private downloadHandler: ((event: Electron.Event) => void) | null = null;
+  private lastFindQuery = '';
 
   constructor(
     private readonly window: BrowserWindow,
@@ -91,6 +107,7 @@ export class ResourcesBrowser {
   }
 
   home(): void {
+    this.stopFind();
     this.view?.webContents.stop();
     this.update({
       isHome: true,
@@ -98,6 +115,7 @@ export class ResourcesBrowser {
       blockedUrl: null,
       blockedHost: null,
       error: null,
+      errorKind: null,
       isLoading: false,
     });
   }
@@ -111,6 +129,7 @@ export class ResourcesBrowser {
         blockedUrl: null,
         blockedHost: null,
         error: target.message,
+        errorKind: 'unknown',
         isLoading: false,
       });
       return this.getState();
@@ -123,6 +142,7 @@ export class ResourcesBrowser {
 
     this.attached = true;
     const view = this.ensureView();
+    this.stopFind();
     this.update({
       url: target.url,
       title: '',
@@ -131,6 +151,7 @@ export class ResourcesBrowser {
       blockedUrl: null,
       blockedHost: null,
       error: null,
+      errorKind: null,
       isLoading: true,
     });
     this.applyVisibility();
@@ -142,12 +163,14 @@ export class ResourcesBrowser {
     const history = this.view?.webContents.navigationHistory;
     if (!history?.canGoBack()) return;
 
+    this.stopFind();
     this.update({
       isHome: false,
       isBlocked: false,
       blockedUrl: null,
       blockedHost: null,
       error: null,
+      errorKind: null,
     });
     this.applyVisibility();
     history.goBack();
@@ -157,12 +180,14 @@ export class ResourcesBrowser {
     const history = this.view?.webContents.navigationHistory;
     if (!history?.canGoForward()) return;
 
+    this.stopFind();
     this.update({
       isHome: false,
       isBlocked: false,
       blockedUrl: null,
       blockedHost: null,
       error: null,
+      errorKind: null,
     });
     this.applyVisibility();
     history.goForward();
@@ -182,6 +207,48 @@ export class ResourcesBrowser {
     this.view?.webContents.stop();
   }
 
+  /** Starts (or restarts) an in-page search. Empty input clears highlights. */
+  find(query: string): void {
+    const contents = this.view?.webContents;
+    const trimmed = query.trim();
+    if (!contents || trimmed === '') {
+      this.stopFind();
+      return;
+    }
+
+    this.lastFindQuery = trimmed;
+    contents.findInPage(trimmed, { findNext: false, forward: true });
+  }
+
+  /** Moves to the next or previous match of the current query. */
+  findNext(forward: boolean): void {
+    const contents = this.view?.webContents;
+    if (!contents || this.lastFindQuery === '') return;
+    contents.findInPage(this.lastFindQuery, { findNext: true, forward });
+  }
+
+  stopFind(): void {
+    if (this.lastFindQuery === '') return;
+    this.lastFindQuery = '';
+    this.view?.webContents.stopFindInPage('clearSelection');
+    this.events.onFindResult({ activeMatchOrdinal: 0, matches: 0, finalUpdate: true });
+  }
+
+  zoomIn(): void {
+    this.changeZoom(1);
+  }
+
+  zoomOut(): void {
+    this.changeZoom(-1);
+  }
+
+  zoomReset(): void {
+    const contents = this.view?.webContents;
+    if (!contents) return;
+    contents.setZoomLevel(0);
+    this.updateZoom();
+  }
+
   dispose(): void {
     if (!this.view) return;
 
@@ -195,6 +262,24 @@ export class ResourcesBrowser {
       session.fromPartition(PARTITION).removeListener('will-download', this.downloadHandler);
       this.downloadHandler = null;
     }
+  }
+
+  private changeZoom(direction: 1 | -1): void {
+    const contents = this.view?.webContents;
+    if (!contents) return;
+
+    const level = contents.getZoomLevel();
+    const next = Math.min(MAX_ZOOM_LEVEL, Math.max(MIN_ZOOM_LEVEL, level + direction));
+    if (next === level) return;
+
+    contents.setZoomLevel(next);
+    this.updateZoom();
+  }
+
+  private updateZoom(): void {
+    const contents = this.view?.webContents;
+    if (!contents) return;
+    this.update({ zoom: Math.round(contents.getZoomFactor() * 100) });
   }
 
   private configureSession(): void {
@@ -216,6 +301,7 @@ export class ResourcesBrowser {
       event.preventDefault();
       this.update({
         error: 'Downloads are disabled in the Resources browser.',
+        errorKind: 'unknown',
         isLoading: false,
       });
     };
@@ -286,6 +372,7 @@ export class ResourcesBrowser {
     });
 
     contents.on('did-navigate', (_event, url) => {
+      this.stopFind();
       this.update({
         url,
         title: contents.getTitle(),
@@ -294,8 +381,11 @@ export class ResourcesBrowser {
         blockedUrl: null,
         blockedHost: null,
         error: null,
+        errorKind: null,
         ...this.historyFlags(),
       });
+      // Chromium remembers zoom per origin, so a new site may differ.
+      this.updateZoom();
     });
 
     contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
@@ -307,6 +397,14 @@ export class ResourcesBrowser {
       this.update({ title });
     });
 
+    contents.on('found-in-page', (_event, result) => {
+      this.events.onFindResult({
+        activeMatchOrdinal: result.activeMatchOrdinal,
+        matches: result.matches,
+        finalUpdate: result.finalUpdate,
+      });
+    });
+
     contents.on('did-fail-load', (_event, errorCode, description, validatedUrl, isMainFrame) => {
       // -3 is ERR_ABORTED: a newer navigation replaced this one.
       if (!isMainFrame || errorCode === -3) return;
@@ -314,6 +412,7 @@ export class ResourcesBrowser {
       this.update({
         isLoading: false,
         error: `Could not load ${host}. ${description}`,
+        errorKind: errorKindForCode(errorCode),
         ...this.historyFlags(),
       });
     });
@@ -322,19 +421,71 @@ export class ResourcesBrowser {
       this.update({
         isLoading: false,
         error: 'The page closed unexpectedly. Reload to try again.',
+        errorKind: 'unknown',
       });
     });
 
     contents.on('before-input-event', (event, input) => {
-      if (!(input.control || input.meta) || input.key.toLowerCase() !== 'l') return;
-      event.preventDefault();
-      this.events.onFocusAddress();
+      if (this.handleShortcut(input)) event.preventDefault();
     });
+  }
+
+  /** Returns true when the shortcut was consumed. */
+  private handleShortcut(input: Electron.Input): boolean {
+    const key = input.key.toLowerCase();
+    const command = input.control || input.meta;
+    const isF5 = key === 'f5';
+
+    if (input.alt && (key === 'left' || key === 'right')) {
+      if (key === 'left') this.goBack();
+      else this.goForward();
+      return true;
+    }
+
+    if (isF5 || (command && key === 'r')) {
+      this.reload();
+      return true;
+    }
+
+    if (key === 'escape') {
+      this.events.onEscape();
+      return true;
+    }
+
+    if (!command) return false;
+
+    if (key === 'l') {
+      this.events.onFocusAddress();
+      return true;
+    }
+
+    if (key === 'f') {
+      this.events.onOpenFind();
+      return true;
+    }
+
+    if (key === '+' || key === '=') {
+      this.zoomIn();
+      return true;
+    }
+
+    if (key === '-') {
+      this.zoomOut();
+      return true;
+    }
+
+    if (key === '0') {
+      this.zoomReset();
+      return true;
+    }
+
+    return false;
   }
 
   private loadInPlace(url: string): void {
     this.attached = true;
     const view = this.ensureView();
+    this.stopFind();
     this.update({
       url,
       title: '',
@@ -343,6 +494,7 @@ export class ResourcesBrowser {
       blockedUrl: null,
       blockedHost: null,
       error: null,
+      errorKind: null,
       isLoading: true,
     });
     this.applyVisibility();
@@ -352,11 +504,13 @@ export class ResourcesBrowser {
   private block(rawUrl: string, host = hostFromUrl(rawUrl) ?? rawUrl): void {
     if (this.state.isBlocked && this.state.blockedUrl === rawUrl) return;
 
+    this.stopFind();
     this.update({
       isBlocked: true,
       blockedUrl: rawUrl,
       blockedHost: host,
       error: null,
+      errorKind: null,
       isHome: false,
       isLoading: false,
     });
@@ -410,4 +564,11 @@ export class ResourcesBrowser {
       canGoForward: history?.canGoForward() ?? false,
     };
   }
+}
+
+function errorKindForCode(code: number): ResourcesBrowserErrorKind {
+  if (code === -106) return 'offline';
+  if (code === -105 || code === -109) return 'unreachable';
+  if (code === -102 || code === -118 || code === -7) return 'refused';
+  return 'unknown';
 }

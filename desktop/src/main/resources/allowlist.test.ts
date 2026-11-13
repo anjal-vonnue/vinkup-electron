@@ -8,13 +8,17 @@ import {
 } from './allowlist';
 
 const allowlist: ResourcesAllowlist = {
-  version: 2,
+  version: 3,
   updatedAt: '2026-01-01',
   domains: ['developer.mozilla.org', 'github.com'],
   categories: [
     { id: 'html', label: 'HTML', domains: ['developer.mozilla.org'] },
     { id: 'git', label: 'Git & GitHub', domains: ['github.com'] },
   ],
+  descriptions: {
+    'developer.mozilla.org': 'MDN — the reference for HTML, CSS and JavaScript.',
+    'github.com': 'Host repositories and review code.',
+  },
 };
 
 describe('isHostAllowed', () => {
@@ -86,11 +90,16 @@ describe('resolveNavigationInput', () => {
 });
 
 describe('parseAllowlist', () => {
-  it('accepts the bundled file and has no search provider', () => {
+  it('accepts the bundled file, has no search provider, and describes its sites', () => {
     const parsed = parseAllowlist(BUNDLED_ALLOWLIST);
     expect(parsed).not.toBeNull();
     expect(parsed?.domains).not.toContain('duckduckgo.com');
     expect(parsed?.categories.length).toBeGreaterThan(0);
+    expect(parsed?.descriptions['developer.mozilla.org']).toMatch(/MDN/);
+    // Every allowed host has a description so the cards never look empty.
+    const descriptions = parsed?.descriptions ?? {};
+    const domains = parsed?.domains ?? [];
+    expect(Object.keys(descriptions).sort()).toEqual([...domains].sort());
   });
 
   it('builds a unique domain union from categories that repeat sites', () => {
@@ -143,5 +152,26 @@ describe('parseAllowlist', () => {
     });
 
     expect(parsed).toBeNull();
+  });
+
+  it('keeps valid descriptions and defaults to none', () => {
+    expect(parseAllowlist(allowlist)?.descriptions['github.com']).toBe(
+      'Host repositories and review code.'
+    );
+
+    const withoutDescriptions = parseAllowlist({
+      version: 2,
+      updatedAt: '2026-01-01',
+      categories: [{ id: 'html', label: 'HTML', domains: ['github.com'] }],
+    });
+    expect(withoutDescriptions?.descriptions).toEqual({});
+  });
+
+  it('rejects descriptions for unknown hosts or with empty text', () => {
+    expect(
+      parseAllowlist({ ...allowlist, descriptions: { 'example.com': 'Not approved.' } })
+    ).toBeNull();
+    expect(parseAllowlist({ ...allowlist, descriptions: { 'github.com': '   ' } })).toBeNull();
+    expect(parseAllowlist({ ...allowlist, descriptions: ['nope'] })).toBeNull();
   });
 });
