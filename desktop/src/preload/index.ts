@@ -5,6 +5,7 @@ import type {
   DesktopAuthState,
   ResourcesAllowlist,
   ResourcesBrowserState,
+  ResourcesFindResult,
 } from '@itp/types';
 
 const api: DesktopApi = {
@@ -61,6 +62,13 @@ const api: DesktopApi = {
     goForward: () => ipcRenderer.invoke('resources:forward') as Promise<void>,
     reload: () => ipcRenderer.invoke('resources:reload') as Promise<void>,
     stop: () => ipcRenderer.invoke('resources:stop') as Promise<void>,
+    find: (query: string) => ipcRenderer.invoke('resources:find', query) as Promise<void>,
+    findNext: (forward: boolean) =>
+      ipcRenderer.invoke('resources:find-next', forward) as Promise<void>,
+    stopFind: () => ipcRenderer.invoke('resources:stop-find') as Promise<void>,
+    zoomIn: () => ipcRenderer.invoke('resources:zoom-in') as Promise<void>,
+    zoomOut: () => ipcRenderer.invoke('resources:zoom-out') as Promise<void>,
+    zoomReset: () => ipcRenderer.invoke('resources:zoom-reset') as Promise<void>,
     onChange: (listener: (state: ResourcesBrowserState) => void) => {
       const handler = (_event: IpcRendererEvent, state: ResourcesBrowserState): void => {
         listener(state);
@@ -80,6 +88,33 @@ const api: DesktopApi = {
       };
     },
 
+    onOpenFind: (listener: () => void) => {
+      const handler = (): void => {
+        listener();
+      };
+      ipcRenderer.on('resources:open-find', handler);
+      return () => {
+        ipcRenderer.removeListener('resources:open-find', handler);
+      };
+    },
+    onFindResult: (listener: (result: ResourcesFindResult) => void) => {
+      const handler = (_event: IpcRendererEvent, result: ResourcesFindResult): void => {
+        listener(result);
+      };
+      ipcRenderer.on('resources:find-result', handler);
+      return () => {
+        ipcRenderer.removeListener('resources:find-result', handler);
+      };
+    },
+    onEscape: (listener: () => void) => {
+      const handler = (): void => {
+        listener();
+      };
+      ipcRenderer.on('resources:escape', handler);
+      return () => {
+        ipcRenderer.removeListener('resources:escape', handler);
+      };
+    },
   },
 };
 

@@ -18,6 +18,7 @@ export function parseAllowlist(value: unknown): ResourcesAllowlist | null {
   const version = record.version;
   const updatedAt = record.updatedAt;
   const rawCategories = record.categories;
+  const rawDescriptions = record.descriptions;
 
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return null;
   if (typeof updatedAt !== 'string' || updatedAt.trim() === '') return null;
@@ -57,7 +58,35 @@ export function parseAllowlist(value: unknown): ResourcesAllowlist | null {
 
   if (domains.length === 0) return null;
 
-  return { version, updatedAt, domains, categories };
+  const descriptions = parseDescriptions(rawDescriptions, domains);
+  if (!descriptions) return null;
+
+  return { version, updatedAt, domains, categories, descriptions };
+}
+
+/**
+ * Descriptions are optional so an older centrally hosted list keeps working,
+ * but any entry that is present must describe a host that is actually allowed.
+ */
+function parseDescriptions(
+  value: unknown,
+  domains: readonly string[]
+): Record<string, string> | null {
+  if (value === undefined) return {};
+
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+
+  const descriptions: Record<string, string> = {};
+  for (const [rawHost, rawDescription] of Object.entries(value as Record<string, unknown>)) {
+    const host = normalizeHost(rawHost);
+    if (!host || !domains.includes(host)) return null;
+    if (typeof rawDescription !== 'string') return null;
+    const description = rawDescription.trim();
+    if (description === '' || description.length > 160) return null;
+    descriptions[host] = description;
+  }
+
+  return descriptions;
 }
 
 /** Lowercases and trims a configured host; returns null for anything malformed. */
