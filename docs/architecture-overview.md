@@ -178,7 +178,7 @@ The task page is the largest part of the frontend. Its state lives in a reducer 
 Mentor pages use their own header (`AdminHeader`) and skip the fullscreen gate and time tracking. Everything they show comes from the five `/api/admin` endpoints; the rest is worked out in the browser:
 
 - **Trainees page:** cohort summary cards (`lib/adminTrainees.ts`, `summarizeCohort`), and search, sort and filter kept in the URL (`lib/traineeListState.ts`). _Needs attention_ (`needsAttention`) flags a trainee who is inactive for 2+ days (never for someone with no activity yet, or who has finished), more than 3 days behind the cohort's median, or below 75 on integrity. CSV export (`toCsv`) writes the rows on screen.
-- **Trainee page:** tabs for tasks, journal and flags; the read-only `ReadOnlyCodeViewer` (Monaco, no paste-block or flag hooks, so viewing never logs anything); and the print report (`usePrintMode`, `PrintReport`), which renders only while printing, in the light theme.
+- **Trainee page:** tabs for tasks, journal, flags and review feedback; the read-only `ReadOnlyCodeViewer` (Monaco, no paste-block or flag hooks, so viewing never logs anything); and the print report (`usePrintMode`, `PrintReport`), which renders only while printing with fixed light print colours. The desktop app saves it as an A4 portrait PDF through the native save dialog; browsers fall back to the print dialog.
 
 ### Focus and activity tracking
 

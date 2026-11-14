@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
+import type { AdminFeedbackEntry, AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
 
 import PrintReport from './PrintReport';
 import { DEFAULT_PRINT_OPTIONS, type PrintReportOptions } from '../../lib/printReport';
@@ -14,11 +14,38 @@ const detail = buildAdminTraineeDetail(mockAdminTraineeIds[0]) as AdminTraineeDe
 // Arjun's mock flags mix High, Normal and Low events.
 const flags = buildAdminFlags(mockAdminTraineeIds[2]) as AdminFlagEvent[];
 const importantFlags = flags.filter((flag) => flag.reviewPriority !== 'LOW');
+const feedback: AdminFeedbackEntry[] = [
+  {
+    id: 'fb-older',
+    taskId: 'task-1',
+    taskTitle: 'Semantic HTML',
+    dayId: 'html-1',
+    adminId: 'admin-1',
+    adminName: 'Mentor Alice',
+    submissionNo: 1,
+    decision: 'rework',
+    feedback: 'Add the meta viewport tag.',
+    reviewedAt: '2026-10-06T09:00:00.000Z',
+  },
+  {
+    id: 'fb-newer',
+    taskId: 'task-1',
+    taskTitle: 'Semantic HTML',
+    dayId: 'html-1',
+    adminId: 'admin-1',
+    adminName: 'Mentor Alice',
+    submissionNo: 2,
+    decision: 'approved',
+    feedback: 'The viewport tag is correct now.',
+    reviewedAt: '2026-10-07T09:00:00.000Z',
+  },
+];
 
 function renderReport(
   overrides: {
     detail?: AdminTraineeDetail;
     flags?: AdminFlagEvent[] | null;
+    feedback?: AdminFeedbackEntry[] | null;
     options?: PrintReportOptions;
     mentorName?: string | null;
   } = {}
@@ -27,6 +54,7 @@ function renderReport(
     <PrintReport
       detail={overrides.detail ?? detail}
       flags={overrides.flags === undefined ? flags : overrides.flags}
+      feedback={overrides.feedback === undefined ? feedback : overrides.feedback}
       dayLabels={new Map()}
       options={overrides.options ?? DEFAULT_PRINT_OPTIONS}
       mentorName={overrides.mentorName === undefined ? 'Mock Mentor' : overrides.mentorName}
@@ -85,6 +113,33 @@ describe('PrintReport', () => {
     renderReport({ detail: { ...detail, tasks: [] } });
 
     expect(screen.getByText('No submitted tasks yet.')).toBeInTheDocument();
+  });
+
+  it('lists review feedback newest first, with the reviewer and decision', () => {
+    renderReport();
+
+    const reviews = section(/^Review feedback/);
+    expect(
+      within(reviews).getByRole('heading', { name: `Review feedback (${feedback.length})` })
+    ).toBeInTheDocument();
+    const entries = within(reviews).getAllByRole('listitem');
+    expect(entries).toHaveLength(feedback.length);
+    expect(entries[0]).toHaveTextContent('The viewport tag is correct now.');
+    expect(entries[0]).toHaveTextContent('approved');
+    expect(entries[0]).toHaveTextContent('Mentor Alice');
+    expect(entries[1]).toHaveTextContent('Add the meta viewport tag.');
+  });
+
+  it('says so when there is no review feedback', () => {
+    renderReport({ feedback: [] });
+
+    expect(screen.getByText('No review feedback yet.')).toBeInTheDocument();
+  });
+
+  it('says review feedback is unavailable when it failed to load', () => {
+    renderReport({ feedback: null });
+
+    expect(screen.getByText('Review feedback unavailable.')).toBeInTheDocument();
   });
 
   it('includes the journal by default', () => {
