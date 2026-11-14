@@ -27,12 +27,36 @@
   :global(html),
   :global(body) {
     background: #ffffff !important;
+    color: #14162a;
   }
 
+  /* A report is always a light document. Override the tokens the shared
+     components use so a dark app theme never prints light text on white paper. */
   .report {
+    --color-text-primary: #14162a;
+    --color-text-secondary: #5b5d6e;
+    --color-text-tertiary: #716c82;
+    --color-text-muted: #78748a;
+    --color-text-green: #069669;
+    --color-text-green-40: #06966966;
+    --color-accent-purple: #7c41e4;
+    --color-accent-purple-soft: #8e51e6;
+    --color-accent-text: #6941c6;
+    --color-accent-tint: #7c41e414;
+    --color-bg-card: #ffffff;
+    --color-bg-panel: #f0f1f5;
+    --color-bg-surface-2: #f5f6fa;
+    --color-bg-green-fill: #10b98114;
+    --color-border-card: #e4e5ec;
+    --color-border-default: #e4e5ec;
+    --color-border-divider: #e2e8f0;
+
+    background: #ffffff;
     font-size: 11pt;
     line-height: 1.45;
     color: var(--color-text-primary);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 
@@ -122,33 +146,35 @@
   border-radius: 999px;
 }
 
-.journal {
+.entryList {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.journalEntry {
+.entry {
   padding: 8px 0;
   border-bottom: 1px solid var(--color-border-card);
   break-inside: avoid;
 }
 
-.journalTitle {
+.entryTitle {
   margin: 0;
   font-size: 10.5pt;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
-.journalDate {
+.entryMeta {
   margin: 0 0 4px;
   font-size: 9pt;
   color: var(--color-text-secondary);
 }
 
-.journalText {
+.entryText {
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .note,

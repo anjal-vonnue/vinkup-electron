@@ -24,7 +24,11 @@ import PrintReport from '../../components/PrintReport';
 import PrintReportButton from '../../components/PrintReportButton';
 import { useAuth } from '../../context/Useauth';
 import { usePrintMode } from '../../hooks/usePrintMode';
-import { DEFAULT_PRINT_OPTIONS, reportDocumentTitle } from '../../lib/printReport';
+import {
+  DEFAULT_PRINT_OPTIONS,
+  reportDocumentTitle,
+  type PrintReportOptions,
+} from '../../lib/printReport';
 import { useAdminResource } from './hooks/useAdminResource';
 import styles from './AdminTraineePage.module.css';
 
@@ -48,6 +52,8 @@ function BackLink() {
 function TraineeDetail({ traineeId }: { traineeId: string }) {
   const [activeTab, setActiveTab] = useState<TabId>('tasks');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
 
   const loadDetail = useMemo(
     () => (traineeId ? () => getAdminTrainee(traineeId) : null),
@@ -80,10 +86,10 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
   }, [detail, code, feedback]);
 
   const { user } = useAuth();
-
-  const { printJob, print } = usePrintMode({
+  const traineeName = detail.data?.profile.trainee.name ?? 'Trainee';
+  const { printJob, print, prepare, restore } = usePrintMode({
     defaults: DEFAULT_PRINT_OPTIONS,
-    documentTitle: reportDocumentTitle(detail.data?.profile.trainee.name ?? 'Trainee'),
+    documentTitle: reportDocumentTitle(traineeName),
   });
 
   const dayLabels = useMemo(() => {
@@ -144,6 +150,64 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
     );
   }
 
+  /**
+   * In the desktop shell the main process writes the PDF through a native save
+   * dialog; in a browser we fall back to the print dialog's "Save as PDF".
+   */
+  const handlePrint = async (options: PrintReportOptions) => {
+    const desktopReport = window.desktop?.report;
+    if (!desktopReport) {
+      print(options);
+      return;
+    }
+
+    setPdfError(null);
+    setIsSavingPdf(true);
+    // Render the print-only report before the main process captures the page.
+    prepare(options);
+    try {
+      await desktopReport.savePdf(reportDocumentTitle(traineeName));
+    } catch (saveError: unknown) {
+      setPdfError(
+        saveError instanceof Error
+          ? `Unable to save report PDF: ${saveError.message}`
+          : 'Unable to save report PDF. Please try again.'
+      );
+    } finally {
+      setIsSavingPdf(false);
+      restore();
+    }
+  };
+
+  /**
+   * In the desktop shell the main process writes the PDF through a native save
+   * dialog; in a browser we fall back to the print dialog's "Save as PDF".
+   */
+  const handlePrint = async (options: PrintReportOptions) => {
+    const desktopReport = window.desktop?.report;
+    if (!desktopReport) {
+      print(options);
+      return;
+    }
+
+    setPdfError(null);
+    setIsSavingPdf(true);
+    // Render the print-only report before the main process captures the page.
+    prepare(options);
+    try {
+      await desktopReport.savePdf(reportDocumentTitle(traineeName));
+    } catch (saveError: unknown) {
+      setPdfError(
+        saveError instanceof Error
+          ? `Unable to save report PDF: ${saveError.message}`
+          : 'Unable to save report PDF. Please try again.'
+      );
+    } finally {
+      setIsSavingPdf(false);
+      restore();
+    }
+  };
+
   const { profile, typingStats, courses, totalTasks, journal, tasks } = detail.data;
 
   const selectedTask = tasks.find((task) => task.taskId === selectedTaskId);
@@ -169,7 +233,14 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
         <main className={styles.page}>
           <div className={styles.topBar}>
             <BackLink />
-            <PrintReportButton onPrint={print} />
+            <div className={styles.printControls}>
+              <PrintReportButton onPrint={handlePrint} disabled={isSavingPdf} />
+              {pdfError && (
+                <p className={styles.pdfError} role="alert">
+                  {pdfError}
+                </p>
+              )}
+            </div>
           </div>
 
           <ProfileHeader trainee={profile.trainee} />
@@ -277,6 +348,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
         <PrintReport
           detail={detail.data}
           flags={flags.data}
+          feedback={feedback.data ?? null}
           dayLabels={dayLabels}
           options={printJob.options}
           mentorName={user?.name ?? null}
