@@ -13,6 +13,7 @@ import {
   getAdminTraineeFeedback,
 } from '../../api/admin';
 import { ApiError } from '../../api/errors';
+import { reportDocumentTitle } from '../../lib/printReport';
 import {
   buildAdminFlags,
   buildAdminTaskCode,
@@ -92,6 +93,8 @@ function renderPage(path = `/admin/trainees/${traineeId}`) {
 }
 
 beforeEach(() => {
+  document.title = 'Vinkup';
+  delete document.documentElement.dataset.theme;
   vi.mocked(getAdminTrainee).mockResolvedValue(detail);
   vi.mocked(getAdminFlags).mockResolvedValue(flags);
   vi.mocked(getAdminTraineeFeedback).mockResolvedValue([]);
@@ -106,7 +109,11 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
+  delete window.desktop;
+  document.title = '';
+  delete document.documentElement.dataset.theme;
 });
 
 describe('AdminTraineePage', () => {
@@ -347,9 +354,10 @@ describe('AdminTraineePage', () => {
     expect(getAdminTrainee).toHaveBeenLastCalledWith('other-trainee');
   });
 
-  it('prints a report of the trainee from the Print report button', async () => {
+  it('prints a report in the browser when the desktop app is unavailable', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const user = userEvent.setup();
+    document.documentElement.dataset.theme = 'dark';
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: 'Print report' }));
@@ -358,6 +366,8 @@ describe('AdminTraineePage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Print' }));
 
     expect(printSpy).toHaveBeenCalledTimes(1);
+    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+    expect(document.documentElement.dataset.theme).toBe('dark');
     const report = screen.getByRole('article', { name: 'Printable trainee report' });
     expect(
       within(report).getByRole('heading', { level: 1, name: detail.profile.trainee.name })
@@ -372,6 +382,100 @@ describe('AdminTraineePage', () => {
     expect(
       screen.queryByRole('article', { name: 'Printable trainee report' })
     ).not.toBeInTheDocument();
-    printSpy.mockRestore();
+    expect(document.title).toBe('Vinkup');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('saves the selected trainee report as a PDF through the desktop app', async () => {
+    const user = userEvent.setup();
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    let resolveSave: (saved: boolean) => void = () => undefined;
+    const savePdf = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveSave = resolve;
+        })
+    );
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: { report: { savePdf } },
+    });
+    document.documentElement.dataset.theme = 'dark';
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Print report' }));
+    const dialog = screen.getByRole('dialog', { name: 'Print report' });
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Journal entries' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Print' }));
+
+    await waitFor(() => expect(savePdf).toHaveBeenCalledTimes(1));
+    expect(savePdf).toHaveBeenCalledWith(reportDocumentTitle(detail.profile.trainee.name));
+    expect(printSpy).not.toHaveBeenCalled();
+    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+
+    const report = screen.getByRole('article', { name: 'Printable trainee report' });
+    expect(
+      within(report).getByRole('heading', { level: 1, name: detail.profile.trainee.name })
+    ).toBeInTheDocument();
+    expect(within(report).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSave(true);
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('article', { name: 'Printable trainee report' })
+      ).not.toBeInTheDocument()
+    );
+    expect(document.title).toBe('Vinkup');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('restores the page quietly when the PDF save dialog is cancelled', async () => {
+    const user = userEvent.setup();
+    const savePdf = vi.fn().mockResolvedValue(false);
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: { report: { savePdf } },
+    });
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Print report' }));
+    await user.click(screen.getByRole('button', { name: 'Print' }));
+
+    await waitFor(() => expect(savePdf).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('article', { name: 'Printable trainee report' })
+      ).not.toBeInTheDocument()
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(document.title).toBe('Vinkup');
+  });
+
+  it('explains a failed PDF export and restores the page', async () => {
+    const user = userEvent.setup();
+    const savePdf = vi.fn().mockRejectedValue(new Error('Disk is full'));
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: { report: { savePdf } },
+    });
+    document.documentElement.dataset.theme = 'dark';
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Print report' }));
+    await user.click(screen.getByRole('button', { name: 'Print' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to save report PDF: Disk is full'
+    );
+    expect(
+      screen.queryByRole('article', { name: 'Printable trainee report' })
+    ).not.toBeInTheDocument();
+    expect(document.title).toBe('Vinkup');
+    expect(document.documentElement.dataset.theme).toBe('dark');
   });
 });
