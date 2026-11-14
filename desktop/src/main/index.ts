@@ -241,31 +241,20 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
-    if (typeof fileName !== 'string' || !fileName.trim()) {
-      throw new Error('A certificate file name is required.');
-    }
-
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) throw new Error('The certificate window is not available.');
-
-    const result = await dialog.showSaveDialog(window, {
-      defaultPath: `${sanitizePdfFileName(fileName)}.pdf`,
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-    });
-    if (result.canceled || !result.filePath) return false;
-
-    const filePath =
-      path.extname(result.filePath).toLowerCase() === '.pdf'
-        ? result.filePath
-        : `${result.filePath}.pdf`;
-    const pdf = await event.sender.printToPDF({
-      pageSize: 'A4',
+    return savePdf(event, fileName, {
+      label: 'certificate',
+      fallbackFileName: 'certificate',
       landscape: true,
-      printBackground: true,
-      preferCSSPageSize: true,
     });
-    await writeFile(filePath, pdf);
-    return true;
+  });
+
+  ipcMain.handle('report:save-pdf', async (event, fileName: unknown) => {
+    assertTrustedSender(event);
+    return savePdf(event, fileName, {
+      label: 'report',
+      fallbackFileName: 'trainee-report',
+      landscape: false,
+    });
   });
 
   ipcMain.handle('auth:get-state', (event) => {
@@ -311,7 +300,50 @@ function getAppInfo(): DesktopAppInfo {
   };
 }
 
-function sanitizePdfFileName(fileName: string): string {
+type PdfSaveRequest = {
+  /** Used in error messages: "A certificate file name is required." */
+  label: string;
+  /** Used if the suggested name has no characters left after sanitising. */
+  fallbackFileName: string;
+  landscape: boolean;
+};
+
+async function savePdf(
+  event: IpcMainInvokeEvent,
+  fileName: unknown,
+  request: PdfSaveRequest
+): Promise<boolean> {
+  if (typeof fileName !== 'string' || !fileName.trim()) {
+    throw new Error(`A ${request.label} file name is required.`);
+  }
+
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) throw new Error(`The ${request.label} window is not available.`);
+
+  const result = await dialog.showSaveDialog(window, {
+    defaultPath: `${sanitizePdfFileName(fileName, request.fallbackFileName)}.pdf`,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (result.canceled || !result.filePath) return false;
+
+  const filePath =
+    path.extname(result.filePath).toLowerCase() === '.pdf'
+      ? result.filePath
+      : `${result.filePath}.pdf`;
+
+  // The page's print CSS supplies the paper size and margins: A4 portrait for a
+  // report, A4 landscape for a certificate. Keep the backgrounds in the PDF.
+  const pdf = await event.sender.printToPDF({
+    pageSize: 'A4',
+    landscape: request.landscape,
+    printBackground: true,
+    preferCSSPageSize: true,
+  });
+  await writeFile(filePath, pdf);
+  return true;
+}
+
+function sanitizePdfFileName(fileName: string, fallbackFileName: string): string {
   const name = path
     .basename(fileName)
     .split('')
@@ -322,7 +354,7 @@ function sanitizePdfFileName(fileName: string): string {
     .join('')
     .replace(/\.pdf$/i, '')
     .trim();
-  return name || 'certificate';
+  return name || fallbackFileName;
 }
 
 function isTrusted(url: string): boolean {

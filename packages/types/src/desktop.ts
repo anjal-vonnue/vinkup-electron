@@ -40,4 +40,8 @@ export interface DesktopApi {
   certificate: {
     savePdf: (fileName: string) => Promise<boolean>;
   };
+  /** Saves the printable trainee report as an A4 portrait PDF. */
+  report: {
+    savePdf: (fileName: string) => Promise<boolean>;
+  };
 }
