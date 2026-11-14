@@ -31,9 +31,8 @@
 .logo {
   width: 7cqw;
   height: 5cqw;
-  background-color: #7c41e4;
-  mask: url('../../assets/logo-mark-currentColor.svg') center / contain no-repeat;
-  -webkit-mask: url('../../assets/logo-mark-currentColor.svg') center / contain no-repeat;
+  color: #7c41e4;
+  flex: none;
 }
 
 .kicker {

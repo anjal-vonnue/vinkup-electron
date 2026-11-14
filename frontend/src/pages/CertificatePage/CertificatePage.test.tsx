@@ -51,6 +51,7 @@ describe('CertificatePage', () => {
 
   afterEach(() => {
     delete document.documentElement.dataset.theme;
+    delete window.desktop;
   });
 
   it('shows the loading state while the certificate loads', () => {
@@ -79,6 +80,7 @@ describe('CertificatePage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Certificate of completion' })
     ).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Vinkup' })).toBeInTheDocument();
     expect(screen.getByText('This certifies that')).toBeInTheDocument();
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
     expect(screen.getByText('has completed the CSS course')).toBeInTheDocument();
@@ -99,7 +101,7 @@ describe('CertificatePage', () => {
   });
 
   describe('printing', () => {
-    it('prints in the light theme with the certificate as the file name', async () => {
+    it('prints with the current theme and certificate as the file name', async () => {
       const user = userEvent.setup();
       vi.mocked(getCertificate).mockResolvedValue(certificate);
       document.documentElement.dataset.theme = 'dark';
@@ -116,7 +118,47 @@ describe('CertificatePage', () => {
 
       expect(printMock).toHaveBeenCalledTimes(1);
       expect(titleWhilePrinting).toBe('Vinkup certificate - CSS - Asha Rao');
-      expect(themeWhilePrinting).toBe('light');
+      expect(themeWhilePrinting).toBe('dark');
+    });
+
+    it('saves a PDF through the desktop app instead of opening the system print flow', async () => {
+      const user = userEvent.setup();
+      const savePdf = vi.fn().mockResolvedValue(true);
+      Object.defineProperty(window, 'desktop', {
+        configurable: true,
+        value: { certificate: { savePdf } },
+      });
+      vi.mocked(getCertificate).mockResolvedValue(certificate);
+
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /Print \/ Save as PDF/ }));
+
+      expect(savePdf).toHaveBeenCalledWith('Vinkup certificate - CSS - Asha Rao');
+      expect(printMock).not.toHaveBeenCalled();
+      expect(document.title).toBe('Vinkup');
+    });
+
+    it('shows an error and restores the page if saving a PDF fails', async () => {
+      const user = userEvent.setup();
+      Object.defineProperty(window, 'desktop', {
+        configurable: true,
+        value: {
+          certificate: {
+            savePdf: vi.fn().mockRejectedValue(new Error('Disk is full')),
+          },
+        },
+      });
+      vi.mocked(getCertificate).mockResolvedValue(certificate);
+      document.documentElement.dataset.theme = 'dark';
+
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /Print \/ Save as PDF/ }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Unable to save certificate PDF: Disk is full'
+      );
+      expect(document.title).toBe('Vinkup');
+      expect(document.documentElement.dataset.theme).toBe('dark');
     });
 
     it('puts the theme and the tab title back after printing', async () => {
