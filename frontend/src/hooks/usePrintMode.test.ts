@@ -53,6 +53,27 @@ describe('usePrintMode', () => {
     expect(printSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('prepare() renders the job for a PDF export without opening the print dialog', () => {
+    const { result } = renderPrintMode();
+
+    act(() => {
+      result.current.prepare({ includeJournal: false });
+    });
+
+    expect(result.current.printJob?.options).toEqual({ includeJournal: false });
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.title).toBe(TITLE);
+    expect(printSpy).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.restore();
+    });
+
+    expect(result.current.printJob).toBeNull();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.title).toBe('Mentor view');
+  });
+
   it('puts the theme and title back after printing and removes the job', () => {
     const { result } = renderPrintMode();
     act(() => {

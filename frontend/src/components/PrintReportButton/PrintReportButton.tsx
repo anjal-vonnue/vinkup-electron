@@ -4,7 +4,7 @@ import { DEFAULT_PRINT_OPTIONS, type PrintReportOptions } from '../../lib/printR
 import styles from './PrintReportButton.module.css';
 
 type PrintReportButtonProps = {
-  onPrint: (options: PrintReportOptions) => void;
+  onPrint: (options: PrintReportOptions) => void | Promise<void>;
   disabled?: boolean;
 };
 
@@ -37,7 +37,8 @@ export default function PrintReportButton({ onPrint, disabled = false }: PrintRe
 
   const handlePrint = () => {
     setIsOpen(false);
-    onPrint(options);
+    // The page may save a PDF asynchronously; errors are handled there.
+    void onPrint(options);
   };
 
   return (
@@ -80,9 +81,7 @@ export default function PrintReportButton({ onPrint, disabled = false }: PrintRe
             Flagged events
           </label>
 
-          <p className={styles.hint}>
-            Choose &ldquo;Save as PDF&rdquo; in the print dialog for a file.
-          </p>
+          <p className={styles.hint}>Print the report, or save it as a PDF.</p>
 
           <div className={styles.actions}>
             <button type="button" className={styles.cancel} onClick={() => setIsOpen(false)}>

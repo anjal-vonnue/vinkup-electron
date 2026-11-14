@@ -1,4 +1,4 @@
-import type { AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
+import type { AdminFeedbackEntry, AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
 import {
   FLAG_PRIORITY_LABELS,
   FLAG_TYPE_LABELS,
@@ -16,6 +16,8 @@ type PrintReportProps = {
   detail: AdminTraineeDetail;
   /** null = the flags didn't load; the report says so instead of leaving the section out. */
   flags: AdminFlagEvent[] | null;
+  /** null = the feedback didn't load; the report says so instead of leaving the section out. */
+  feedback?: AdminFeedbackEntry[] | null;
   /** dayId → "HTML · Day 2" */
   dayLabels: ReadonlyMap<string, string>;
   options: PrintReportOptions;
@@ -35,6 +37,7 @@ function dayLabel(dayLabels: ReadonlyMap<string, string>, dayId: string): string
 export default function PrintReport({
   detail,
   flags,
+  feedback = null,
   dayLabels,
   options,
   mentorName,
@@ -56,6 +59,10 @@ export default function PrintReport({
   const importantFlags = (flags ?? [])
     .filter((flag) => flag.reviewPriority !== 'LOW')
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+
+  const reviewFeedback = [...(feedback ?? [])].sort(
+    (a, b) => Date.parse(b.reviewedAt) - Date.parse(a.reviewedAt)
+  );
 
   return (
     <article className={styles.report} aria-label="Printable trainee report">
@@ -118,20 +125,46 @@ export default function PrintReport({
         )}
       </section>
 
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Review feedback ({reviewFeedback.length})</h2>
+        {feedback === null ? (
+          <p className={styles.empty}>Review feedback unavailable.</p>
+        ) : reviewFeedback.length === 0 ? (
+          <p className={styles.empty}>No review feedback yet.</p>
+        ) : (
+          <ol className={styles.entryList}>
+            {reviewFeedback.map((entry) => (
+              <li key={entry.id} className={styles.entry}>
+                <h3 className={styles.entryTitle}>
+                  {entry.taskTitle}
+                  <span className={styles.tag}>{entry.decision}</span>
+                </h3>
+                <p className={styles.entryMeta}>
+                  {entry.adminName}
+                  {entry.submissionNo > 0 ? ` · Attempt ${entry.submissionNo}` : ''} ·{' '}
+                  {dayLabel(dayLabels, entry.dayId)} · {formatIstDateTime(entry.reviewedAt)}
+                </p>
+                <p className={styles.entryText}>{entry.feedback}</p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
       {options.includeJournal && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Journal ({journal.length})</h2>
           {journal.length === 0 ? (
             <p className={styles.empty}>No journal entries yet.</p>
           ) : (
-            <ol className={styles.journal}>
+            <ol className={styles.entryList}>
               {journal.map((entry) => (
-                <li key={entry.dayId} className={styles.journalEntry}>
-                  <h3 className={styles.journalTitle}>
+                <li key={entry.dayId} className={styles.entry}>
+                  <h3 className={styles.entryTitle}>
                     {entry.courseTitle} · Day {entry.dayNumber} — {entry.dayTitle}
                   </h3>
-                  <p className={styles.journalDate}>{formatIstDateTime(entry.updatedAt)}</p>
-                  <p className={styles.journalText}>{entry.responseText}</p>
+                  <p className={styles.entryMeta}>{formatIstDateTime(entry.updatedAt)}</p>
+                  <p className={styles.entryText}>{entry.responseText}</p>
                 </li>
               ))}
             </ol>
