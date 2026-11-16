@@ -68,25 +68,46 @@ export function buildTraineeComparison(
   }));
 }
 
-type StatusCount = { status: 'not_started' | 'in_progress' | 'completed'; count: number };
+type StatusCount = {
+  status: 'not_started' | 'in_progress' | 'completed';
+  reviewStatus: 'pending' | 'approved' | 'rework' | null;
+  count: number;
+};
 
 /**
- * Current task status. A trainee only has a task_progress row for tasks they opened, so
- * "not started" = every task for every trainee, minus the ones in progress or completed.
+ * Current task status, split by mentor review. Submitting sets status "completed", so only
+ * completed rows have a review status:
+ * - approved -> Approved, rework -> Sent back to fix
+ * - pending or null -> Waiting for review. null = submitted before reviews existed; mentors
+ *   can still review those, exactly like pending ones.
+ * A trainee only has a task_progress row for tasks they opened, so "not started" = every
+ * task for every trainee, minus all the other groups (never below 0).
  */
 export function buildTaskStatus(
   statusCounts: StatusCount[],
   totalTasks: number,
   traineeCount: number
 ): AdminAnalyticsTaskStatus {
-  const countOf = (status: StatusCount['status']) =>
-    statusCounts.find((row) => row.status === status)?.count ?? 0;
+  let approved = 0;
+  let waitingForReview = 0;
+  let sentBack = 0;
+  let inProgress = 0;
 
-  const completed = countOf('completed');
-  const inProgress = countOf('in_progress');
-  const notStarted = Math.max(totalTasks * traineeCount - completed - inProgress, 0);
+  for (const row of statusCounts) {
+    if (row.status === 'in_progress') {
+      inProgress += row.count;
+    } else if (row.status === 'completed') {
+      if (row.reviewStatus === 'approved') approved += row.count;
+      else if (row.reviewStatus === 'rework') sentBack += row.count;
+      else waitingForReview += row.count; // pending or null
+    }
+    // status "not_started" rows are left out: they are counted below.
+  }
 
-  return { completed, inProgress, notStarted };
+  const started = approved + waitingForReview + sentBack + inProgress;
+  const notStarted = Math.max(totalTasks * traineeCount - started, 0);
+
+  return { approved, waitingForReview, sentBack, inProgress, notStarted };
 }
 
 type TypingInput = { traineeId: string; date: string; wpm: number };

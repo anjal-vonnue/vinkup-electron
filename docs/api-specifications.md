@@ -167,7 +167,7 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | GET    | `/api/admin/trainees/:traineeId`                       | Admin   | One trainee: profile, course progress, worked-on tasks, journal                     |
 | GET    | `/api/admin/trainees/:traineeId/flags`                 | Admin   | The trainee's flag events, newest first                                             |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Admin   | The trainee's saved files for a task (read-only)                                    |
-| GET    | `/api/admin/analytics`                              | Admin   | Team analytics for a period: progress, comparison, task status, typing, integrity   |
+| GET    | `/api/admin/analytics`                                 | Admin   | Team analytics for a period: progress, comparison, task status, typing, integrity   |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Admin   | Approve the current submission                                                      |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Admin   | Send the current submission back for rework                                         |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Admin   | Review history for one task                                                         |
@@ -1058,7 +1058,13 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
   - `totals`: days completed, tasks first submitted, active and coding seconds, and typing tests **in the period**.
   - `progressTrend`: one point per day from `from` to `to`: average curriculum days completed per trainee by the end of that day (completions before `from` count).
   - `traineeComparison`: **every** trainee (even when `traineeId` is sent), sorted by name: all-time `daysCompleted`/`totalDays`, and coding/active seconds in the period. Only ids and names, no emails.
-  - `taskStatus`: current `completed` / `inProgress` / `notStarted` counts. Only the current status is stored, so the period does not change them. There are no due dates or reviews, so there is no "overdue" or "awaiting review".
+  - `taskStatus`: current task counts, split by mentor review (`task_progress.status` + `review_status`). Only the current status is stored, so the period does not change them. The five counts add up to tasks in the curriculum × trainees.
+    - `approved`: `completed` + `approved`.
+    - `waitingForReview`: `completed` + `pending`, **and** `completed` + `NULL` (submitted before reviews existed; admins can still review these exactly like `pending`).
+    - `sentBack`: `completed` + `rework` (stays here while the trainee edits, until they resubmit).
+    - `inProgress`: `in_progress` rows (saved, never submitted).
+    - `notStarted`: tasks × trainees minus the four groups above, never below 0 (tasks with no progress row).
+    - There are no due dates, so there is no "overdue".
   - `typingTrend`: on each day someone took a test, the average of each trainee's **latest** WPM so far (like the WPM column). `traineesIncluded` says how many trainees had a result.
   - `integrityTrend`: on each day a curriculum day was completed, the average score of **every completed day so far**, scored like the trainee list. Days still in progress have no date and are left out.
 
@@ -1086,7 +1092,13 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
       "activeSeconds": 16200
     }
   ],
-  "taskStatus": { "completed": 586, "inProgress": 3, "notStarted": 711 },
+  "taskStatus": {
+    "approved": 548,
+    "waitingForReview": 30,
+    "sentBack": 8,
+    "inProgress": 3,
+    "notStarted": 711
+  },
   "typingTrend": [{ "date": "2026-11-08", "averageWpm": 72, "traineesIncluded": 4 }],
   "integrityTrend": [{ "date": "2026-11-09", "averageScore": 76, "daysScored": 89 }]
 }

@@ -162,13 +162,16 @@ export type AdminAnalyticsTraineeRow = {
 };
 
 /**
- * Task status right now. Only the current status is stored (no history), so the period
- * does not change these counts. There are no due dates or reviews, so no "overdue" or
- * "awaiting review".
+ * Task status right now, split by mentor review. Only the current status is stored (no
+ * history), so the period does not change these counts. There are no due dates, so no
+ * "overdue". The five counts add up to (tasks in the curriculum x trainees).
  */
 export type AdminAnalyticsTaskStatus = {
-  completed: number;
-  inProgress: number;
+  approved: number; // submitted and approved by a mentor
+  // Submitted, no decision yet. Includes old submissions from before reviews existed.
+  waitingForReview: number;
+  sentBack: number; // a mentor asked for rework; the trainee has to resubmit
+  inProgress: number; // saved but not submitted yet
   notStarted: number;
 };
 

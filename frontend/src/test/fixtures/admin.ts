@@ -580,6 +580,19 @@ export function buildAdminAnalytics(query: AdminAnalyticsQuery): AdminAnalytics 
     0
   );
   const completedTasks = scope.reduce((sum, t) => sum + tasksInFirstDays(t.completed), 0);
+  // Review split of the completed tasks: the mentor has reviewed everything before each
+  // trainee's latest finished day. On that latest day, the first task was sent back to fix
+  // (when the day has 2+ tasks) and the rest are waiting for review.
+  let waitingForReview = 0;
+  let sentBack = 0;
+  for (const t of scope) {
+    if (t.completed === 0) continue;
+    const latestDayTasks = catalogDays[t.completed - 1].tasks.length;
+    const sentBackHere = latestDayTasks >= 2 ? 1 : 0;
+    sentBack += sentBackHere;
+    waitingForReview += latestDayTasks - sentBackHere;
+  }
+  const approved = completedTasks - waitingForReview - sentBack;
   const inProgress = scope.filter(
     (t) => t.lastActiveDaysAgo !== null && t.completed < catalogDays.length
   ).length;
@@ -604,7 +617,9 @@ export function buildAdminAnalytics(query: AdminAnalyticsQuery): AdminAnalytics 
     progressTrend,
     traineeComparison: comparison,
     taskStatus: {
-      completed: completedTasks,
+      approved,
+      waitingForReview,
+      sentBack,
       inProgress,
       notStarted: Math.max(allTasks - completedTasks - inProgress, 0),
     },

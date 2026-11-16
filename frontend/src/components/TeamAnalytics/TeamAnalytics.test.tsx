@@ -47,7 +47,13 @@ function emptyAnalytics(query: AdminAnalyticsQuery): AdminAnalytics {
       codingSeconds: 0,
       activeSeconds: 0,
     })),
-    taskStatus: { completed: 0, inProgress: 0, notStarted: 260 * trainees.length },
+    taskStatus: {
+      approved: 0,
+      waitingForReview: 0,
+      sentBack: 0,
+      inProgress: 0,
+      notStarted: 260 * trainees.length,
+    },
     typingTrend: [],
     integrityTrend: [],
   };
@@ -155,7 +161,7 @@ describe('TeamAnalytics: empty data', () => {
       'No completed days with a score in this period.'
     );
     // Tasks exist even when nobody started them, so this one is not empty.
-    expect(within(card('Task status')).getByText('0% of 1300 tasks completed')).toBeInTheDocument();
+    expect(within(card('Task status')).getByText('0% of 1300 tasks approved')).toBeInTheDocument();
   });
 });
 
@@ -178,20 +184,44 @@ describe('TeamAnalytics: charts', () => {
     );
   });
 
-  it('lists every task status with its count and share', async () => {
+  it('lists every task status, split by mentor review, with its count and share', async () => {
     mockedGet.mockImplementation((query) =>
       Promise.resolve({
         ...emptyAnalytics(query),
-        taskStatus: { completed: 60, inProgress: 1, notStarted: 939 },
+        // 40 + 12 + 8 + 1 + 939 = 1000 tasks
+        taskStatus: {
+          approved: 40,
+          waitingForReview: 12,
+          sentBack: 8,
+          inProgress: 1,
+          notStarted: 939,
+        },
       })
     );
     renderAnalytics();
     await screen.findByText('Days completed');
     const status = card('Task status');
 
-    expect(within(status).getByText('60 (6%)')).toBeInTheDocument();
-    expect(within(status).getByText('1 (<1%)')).toBeInTheDocument();
-    expect(within(status).getByText('939 (94%)')).toBeInTheDocument();
+    // Each legend row: name, then "count (share)".
+    const rows = within(status).getAllByRole('listitem');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'Approved40 (4%)',
+      'Waiting for review12 (1%)',
+      'Sent back to fix8 (1%)',
+      'In progress1 (<1%)',
+      'Not started939 (94%)',
+    ]);
+    expect(within(status).getByText('4% of 1000 tasks approved')).toBeInTheDocument();
+  });
+
+  it('says overdue is not shown, without claiming reviews do not exist', async () => {
+    renderAnalytics();
+    await screen.findByText('Days completed');
+    const status = card('Task status');
+
+    expect(within(status).getByText(/Overdue is not shown/)).toBeInTheDocument();
+    // The old, now false, wording.
+    expect(within(status).queryByText(/due dates or reviews/)).not.toBeInTheDocument();
   });
 });
 

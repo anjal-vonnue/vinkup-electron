@@ -370,7 +370,11 @@ export class AdminService {
         totalDays
       ),
       taskStatus: buildTaskStatus(
-        statusCounts.map((row) => ({ status: row.status, count: row._count._all })),
+        statusCounts.map((row) => ({
+          status: row.status,
+          reviewStatus: row.review_status,
+          count: row._count._all,
+        })),
         totalTasks,
         scopeIds.length
       ),

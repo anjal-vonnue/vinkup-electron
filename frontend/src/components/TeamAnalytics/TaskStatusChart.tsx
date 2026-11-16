@@ -19,10 +19,19 @@ function percentLabel(count: number, total: number): string {
   return count > 0 && value === 0 ? '<1%' : `${value}%`;
 }
 
-/** Donut chart of the tasks' current status, with a legend that lists the exact counts. */
+/**
+ * Donut chart of the tasks' current status, split by mentor review, with a legend that
+ * lists the exact counts. Colours are theme variables, so they work in light and dark mode.
+ */
 export default function TaskStatusChart({ status }: TaskStatusChartProps) {
   const slices = [
-    { name: 'Completed', count: status.completed, color: 'var(--color-status-success)' },
+    { name: 'Approved', count: status.approved, color: 'var(--color-status-success)' },
+    {
+      name: 'Waiting for review',
+      count: status.waitingForReview,
+      color: 'var(--color-status-warning)',
+    },
+    { name: 'Sent back to fix', count: status.sentBack, color: 'var(--color-status-error-icon)' },
     { name: 'In progress', count: status.inProgress, color: 'var(--color-accent-purple)' },
     { name: 'Not started', count: status.notStarted, color: 'var(--color-text-muted)' },
   ];
@@ -31,8 +40,8 @@ export default function TaskStatusChart({ status }: TaskStatusChartProps) {
   return (
     <ChartCard
       title="Task status"
-      description="Current status of every curriculum task. Not affected by the period."
-      summary={`${percent(status.completed, total)}% of ${total} tasks completed`}
+      description="Current status of every curriculum task, including mentor reviews. Not affected by the period."
+      summary={`${percent(status.approved, total)}% of ${total} tasks approved`}
       isEmpty={total === 0}
       emptyText="There are no tasks to show."
     >
@@ -79,7 +88,8 @@ export default function TaskStatusChart({ status }: TaskStatusChartProps) {
       </div>
 
       <p className={styles.note}>
-        Overdue and awaiting review are not shown: VinkUp does not store due dates or reviews.
+        Overdue is not shown: VinkUp does not store due dates. Waiting for review includes tasks
+        submitted before mentor reviews existed.
       </p>
     </ChartCard>
   );

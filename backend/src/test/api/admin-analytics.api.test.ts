@@ -3,11 +3,13 @@ import type { AdminAnalytics } from '@itp/types';
 import { db } from './helpers/db';
 import {
   DAY,
+  TASK,
   createAdmin,
   freshTrainees,
   istDate,
   istDateString,
   markDayCompleted,
+  markTaskCompleted,
   seedCurriculum,
   type TestAdmin,
   type TestTrainee,
@@ -100,7 +102,9 @@ describe('GET /api/admin/analytics: numbers', () => {
     expect(data.progressTrend).toHaveLength(7);
     expect(data.progressTrend.every((point) => point.averageDaysCompleted === 0)).toBe(true);
     expect(data.taskStatus).toEqual({
-      completed: 0,
+      approved: 0,
+      waitingForReview: 0,
+      sentBack: 0,
       inProgress: 0,
       notStarted: 2 * TASKS_IN_CURRICULUM,
     });
@@ -132,8 +136,11 @@ describe('GET /api/admin/analytics: numbers', () => {
     // 1 completed day / 2 trainees, reached today.
     expect(data.progressTrend[0].averageDaysCompleted).toBe(0);
     expect(data.progressTrend[6]).toEqual({ date: TO, averageDaysCompleted: 0.5 });
+    // markDayCompleted writes no review_status (like an old submission): waiting for review.
     expect(data.taskStatus).toEqual({
-      completed: 1,
+      approved: 0,
+      waitingForReview: 1,
+      sentBack: 0,
       inProgress: 0,
       notStarted: 2 * TASKS_IN_CURRICULUM - 1,
     });
@@ -159,11 +166,62 @@ describe('GET /api/admin/analytics: numbers', () => {
     expect(data.totals.activeSeconds).toBe(0); // B's activity is not A's
     expect(data.progressTrend[6].averageDaysCompleted).toBe(1);
     expect(data.taskStatus).toEqual({
-      completed: 1,
+      approved: 0,
+      waitingForReview: 1,
+      sentBack: 0,
       inProgress: 0,
       notStarted: TASKS_IN_CURRICULUM - 1,
     });
     expect(data.traineeComparison).toHaveLength(2); // still every trainee, to compare against
+  });
+
+  it('splits task status by the real mentor review status', async () => {
+    const submit = (taskId: string, trainee: TestTrainee) =>
+      api.post(`/api/tasks/${taskId}/submit`, undefined, trainee.cookie);
+    const reviewUrl = (traineeId: string, taskId: string, action: 'approve' | 'rework') =>
+      `/api/admin/trainees/${traineeId}/tasks/${taskId}/${action}`;
+
+    // A: one task approved, one task sent back to fix.
+    expect((await submit(TASK.html1Main, a)).status).toBe(200);
+    expect((await submit(TASK.html1Stretch, a)).status).toBe(200);
+    expect(
+      (await api.post(reviewUrl(a.id, TASK.html1Main, 'approve'), {}, admin.cookie)).status
+    ).toBe(201);
+    expect(
+      (
+        await api.post(
+          reviewUrl(a.id, TASK.html1Stretch, 'rework'),
+          { feedback: 'Please add alt text.' },
+          admin.cookie
+        )
+      ).status
+    ).toBe(201);
+    // B: one task submitted and waiting (pending), one old submission (no review status),
+    // and one task saved but not submitted.
+    expect((await submit(TASK.html1Main, b)).status).toBe(200);
+    await markTaskCompleted(b.id, TASK.html2First);
+    await db.task_progress.create({
+      data: { trainee_id: b.id, task_id: TASK.pg1Sql, status: 'in_progress' },
+    });
+
+    const team = await getAnalytics();
+    expect(team.taskStatus).toEqual({
+      approved: 1,
+      waitingForReview: 2, // B's pending one + B's old one
+      sentBack: 1,
+      inProgress: 1,
+      notStarted: 2 * TASKS_IN_CURRICULUM - 5,
+    });
+
+    // The trainee filter still works: only A's tasks.
+    const onlyA = await getAnalytics(`&traineeId=${a.id}`);
+    expect(onlyA.taskStatus).toEqual({
+      approved: 1,
+      waitingForReview: 0,
+      sentBack: 1,
+      inProgress: 0,
+      notStarted: TASKS_IN_CURRICULUM - 2,
+    });
   });
 
   it('never sends trainee emails', async () => {

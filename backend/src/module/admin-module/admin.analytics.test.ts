@@ -85,23 +85,61 @@ describe('buildTraineeComparison', () => {
 });
 
 describe('buildTaskStatus', () => {
-  it('counts tasks nobody opened as not started', () => {
+  it('splits submitted tasks by review status and counts unopened tasks as not started', () => {
     // 2 trainees x 10 tasks = 20 tasks in total.
     const status = buildTaskStatus(
       [
-        { status: 'completed', count: 6 },
-        { status: 'in_progress', count: 3 },
-        { status: 'not_started', count: 1 },
+        { status: 'completed', reviewStatus: 'approved', count: 4 },
+        { status: 'completed', reviewStatus: 'pending', count: 2 },
+        { status: 'completed', reviewStatus: 'rework', count: 1 },
+        { status: 'in_progress', reviewStatus: null, count: 3 },
+        { status: 'not_started', reviewStatus: null, count: 1 },
       ],
       10,
       2
     );
 
-    expect(status).toEqual({ completed: 6, inProgress: 3, notStarted: 11 });
+    // 20 - 4 - 2 - 1 - 3 = 10 (the not_started row is part of those 10)
+    expect(status).toEqual({
+      approved: 4,
+      waitingForReview: 2,
+      sentBack: 1,
+      inProgress: 3,
+      notStarted: 10,
+    });
+  });
+
+  it('counts old submissions with no review status as waiting for review', () => {
+    const status = buildTaskStatus(
+      [
+        { status: 'completed', reviewStatus: null, count: 2 },
+        { status: 'completed', reviewStatus: 'pending', count: 1 },
+      ],
+      10,
+      1
+    );
+
+    expect(status).toMatchObject({ approved: 0, waitingForReview: 3, sentBack: 0 });
+  });
+
+  it('never returns a negative not-started count', () => {
+    const status = buildTaskStatus(
+      [{ status: 'completed', reviewStatus: 'approved', count: 12 }],
+      10,
+      1
+    );
+
+    expect(status.notStarted).toBe(0);
   });
 
   it('returns all zeros when there are no trainees', () => {
-    expect(buildTaskStatus([], 10, 0)).toEqual({ completed: 0, inProgress: 0, notStarted: 0 });
+    expect(buildTaskStatus([], 10, 0)).toEqual({
+      approved: 0,
+      waitingForReview: 0,
+      sentBack: 0,
+      inProgress: 0,
+      notStarted: 0,
+    });
   });
 });
 

@@ -224,10 +224,10 @@ export class AdminRepository {
       _sum: { active_seconds: true, coding_seconds: true },
     });
 
-  /** How many task_progress rows these trainees have in each status. */
+  /** How many task_progress rows these trainees have for each (status, review_status) pair. */
   taskStatusCounts = (traineeIds: string[]) =>
     prisma.task_progress.groupBy({
-      by: ['status'],
+      by: ['status', 'review_status'],
       where: { trainee_id: { in: traineeIds } },
       _count: { _all: true },
     });
