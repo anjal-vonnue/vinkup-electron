@@ -156,27 +156,61 @@ npx prisma migrate dev --name short_description --config prisma7.config.ts
 
 If two PRs both add migrations, the second one to merge pulls `main` and runs `migrate dev` again.
 
-### 5.4 Load the curriculum and trainees
+Migrations you should see applied on an existing database built before the role work:
+
+- `20261116120000_add_manager_role_and_assignments` — adds `admin.role` (`staff_role` enum, every
+  existing row becomes `MENTOR`) and the nullable `trainee.mentor_id` foreign key with its index.
+  Existing trainees are **not** assigned to anyone.
+- `20261116140000_add_trainee_active_status` — adds `trainee.is_active` (default `true`).
+
+Neither migration drops or rewrites user data. See
+[roles-and-assignments.md](./roles-and-assignments.md#5-migration-strategy) for the SQL and the
+rollback steps.
+
+### 5.4 Load the curriculum, staff and trainees
 
 ```bash
 npm run db:seed -w backend
 ```
 
 This loads the 8 courses, 54 days and 260 tasks from `backend/prisma/seed-data/curriculum.json`, and
-the `trainees` and `admins` (mentors) lists at the top of `backend/src/lib/seed.ts`. Only people in those
-lists can sign in; if your email isn't there, add it (in a PR) and run the seed again. The seed is safe
-to run any number of times.
+the `trainees` and `admins` (mentors and managers) lists at the top of `backend/src/lib/seed.ts`.
+Only people in those lists can sign in; if your email isn't there, add it (in a PR) and run the seed
+again. The seed is safe to run any number of times.
 
-**Mentor or trainee?** At sign-in an email with an **active** row in `admin` opens the mentor dashboard
-(`/admin`), even if it is also in the trainee list. To try the trainee side with an email that is in
-both, switch your admin row off in your development database, then sign out and in again:
+**Which dashboard do I get?** At sign-in the backend checks, in order, for an **active** row in
+`admin` and then for an **active** row in `trainee`, so an email in both signs in as staff:
+
+| Your `admin.role`            | You land on | You can                                          |
+| ---------------------------- | ----------- | ------------------------------------------------ |
+| `MANAGER`                    | `/manager`  | Manage accounts and assign trainees to mentors   |
+| `MENTOR` (also the default)  | `/admin`    | See and review only the trainees assigned to you |
+| No staff row, active trainee | `/`         | Your own workspace and records                   |
+
+To make yourself a manager in development, add `role: 'MANAGER'` to your entry in the `admins` list
+in `backend/src/lib/seed.ts` and run the seed again — or update the row directly:
+
+```sql
+UPDATE admin SET role = 'MANAGER' WHERE email = 'you@vonnue.com';
+```
+
+Managers can promote and demote other staff from `/manager`, so one seeded manager is enough.
+
+**Mentor or trainee with the same email?** To try the trainee side with an email that is in both
+lists, switch your staff row off in your development database, then sign out and in again:
 
 ```sql
 UPDATE admin SET is_active = false WHERE email = 'you@vonnue.com';  -- true to switch back
 ```
 
-Mentors can also add trainees from the dashboard (**Add trainee**), so a second test trainee doesn't need
-a seed change.
+Mentors can add trainees from the dashboard (**Add trainee**) and those trainees are assigned to that
+mentor immediately. Trainees added by a manager stay **unassigned** until a manager assigns them, so
+seed the assignment (or use the manager console) before expecting a mentor to see them:
+
+```sql
+UPDATE trainee SET mentor_id = (SELECT id FROM admin WHERE email = 'mentor@vonnue.com')
+WHERE email = 'trainee@vonnue.com';
+```
 
 To get a realistic account to test with (HTML and CSS days 1–2 done, CSS Day 3 open, some activity and
 typing results):
