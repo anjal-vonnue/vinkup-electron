@@ -4,8 +4,8 @@ Electron shell for Vinkup. Linux is the only supported target for now, and the
 desktop build ships the **student** experience first.
 
 The renderer is the existing Vite app, served over `http://127.0.0.1:43110`
-instead of `file://` so that cookies, `localStorage`, IndexedDB, and
-`Cross-Origin-Isolation` (needed by WebContainer) keep working.
+instead of `file://` so that cookies, `localStorage` and IndexedDB keep
+working.
 
 ## Layout
 
@@ -13,8 +13,9 @@ instead of `file://` so that cookies, `localStorage`, IndexedDB, and
 desktop/
   resources/resources-allowlist.json  Bundled approved-site list
   src/main/config.ts    App name, API URL, desktop port, frontend directory
-  src/main/server.ts    Local static server + /api proxy (COOP/COEP headers)
+  src/main/server.ts    Local static server + /api proxy
   src/main/index.ts     Window, menu, IPC handlers, security defaults
+  src/main/workspace/   Host task workspaces: files, preview server, PTY, runs
   src/main/resources/   Allowlist validation + embedded Resources browser
   src/preload/index.ts  contextBridge surface (window.desktop)
   scripts/build.mjs     esbuild bundle for main + preload
@@ -180,8 +181,8 @@ sudo chown root:root node_modules/electron/dist/chrome-sandbox
 sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
 ```
 
-Do **not** add `--no-sandbox` to the real app: the renderer runs WebContainer
-code and needs Chromium's sandbox.
+Do **not** add `--no-sandbox` to the real app: the renderer displays
+trainee-authored pages in sandboxed iframes and needs Chromium's sandbox.
 
 The AppImage cannot configure the setuid helper without root, so its `AppRun`
 falls back to `--no-sandbox` when unprivileged user namespaces are blocked. The
@@ -209,5 +210,5 @@ or run the AppImage with `--appimage-extract-and-run`.
   `src/main/index.ts`).
 - Mentor/admin routes are not gated yet. They will be hidden or disabled for the
   student-only desktop build.
-- `node-pty` and system filesystem access are intentionally out of scope for
-  v1. The WebContainer/PGlite runtime is unchanged.
+- Task runs need the desktop app: a plain browser build shows the Result pane
+  with "Local workspaces are only available in the desktop app."

@@ -1,8 +1,9 @@
 # Prisma in the workspace
 
-The Prisma course (8 days, 16 tasks) runs in the trainee's browser like every other Node.js task.
-Prisma Client talks to **PGlite**, PostgreSQL compiled to WebAssembly, through the community
-package `prisma-pglite`. There is no database server, no `DATABASE_URL` and nothing to install.
+The Prisma course (8 days, 16 tasks) runs in the desktop app's Node workspace like every other
+Node.js task. Prisma Client talks to **PGlite**, PostgreSQL compiled to WebAssembly, through the
+community package `prisma-pglite`. There is no database server, no `DATABASE_URL` and nothing to
+install.
 
 ## What the trainee gets
 
@@ -62,9 +63,8 @@ them for good, and fixing them only needs a frontend deploy.
 
 ### Why each workaround is there
 
-- **prisma-pglite's own CLI isn't used.** Its `bin.js` crashes in WebContainer
-  (`ERR_INVALID_ARG_TYPE ... relevant-args.js`), so `cli.mjs` calls its functions.
-  `resetPgliteDatabase()` also crashed, so reset deletes the folder.
+- **prisma-pglite's own CLI isn't used.** `cli.mjs` calls its functions directly, and reset deletes
+  the folder.
 - **The database is recreated when the schema changes.** The adapter creates tables only on a new
   database; it can't add a column to an existing one (`P2022 ColumnNotFound`). `adapter.mjs`
   stores a hash of `schema.prisma` next to the database and starts a fresh one when it changes,
@@ -75,50 +75,35 @@ them for good, and fixing them only needs a frontend deploy.
 - **PGlite is never closed, and doesn't need to be.** prisma-pglite's adapter `dispose()` does
   nothing, so the database stays open until the process ends. That is safe: Postgres writes each
   committed change to its write-ahead log (`pg_wal`) straight away and replays it the next time
-  the database opens. Tested with Prisma 7.10, prisma-pglite 3.0.2 and PGlite 0.4.3: in plain
-  Node.js, rows survived `process.exit`, Ctrl+C and even `kill -9` right after the commit; in
-  WebContainer, they survived `process.exit` with and without a `CHECKPOINT` or `close()`
-  first. (An earlier version of `adapter.mjs` ran a `CHECKPOINT` after each burst of queries and
+  the database opens. Tested with Prisma 7.10, prisma-pglite 3.0.2 and PGlite 0.4.3: rows survived
+  `process.exit`, Ctrl+C and even `kill -9` right after the commit. (An earlier version of
+  `adapter.mjs` ran a `CHECKPOINT` after each burst of queries and
   closed PGlite on `prisma.$disconnect()`. It was removed: it didn't change what survives, and
   after a `$disconnect()` every query failed with `PGlite is closed` instead of reconnecting.)
-- **The seed reads the count into a variable before the `if`.** WebContainer gets one
-  JavaScript pattern wrong: at the top level of a `.ts` file run with `tsx`, a block like
-  `if ((await prisma.ticket.count()) === 0) { ... }` is skipped without an error. (esbuild drops
-  the brackets, `if (await count() === 0)`, which is the same thing in JavaScript, but WebContainer
-  evaluates it as `await (count() === 0)`, which is false.) That was the Preview's `[]`: the seed
-  ran, added nothing, printed nothing and exited with 0. Inside functions, such as route
-  handlers, the pattern works. So the starter writes
+- **The seed reads the count into a variable before the `if`.** This was needed by the earlier
+  in-browser runtime, which evaluated `if (await count() === 0)` at a file's top level as
+  `await (count() === 0)`. On the host Node process the pattern is unnecessary, but existing
+  saved starters still use it and it works either way:
   `const ticketCount = await prisma.ticket.count(); if (ticketCount === 0) { ... }`.
 - **The seed ends with `process.exit(0)`.** Without it, the script waits about 12 seconds after
   `prisma.$disconnect()` before it ends, so the server would start late.
 
-### Saving the database between visits
+### Keeping the database between visits
 
-WebContainer keeps its files in the tab's memory and every task open starts from a clean folder,
-and its Node.js can't reach the browser's IndexedDB. So the page copies the database
-(`runtimes/node/databaseSnapshots.ts`):
+The desktop workspace is reset to the editor's files every time a task opens, but `.vinkup/db` is
+preserved: the workspace manager moves it aside, empties the folder, and moves it back
+(`desktop/src/main/workspace/files.ts`). The dev database and its schema marker
+(`dev.schema-hash`) therefore survive closing and reopening the task.
 
-- **Restore:** after the task's files are mounted and before `npm install`, the saved copy is
-  written back to `.vinkup/db/dev` (with its schema marker). The terminal says
-  `Restored your saved database.`
-- **Save:** a watcher sees writes under `.vinkup/db`. Once they have been quiet for 2 seconds, the
-  page reads the folder, compares it with the last saved copy and saves only the changed and
-  deleted files, in one IndexedDB transaction. It also saves right away when the tab is hidden
-  and when the trainee leaves the task (the next task waits for that save before clearing the
-  folder).
-- **Where:** IndexedDB database `itp-node-databases`, store `files`, key
-  `[storage name, path]`. The storage name is `itp-node-<trainee id>-<task id>`, so each trainee
-  and task has its own copy, in this browser only. Folders are stored as `null`, because Postgres
-  needs some empty folders.
-- **Not saved:** the test database, and Postgres's `postmaster.pid` / `postmaster.opts` lock files.
-- **Two tabs:** a Web Lock lets one tab save. The other still opens the saved copy, but prints
-  `This task is open in another tab, so database changes here won't be saved.`
-- **If a saved copy is broken** (for example the tab closed in the middle of Postgres writing),
+- **Where:** `.vinkup/db/dev` inside `<userData>/workspaces/<taskId>`. `.vinkup` is ignored
+  (`lib/workspaceIgnore.ts`), so it never appears in Files and is never sent to the server.
+- **Not kept:** the test database, which starts empty on every run, and Postgres's
+  `postmaster.pid` / `postmaster.opts` lock files.
+- **Resetting:** `npm run db:reset` deletes `.vinkup/db`; the next Run seeds a fresh database.
+- **If a saved database is broken** (for example the app closed in the middle of Postgres writing),
   `adapter.mjs` catches the open error, prints
   `[database] The saved database couldn't be opened, so a fresh one was created.` and the seed
   runs as usual.
-
-Changes made in the last 2 seconds before a page reload can be lost.
 
 ## Rolling it out
 
@@ -140,7 +125,7 @@ Prisma days changed). After it is merged and deployed:
 
 ## Checking it
 
-Open any Prisma task (for example `/tasks/prisma-day-01-t-1`) in Chrome or Edge:
+Open any Prisma task (for example `/tasks/prisma-day-01-t-1`) in the desktop app:
 
 1. Wait for **Node ready** (1 to 3 minutes, mostly `npm install`). Files shows no `.vinkup`,
    `generated` or `node_modules`.
@@ -149,29 +134,30 @@ Open any Prisma task (for example `/tasks/prisma-day-01-t-1`) in Chrome or Edge:
    shows the three tickets as JSON.
 3. Add rows: in `prisma/seed.ts` change `if (ticketCount === 0)` to `if (true)`,
    press Run (six tickets), then change it back.
-4. **Reload the browser tab.** Expect `Restored your saved database.` before `npm install`, then
-   Run shows the six tickets. (Without saving, it would show three.)
+4. **Close the task and open it again.** Run still shows the six tickets. (Without the preserved
+   database it would show three.)
 5. `npm test`: 1 test passes and the prompt comes back.
 6. Add `priority String @default("normal")` to `Ticket`, then
    `npm run db:migrate -- --name add_priority`: a new `migration.sql` appears in Files (a
    `CREATE TABLE` with `priority`, because the starter has no earlier migration). Run: the `schema.prisma changed` line, three seeded tickets with `"priority": "normal"`.
-7. `npm run db:reset`, then reload the tab: no `Restored` line, and Run seeds three tickets.
-8. Open the same task in a second tab: that tab prints the "open in another tab" line.
-9. No "won't be saved" lines in the terminal at any point.
+7. `npm run db:reset`, then close and reopen the task: Run seeds three tickets.
+8. Quit and relaunch the app: the dev database is still there, because it lives under the app's
+   user-data folder.
+9. No database errors in the terminal at any point.
 
 ## If something fails
 
-| Symptom                                                                                      | Likely cause                                                                                                                      | Try                                                                                                          |
-| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Preview shows `[]`, and Run printed no `[seed] Added 3 tickets.` line                        | The seed has `if ((await ...) === 0)` at the top level, which WebContainer skips (see "The seed reads the count into a variable") | Put the `await` result in a variable first, then `npm run db:reset` and Run                                  |
-| `Cannot find module '.../.vinkup/prisma/adapter.mjs'`                                        | Helper files not written                                                                                                          | The task's `package.json` must list `prisma-pglite`                                                          |
-| Tables in `.not-committed/pglite` instead of `.vinkup/db/dev`; nothing restored after reload | `createPgliteAdapter` ignores `dbParentDirPath`/`dbDirName` in this version                                                       | Pin the version that honours them, or change `PRISMA_SAVED_DATABASE` and `adapter.mjs` to the folder it uses |
-| `P2022 ColumnNotFound` after a migration                                                     | Database not recreated                                                                                                            | `npm run db:reset`, then Run                                                                                 |
-| `Restored your saved database.` but rows are missing                                         | Reload within 2 seconds of the change, or the other tab held the lock                                                             | Expected; check the terminal for the "another tab" line                                                      |
-| `npm test` doesn't return to the prompt after passing                                        | PGlite keeping a Vitest worker alive                                                                                              | Ctrl+C (the results stand); add `teardownTimeout: 1000` to `vitest.config.ts`                                |
-| `TypeError [ERR_INVALID_ARG_TYPE] ... relevant-args.js`                                      | Something ran `npx prisma-pglite`                                                                                                 | Use the npm scripts                                                                                          |
-| `Downloading Prisma engines ...` then `socket hang up`                                       | `npx prisma ...` run directly, without the placeholder                                                                            | Use the npm scripts                                                                                          |
-| `prisma:warn Prisma failed to detect the libssl/openssl version`                             | Prisma CLI run directly                                                                                                           | Harmless                                                                                                     |
+| Symptom                                                                                              | Likely cause                                                                | Try                                                                              |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Preview shows `[]`, and Run printed no `[seed] Added 3 tickets.` line                                | The seed didn't run, or it failed                                           | Check the terminal for the seed's error, then `npm run db:reset` and Run         |
+| `Cannot find module '.../.vinkup/prisma/adapter.mjs'`                                                | Helper files not written                                                    | The task's `package.json` must list `prisma-pglite`                              |
+| Tables in `.not-committed/pglite` instead of `.vinkup/db/dev`; nothing kept after reopening the task | `createPgliteAdapter` ignores `dbParentDirPath`/`dbDirName` in this version | Pin the version that honours them, or change `adapter.mjs` to the folder it uses |
+| `P2022 ColumnNotFound` after a migration                                                             | Database not recreated                                                      | `npm run db:reset`, then Run                                                     |
+| Rows are missing after reopening the task                                                            | The database was deleted, or the task was reset                             | Check that `.vinkup/db/dev` exists on disk; avoid `npm run db:reset`             |
+| `npm test` doesn't return to the prompt after passing                                                | PGlite keeping a Vitest worker alive                                        | Ctrl+C (the results stand); add `teardownTimeout: 1000` to `vitest.config.ts`    |
+| `TypeError [ERR_INVALID_ARG_TYPE] ... relevant-args.js`                                              | Something ran `npx prisma-pglite`                                           | Use the npm scripts                                                              |
+| `Downloading Prisma engines ...` then `socket hang up`                                               | `npx prisma ...` run directly, without the placeholder                      | Use the npm scripts                                                              |
+| `prisma:warn Prisma failed to detect the libssl/openssl version`                                     | Prisma CLI run directly                                                     | Harmless                                                                         |
 
 ## Limits
 
@@ -181,12 +167,13 @@ Open any Prisma task (for example `/tasks/prisma-day-01-t-1`) in Chrome or Edge:
   as files but aren't applied one by one like `prisma migrate dev`, so "fix a faulty migration"
   (Day 1 stretch task) is about editing and re-creating migration files.
 - `prisma studio`, `prisma migrate deploy` and `prisma db push` don't run here.
-- The database is saved only in the browser it was made in.
-- At the top level of a file, `if ((await x) === y)` is skipped without an error. Trainees who
-  write their own seed or scripts need to put the `await` result in a variable first.
+- The database is stored with the workspace on this machine, under the app's user-data folder.
 - Stay on Prisma 7.10. Prisma 8 changes the API.
 
 ## History
+
+These runs predate the desktop host runtime, when tasks used the in-browser WebContainer. They are
+kept as the record of why the workarounds above exist.
 
 The setup came out of a pilot test task (`t-prisma`, mock mode only), October 2026:
 

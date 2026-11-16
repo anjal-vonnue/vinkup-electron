@@ -10,7 +10,7 @@ import NodePreview from '../node/NodePreview';
 import type { LocalNodeStatus } from './useLocalNodeSession';
 import { useLocalNodeSession } from './useLocalNodeSession';
 import { useLocalWorkspace } from './useLocalWorkspace';
-import styles from '../node/NodeRuntime.module.css';
+import styles from './LocalNodeRuntime.module.css';
 
 type LocalNodeRuntimeProps = { task: TaskResponse; isVisible: boolean };
 

@@ -13,9 +13,10 @@ their code and journal, and add new trainees.
 
 - **Guided curriculum:** HTML, CSS, JavaScript, TypeScript, Node.js, PostgreSQL, Prisma and React;
   54 days and 260 tasks. Days unlock in order.
-- **In-browser workspace:** Monaco editor with three runtimes, so trainee code never runs on the server:
-  - web pages run in a live preview (iframe + esbuild-wasm);
-  - Node.js projects run in a WebContainer with a terminal;
+- **Workspace:** Monaco editor with three runtimes. In the desktop app, trainee code runs on the
+  trainee's machine, never on the platform's servers:
+  - web pages are served from a loopback preview server with native esbuild;
+  - Node.js projects run in a real PTY with a terminal;
   - SQL runs in PGlite (PostgreSQL in WebAssembly).
 - **Autosave:** code saves a few seconds after typing stops and survives a dropped connection.
 - **Day page:** lesson summary, learning objectives, task list, end-of-day checklist, optional
@@ -40,7 +41,7 @@ their code and journal, and add new trainees.
 | Part          | Technology                                                                           |
 | ------------- | ------------------------------------------------------------------------------------ |
 | Frontend      | React 19, TypeScript, Vite, React Router, Monaco, Axios                              |
-| Code runtimes | iframe + esbuild-wasm, WebContainer API + xterm, PGlite                              |
+| Code runtimes | Loopback preview server + esbuild, PTY + xterm, PGlite (Electron host)               |
 | Backend       | Node.js 22, Express 5, TypeScript, Zod 4, Passport (Google OAuth), JWT in a cookie   |
 | Database      | PostgreSQL (Neon), Prisma 7 with `@prisma/adapter-pg`                                |
 | Shared types  | `@itp/types` in `packages/types`, used by both frontend and backend                  |

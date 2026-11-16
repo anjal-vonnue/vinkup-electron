@@ -163,7 +163,7 @@ function setNoStore(res: http.ServerResponse): void {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  // The preview is embedded by the app, which is cross-origin (and COEP-credentialless).
+  // The preview is embedded by the app from a different origin.
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   // The sandboxed iframe has an opaque origin, so its module scripts and fetch() calls
   // are cross-origin even against this server. Task files are public to the page.

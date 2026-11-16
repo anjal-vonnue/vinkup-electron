@@ -10,7 +10,7 @@ import {
 import type { WorkspaceEvent } from '@itp/types';
 import { isPreviewMessage, type PreviewMessage } from '../browser/previewMessages';
 import { resolvePath } from '../browser/resolvePath';
-import { storageKey, type ConsoleEntry, type ConsoleLevel } from '../browser/usePreview';
+import { storageKey, type ConsoleEntry, type ConsoleLevel } from '../previewConsole';
 import { useWorkspaceEvents } from './useLocalWorkspace';
 
 export type LocalPreviewRun = {
@@ -69,9 +69,9 @@ function writeStoredStorage(taskId: string, storage: Record<string, string>): vo
 }
 
 /**
- * The host-preview counterpart of `usePreview`: the page is served over loopback HTTP,
- * console output arrives as workspace events, and navigation/storage still arrive over
- * postMessage from the sandboxed bridge.
+ * Preview state for a host workspace: the page is served over loopback HTTP, console output
+ * arrives as workspace events, and navigation/storage still arrive over postMessage from the
+ * sandboxed bridge.
  */
 export function useLocalPreview({
   taskId,

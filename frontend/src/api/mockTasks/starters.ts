@@ -266,8 +266,8 @@ function nodeStarter(task: CatalogTask, flavour: NodeFlavour): TaskFile[] {
 
 // Prisma runs on PGlite (PostgreSQL in WebAssembly) through the prisma-pglite package. Because the
 // task depends on prisma-pglite, the workspace adds hidden helper files in .vinkup/ that the db:*
-// scripts and src/db.ts use (runtimes/node/support/prismaPglite.ts), and saves the database in
-// the browser (runtimes/node/databaseSnapshots.ts).
+// scripts and src/db.ts use (runtimes/node/support/prismaPglite.ts); the database itself lives in
+// .vinkup/db and is preserved between visits.
 const PRISMA_CLI = 'node .vinkup/prisma/cli.mjs';
 
 function prismaStarter(task: CatalogTask): TaskFile[] {

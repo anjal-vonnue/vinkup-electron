@@ -10,14 +10,9 @@ import { isIgnoredPath } from '../../lib/workspaceIgnore';
 import { supportFilesFor } from '../node/supportFiles';
 
 /**
- * The host runtime is opt-in for the desktop shell only. `VITE_WORKSPACE_RUNTIME=webcontainer`
- * keeps the old in-browser stack until the local one is signed off on a packaged build.
+ * Host execution runs in the Electron main process. The API is absent when the
+ * renderer is opened outside the desktop shell (tests, a plain browser).
  */
-export function isLocalRuntimeEnabled(): boolean {
-  if (import.meta.env.VITE_WORKSPACE_RUNTIME === 'webcontainer') return false;
-  return typeof window !== 'undefined' && Boolean(window.desktop?.workspace);
-}
-
 function desktop(): DesktopApi | undefined {
   return typeof window === 'undefined' ? undefined : window.desktop;
 }

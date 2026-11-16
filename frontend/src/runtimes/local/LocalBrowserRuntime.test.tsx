@@ -86,7 +86,6 @@ describe('LocalBrowserRuntime', () => {
     expect(src).toContain('run=');
     expect(src).toContain(`parent=${encodeURIComponent(window.location.origin)}`);
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-modals allow-forms');
-    expect(frame.hasAttribute('credentialless')).toBe(true);
     await waitFor(() => expect(screen.getByTestId('runner').dataset.canRun).toBe('true'));
   });
 

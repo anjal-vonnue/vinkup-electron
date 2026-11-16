@@ -6,14 +6,15 @@ import { isIgnoredPath } from '../../lib/workspaceIgnore';
 import { selectHtmlEntry } from '../../pages/TaskPage/state/selectors';
 import { useWorkspaceState } from '../../pages/TaskPage/state/WorkspaceContext';
 import { useRegisterRunner } from '../runnerContext';
-import { NO_ENTRY_MESSAGE } from '../browser/buildPreviewDocument';
 import ConsolePanel from '../browser/ConsolePanel';
 import PreviewFrame from '../browser/PreviewFrame';
 import { useLocalPreview } from './useLocalPreview';
 import { useLocalWorkspace } from './useLocalWorkspace';
-import styles from '../browser/BrowserRuntime.module.css';
+import styles from './LocalBrowserRuntime.module.css';
 
 type LocalBrowserRuntimeProps = { task: TaskResponse; isVisible: boolean };
+
+const NO_ENTRY_MESSAGE = 'Add an .html file to preview your work.';
 
 export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRuntimeProps) {
   const state = useWorkspaceState();

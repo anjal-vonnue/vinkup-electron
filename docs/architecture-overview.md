@@ -8,20 +8,20 @@ This document explains how Vinkup is built: the parts of the system, how the fro
 
 Vinkup is Vonnue's in-house training platform for new engineering trainees. It carries 8 courses (HTML, CSS, JavaScript, TypeScript, Node.js, PostgreSQL, Prisma, React) with 54 days and 260 tasks. A trainee signs in with their company Google account, opens the day that's unlocked, reads the lesson, solves the tasks in a code editor in the browser, submits them, and submits the day to unlock the next. While they work, the platform records active time, coding time and focus events (leaving fullscreen, switching tabs), and turns the focus events into an integrity score. Mentors sign in to a separate mentor dashboard (`/admin`) to follow the trainees assigned to them, read their submitted code and journal, review their flags, add trainees and print progress reports. Managers sign in to the manager console (`/manager`) to manage accounts and decide which mentor sees each trainee.
 
-The main design decision: **all trainee code runs in the browser.** Web pages render in a sandboxed iframe, Node.js projects run in a WebContainer, and SQL runs in PGlite (PostgreSQL compiled to WebAssembly). The server never executes trainee code; it stores files, applies progress rules and records activity. That removes the risk of running untrusted code on a server.
+The main design decision: **trainee code never runs on the platform's servers.** In the desktop app an Electron main-process workspace manager mirrors the editor files to disk, serves web previews from a loopback HTTP server that bundles with native esbuild, runs Node.js projects in a real PTY, and keeps SQL in PGlite (PostgreSQL compiled to WebAssembly). The backend only stores files, applies progress rules and records activity.
 
-**Code runs in the trainee's browser; the server only stores and checks.**
+**Code runs on the trainee's machine; the server only stores and checks.**
 
 ![System overview: the app and the code runtimes run in the trainee's browser; Netlify proxies /api to the Express API on Render, which uses Neon PostgreSQL and Google OAuth](images/system-overview.png)
 
-| Part          | Technology                                                | Where it runs                    |
-| ------------- | --------------------------------------------------------- | -------------------------------- |
-| Frontend      | React 19, Vite, React Router, Monaco, Axios               | Netlify (static)                 |
-| Code runtimes | iframe + esbuild-wasm, WebContainer API + xterm, PGlite   | Trainee's browser                |
-| Backend       | Node.js 22, Express 5, Zod 4, Passport (Google), JWT      | Render                           |
-| Database      | PostgreSQL, Prisma 7 with `@prisma/adapter-pg`            | Neon                             |
-| Shared types  | `@itp/types` (TypeScript only)                            | Imported by frontend and backend |
-| Users         | Trainees, mentors and managers, each with their own pages | Same app, routed by role         |
+| Part          | Technology                                                  | Where it runs                    |
+| ------------- | ----------------------------------------------------------- | -------------------------------- |
+| Frontend      | React 19, Vite, React Router, Monaco, Axios                 | Netlify (static)                 |
+| Code runtimes | Electron workspace manager: loopback + esbuild, PTY, PGlite | Trainee's machine (main process) |
+| Backend       | Node.js 22, Express 5, Zod 4, Passport (Google), JWT        | Render                           |
+| Database      | PostgreSQL, Prisma 7 with `@prisma/adapter-pg`              | Neon                             |
+| Shared types  | `@itp/types` (TypeScript only)                              | Imported by frontend and backend |
+| Users         | Trainees, and mentors (role `admin`) with their own pages   | Same app, routed by role         |
 
 ## 2. Architecture
 
@@ -56,9 +56,9 @@ There are no server sessions: the JWT is the session. Its lifetime is `JWT_EXPIR
 
 **Electron** signs in through the system browser and a loopback listener under `/api/auth/desktop` (see `docs/authentication.md`). The backend still owns the Google Web client; the browser leg ends with a one-time PKCE-protected handoff code, and only the main process exchanges it for credentials. Desktop sessions do use a server table: a short-lived access JWT is set as the renderer's `auth_token` cookie, while a hashed, rotating refresh token lives in `desktop_session`. The renderer receives only user/state over IPC.
 
-### Cross-origin isolation
+### Host runtimes (desktop)
 
-WebContainer needs the page to be cross-origin isolated. Every route is served with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless`: by `frontend/public/_headers` on Netlify and by `vite.config.ts` locally. It must be every route, not only task pages, because the app is a single-page app and the first page loaded decides the isolation. Anything the app embeds from another origin must work under these headers.
+The desktop shell (`desktop/`) serves the renderer over `http://127.0.0.1:43110` and runs task workspaces in the **main process**. Editor files are mirrored to `<userData>/workspaces/<taskId>`, which stays the working copy for the task; the editor is the source of truth and a file watcher sends terminal-created changes back to it. Browser previews come from a per-task loopback HTTP server that bundles scripts on request with native esbuild; the page runs in a sandboxed, opaque-origin iframe and a bridge endpoint forwards console output and DOM readiness to the Console panel. Node tasks get a real PTY, `npm install` when the task lists packages, and a detected dev-server port in the Preview tab. A Prisma task's database lives in `.vinkup/db` inside the workspace and is preserved when the task is reopened. The renderer stays sandboxed: no Node integration, no `file://`, and no generic `fs`/`exec` IPC — main validates every path, command and workspace id.
 
 ## 3. Repository layout
 
@@ -74,7 +74,7 @@ Training-platform/
 │     ├─ api/                API calls, Axios client, error mapping, mock adapter
 │     │  ├─ dayOverview/     day content per course (source of the curriculum)
 │     │  └─ mockTasks/       task catalog, starter files, SQL setup (source of the curriculum)
-│     ├─ runtimes/           browser, node and sql runtimes + RuntimeHost
+│     ├─ runtimes/           local host runtimes, shared preview UI, sql + RuntimeHost
 │     ├─ context/            AuthProvider, ActivityProvider
 │     ├─ hooks/              flag tracking, fullscreen, typing test, reference search
 │     ├─ lib/                pure helpers (save rules, paste blocking, file tree, Monaco setup)
@@ -168,11 +168,11 @@ The task page is the largest part of the frontend. Its state lives in a reducer 
 
 **Runtimes.** `RuntimeHost` picks one by the task's `runtime` field. The Result pane stays mounted when hidden, so a running process survives switching panes.
 
-| Runtime   | Tasks                                                                | How it works                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| --------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browser` | 153 (HTML, CSS, most JavaScript)                                     | Builds one HTML document from the task files: CSS and SVG are inlined, JavaScript and TypeScript are bundled by esbuild-wasm. Renders it in a sandboxed `srcdoc` iframe; a bridge script sends `console` output and errors back to the Console panel                                                                                                                                                                                                           |
-| `node`    | 98 (Node.js, TypeScript, React, some JavaScript, Prisma, PostgreSQL) | Boots one WebContainer per browser tab, mounts the files, runs `npm install` when `package.json` lists packages, and opens a `jsh` shell in an xterm terminal. Run types the task's `runCommand` (`npm test`, `npm run check` or `npm run dev`). Edits sync into the container; a dev server's port shows in a preview. Prisma tasks also get hidden helper files and keep their database in IndexedDB ([Prisma in the workspace](prisma-in-the-workspace.md)) |
-| `sql`     | 9 (PostgreSQL)                                                       | Runs PGlite (PostgreSQL in WebAssembly), stored in IndexedDB under a name built from the trainee and task. The task's `setupSql` runs once, when the database is new or the setup changed. A Web Lock lets one tab own it; a second tab gets an in-memory database. Results are capped at 500 rows                                                                                                                                                             |
+| Runtime   | Tasks                                                                | How it works                                                                                                                                                                                                                                                                                                                                                                |
+| --------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser` | 153 (HTML, CSS, most JavaScript)                                     | Serves the task folder from a loopback HTTP server; module and classic scripts are bundled with native esbuild on request. The page runs in a sandboxed, opaque-origin iframe, and a bridge endpoint forwards console output, errors and DOM readiness to the Console panel                                                                                                 |
+| `node`    | 98 (Node.js, TypeScript, React, some JavaScript, Prisma, PostgreSQL) | Runs on the host in a real PTY: `npm install` when `package.json` lists packages, then an interactive shell and the task's `runCommand`. A dev server's detected port opens the Preview tab. Edits sync both ways through a file watcher. Prisma tasks get hidden helper files and keep `.vinkup/db` across reopens ([Prisma in the workspace](prisma-in-the-workspace.md)) |
+| `sql`     | 9 (PostgreSQL)                                                       | Runs PGlite (PostgreSQL in WebAssembly), stored in IndexedDB under a name built from the trainee and task. The task's `setupSql` runs once, when the database is new or the setup changed. A Web Lock lets one tab own it; a second tab gets an in-memory database. Results are capped at 500 rows                                                                          |
 
 ### Mentor pages
 

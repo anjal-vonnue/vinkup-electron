@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isIgnoredPath } from '../../lib/workspaceIgnore';
-import { savedDatabasePaths, supportFilesFor } from './supportFiles';
+import { supportFilesFor } from './supportFiles';
 
 const packageJson = (deps: Record<string, string>) => JSON.stringify({ dependencies: deps });
 
@@ -27,12 +27,5 @@ describe('supportFilesFor', () => {
   it('only writes files the workspace ignores, so trainees never see or save them', () => {
     const files = supportFilesFor({ 'package.json': packageJson({ 'prisma-pglite': '^3.0.2' }) });
     for (const path of Object.keys(files)) expect(isIgnoredPath(path)).toBe(true);
-  });
-
-  it('keeps the dev database of Prisma tasks, and nothing for other tasks', () => {
-    const prisma = { 'package.json': packageJson({ 'prisma-pglite': '^3.0.2' }) };
-    expect(savedDatabasePaths(prisma)).toEqual(['.vinkup/db/dev', '.vinkup/db/dev.schema-hash']);
-    expect(savedDatabasePaths({ 'package.json': packageJson({ express: '^4.21.1' }) })).toEqual([]);
-    for (const path of savedDatabasePaths(prisma)) expect(isIgnoredPath(path)).toBe(true);
   });
 });

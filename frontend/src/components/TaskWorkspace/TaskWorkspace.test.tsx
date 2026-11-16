@@ -1,7 +1,8 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
+import type { DesktopApi, WorkspaceApi } from '@itp/types';
 import TaskWorkspace from './TaskWorkspace';
 import { WorkspaceProvider } from '../../pages/TaskPage/state/WorkspaceContext';
 import { EditorProvider } from '../../pages/TaskPage/state/EditorContext';
@@ -10,16 +11,30 @@ import { ToastProvider } from '../../components/Toast';
 import { taskFixture, taskCodeFixture } from '../../test/fixtures/task';
 import { saveTaskCode, submitTask } from '../../api/tasks';
 import { ApiError } from '../../api/errors';
-import { buildPreviewDocument } from '../../runtimes/browser/buildPreviewDocument';
 
 vi.mock('../../api/tasks');
 
-// The real builder, wrapped so tests can count builds.
-vi.mock('../../runtimes/browser/buildPreviewDocument', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../runtimes/browser/buildPreviewDocument')>();
-  return { ...actual, buildPreviewDocument: vi.fn(actual.buildPreviewDocument) };
-});
+const PREVIEW_URL = 'http://127.0.0.1:4100';
+
+/** The host workspace API the desktop preload exposes; the Run button needs it to enable. */
+function installWorkspaceApi(): WorkspaceApi {
+  const api: WorkspaceApi = {
+    open: vi.fn(() =>
+      Promise.resolve({
+        previewUrl: PREVIEW_URL,
+        nodeVersion: '24.0.0',
+        error: null,
+      })
+    ),
+    sync: vi.fn(() => Promise.resolve()),
+    reload: vi.fn(() => Promise.resolve({})),
+    close: vi.fn(() => Promise.resolve()),
+    getEnvironment: vi.fn(() => Promise.resolve({ nodeVersion: '24.0.0', error: null })),
+    onEvent: () => () => {},
+  };
+  window.desktop = { workspace: api } as unknown as DesktopApi;
+  return api;
+}
 
 const navigateMock = vi.fn();
 vi.mock('react-router', async () => {
@@ -50,6 +65,10 @@ describe('TaskWorkspace', () => {
     window.localStorage.clear();
   });
 
+  afterEach(() => {
+    delete (window as { desktop?: DesktopApi }).desktop;
+  });
+
   it('renders sidebar and code panes by default, with the result pane mounted but hidden', () => {
     renderWorkspace();
     expect(screen.getByTestId('sidebar-pane')).toBeInTheDocument();
@@ -61,34 +80,35 @@ describe('TaskWorkspace', () => {
 
   it('shows the result pane when Run is clicked', async () => {
     const user = userEvent.setup();
+    installWorkspaceApi();
     renderWorkspace();
-    await user.click(screen.getByRole('button', { name: /run/i }));
+    const run = screen.getByRole('button', { name: /run/i });
+    await waitFor(() => expect(run).toBeEnabled());
+    await user.click(run);
     expect(screen.getByTestId('result-pane').className).not.toMatch(/paneHidden/);
   });
 
-  it('clicking Run calls the active runtime’s registered run()', async () => {
+  it('opens the host workspace and shows the preview when Run is clicked', async () => {
     const user = userEvent.setup();
+    const api = installWorkspaceApi();
     renderWorkspace();
-    await user.click(screen.getByRole('button', { name: /run/i }));
-    // BrowserRuntime's run() builds the page and shows it in the preview iframe.
+
+    await waitFor(() => expect(api.open).toHaveBeenCalledTimes(1));
+    const openArgs = vi.mocked(api.open).mock.calls[0]?.[0];
+    expect(openArgs?.taskId).toBe(taskFixture.id);
+
+    const run = screen.getByRole('button', { name: /run/i });
+    await waitFor(() => expect(run).toBeEnabled());
+    // The preview only starts when the Result pane is shown.
+    expect(screen.queryByTitle('Preview of services.html')).not.toBeInTheDocument();
+
+    await user.click(run);
     expect(await screen.findByTitle('Preview of services.html')).toBeInTheDocument();
-  });
-
-  it('builds the preview once when Run opens the hidden Result pane', async () => {
-    const user = userEvent.setup();
-    vi.mocked(buildPreviewDocument).mockClear();
-    renderWorkspace();
-    expect(buildPreviewDocument).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: /run/i }));
-    await screen.findByTitle('Preview of services.html');
-
-    // Run and "the pane just became visible" must not both start a build.
-    expect(buildPreviewDocument).toHaveBeenCalledTimes(1);
   });
 
   it('Ctrl+Enter runs, even outside the editor', async () => {
     const user = userEvent.setup();
+    installWorkspaceApi();
     renderWorkspace();
 
     await user.keyboard('{Control>}{Enter}{/Control}');
