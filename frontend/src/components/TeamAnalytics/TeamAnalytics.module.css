@@ -171,3 +171,61 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Totals and chart cards rise into place one after another. */
+.totals > *,
+.charts > * {
+  animation: rise-in 450ms ease both;
+}
+
+.totals > :nth-child(2) {
+  animation-delay: 50ms;
+}
+.totals > :nth-child(3) {
+  animation-delay: 100ms;
+}
+.totals > :nth-child(4) {
+  animation-delay: 150ms;
+}
+.totals > :nth-child(5) {
+  animation-delay: 200ms;
+}
+
+.charts > :nth-child(1) {
+  animation-delay: 150ms;
+}
+.charts > :nth-child(2) {
+  animation-delay: 250ms;
+}
+.charts > :nth-child(3) {
+  animation-delay: 350ms;
+}
+.charts > :nth-child(4) {
+  animation-delay: 450ms;
+}
+.charts > :nth-child(5) {
+  animation-delay: 550ms;
+}
+.charts > :nth-child(6) {
+  animation-delay: 650ms;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* People who turned off animations in their system settings see everything at once. */
+@media (prefers-reduced-motion: reduce) {
+  .totals > *,
+  .charts > * {
+    animation: none;
+  }
+}

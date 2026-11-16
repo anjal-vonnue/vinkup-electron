@@ -109,7 +109,7 @@ export default function TrendLineChart({
             stroke="var(--color-accent-purple)"
             strokeWidth={2}
             dot={{ r: 3 }}
-            isAnimationActive={false}
+            animationDuration={800}
           />
         </LineChart>
       </ResponsiveContainer>

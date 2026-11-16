@@ -47,7 +47,7 @@ export default function TaskStatusChart({ status }: TaskStatusChartProps) {
                 innerRadius="60%"
                 outerRadius="90%"
                 stroke="var(--color-bg-card)"
-                isAnimationActive={false}
+                animationDuration={800}
               >
                 {slices.map((slice) => (
                   <Cell key={slice.name} fill={slice.color} />

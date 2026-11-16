@@ -59,7 +59,7 @@ export default function ProgressTrendChart({ points, isOneTrainee }: ProgressTre
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
-            isAnimationActive={false}
+            animationDuration={800}
           />
         </LineChart>
       </ResponsiveContainer>

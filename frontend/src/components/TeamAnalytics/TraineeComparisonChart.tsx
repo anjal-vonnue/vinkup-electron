@@ -120,7 +120,7 @@ export default function TraineeComparisonChart({
                 : [formatDurationHM(row.codingSeconds), 'Coding time'];
             }}
           />
-          <Bar dataKey="value" barSize={16} radius={[0, 4, 4, 0]} isAnimationActive={false}>
+          <Bar dataKey="value" barSize={16} radius={[0, 4, 4, 0]} animationDuration={800}>
             {bars.map((bar) => (
               <Cell
                 key={bar.traineeId}
