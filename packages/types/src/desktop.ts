@@ -88,4 +88,8 @@ export interface DesktopApi {
     /** Returns an unsubscribe function. Esc from inside the page. */
     onEscape: (listener: () => void) => () => void;
   };
+  /** Saves the printable trainee report as an A4 portrait PDF. */
+  report: {
+    savePdf: (fileName: string) => Promise<boolean>;
+  };
 }

@@ -21,13 +21,17 @@ function restorePage(saved: SavedPage): void {
 }
 
 /**
- * Lets a page render a print-only view that exists only while printing:
+ * Lets a page render a print-only view, hidden on screen and shown only when printing:
  *
  * - `print(options)` renders the view synchronously, then opens the browser's print dialog.
  * - Printing from the browser menu (`beforeprint`) renders it with `defaults`.
+ * - `prepare(options)` / `restore()` render and remove the view for a PDF export that does not
+ *   use the browser's print dialog (the desktop shell).
  * - The document title is set to the report's title while printing (browsers suggest it as
  *   the "Save as PDF" filename). The user's theme is never changed.
- * - `afterprint` puts the title back and removes the view.
+ * - `afterprint` puts the title back. The view stays mounted (hidden on screen) because a
+ *   print pipeline can take its snapshot after `afterprint`; unmounting there prints a blank
+ *   page. The next print replaces it, and `restore()` removes it once a PDF capture is done.
  */
 export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions<T>) {
   const [job, setJob] = useState<PrintJob<T> | null>(null);
@@ -54,14 +58,23 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
     flushSync(() => setJob(next));
   }, []);
 
+  /** Put the title back and forget the job; the rendered view stays for a late snapshot. */
   const leave = useCallback(() => {
+    // Not our print (e.g. another page printed): nothing to restore.
+    if (!savedRef.current && !jobRef.current) return;
+
     if (savedRef.current) {
       restorePage(savedRef.current);
       savedRef.current = null;
     }
     jobRef.current = null;
-    setJob(null);
   }, []);
+
+  /** Put the title back and remove the view; safe once the PDF capture has finished. */
+  const clear = useCallback(() => {
+    leave();
+    setJob(null);
+  }, [leave]);
 
   useEffect(() => {
     const handleBeforePrint = () => {
@@ -85,10 +98,16 @@ export function usePrintMode<T>({ defaults, documentTitle }: UsePrintModeOptions
   const print = useCallback(
     (options: T) => {
       enter(options);
-      window.print();
+      try {
+        window.print();
+      } catch (error) {
+        // A window that refuses to open the dialog must not leave the page in print mode.
+        clear();
+        throw error;
+      }
     },
-    [enter]
+    [enter, clear]
   );
 
-  return { printJob: job, print, prepare: enter, restore: leave };
+  return { printJob: job, print, prepare: enter, restore: clear };
 }

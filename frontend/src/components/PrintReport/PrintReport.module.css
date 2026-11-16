@@ -1,4 +1,7 @@
-/* The report exists only while printing; on screen it stays hidden behind the print dialog. */
+/*
+ * The report is mounted once printed (and kept for later snapshots), so it must never take up
+ * space on screen. Only print media shows it.
+ */
 @media screen {
   .report {
     display: none;
@@ -24,15 +27,52 @@
     }
   }
 
+  /* A dark `color-scheme` paints the print canvas (the page margins) dark too. The theme rule
+     is more specific, so this has to be important. */
+  :global(:root) {
+    color-scheme: light !important;
+  }
+
   :global(html),
   :global(body) {
     background: #ffffff !important;
+    color: #14162a;
   }
 
+  /* A report is always a light document. Override the tokens the shared
+     components use so a dark app theme never prints light text on white paper. */
   .report {
+    --color-text-primary: #14162a;
+    --color-text-secondary: #5b5d6e;
+    --color-text-tertiary: #716c82;
+    --color-text-muted: #78748a;
+    --color-text-green: #069669;
+    --color-text-green-40: #06966966;
+    --color-accent-purple: #7c41e4;
+    --color-accent-purple-soft: #8e51e6;
+    --color-accent-text: #6941c6;
+    --color-accent-tint: #7c41e414;
+    --color-bg-card: #ffffff;
+    --color-bg-panel: #f0f1f5;
+    --color-bg-surface-2: #f5f6fa;
+    --color-bg-green-fill: #10b98114;
+    --color-border-card: #e4e5ec;
+    --color-border-default: #e4e5ec;
+    --color-border-divider: #e2e8f0;
+
+    background: #ffffff;
     font-size: 11pt;
     line-height: 1.45;
     color: var(--color-text-primary);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+
+    /* Long emails and URLs in journal entries must wrap, not spill off the paper. */
+    overflow-wrap: anywhere;
+
+    /* Don't leave a lone line of a paragraph alone at a page edge. */
+    orphans: 3;
+    widows: 3;
   }
 }
 
@@ -122,33 +162,35 @@
   border-radius: 999px;
 }
 
-.journal {
+.entryList {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.journalEntry {
+.entry {
   padding: 8px 0;
   border-bottom: 1px solid var(--color-border-card);
   break-inside: avoid;
 }
 
-.journalTitle {
+.entryTitle {
   margin: 0;
   font-size: 10.5pt;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
-.journalDate {
+.entryMeta {
   margin: 0 0 4px;
   font-size: 9pt;
   color: var(--color-text-secondary);
 }
 
-.journalText {
+.entryText {
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .note,
@@ -166,4 +208,20 @@
   text-align: center;
   color: var(--color-text-secondary);
   border-top: 1px solid var(--color-border-card);
+}
+
+/*
+ * These come after the screen rules above: a plain `.block` override placed earlier would be
+ * beaten by the base `.block` by source order, whatever the media query.
+ */
+@media print {
+  /* A card can be taller than one page. Let it flow over the break instead of clipping it. */
+  .report .block {
+    overflow: visible;
+    break-inside: auto;
+  }
+
+  .header {
+    break-inside: avoid;
+  }
 }

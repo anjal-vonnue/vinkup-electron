@@ -47,6 +47,7 @@ const api: DesktopApi = {
     savePdf: (fileName: string) =>
       ipcRenderer.invoke('certificate:save-pdf', fileName) as Promise<boolean>,
   },
+
   resources: {
     getAllowlist: () =>
       ipcRenderer.invoke('resources:get-allowlist') as Promise<ResourcesAllowlist>,
@@ -115,6 +116,10 @@ const api: DesktopApi = {
         ipcRenderer.removeListener('resources:escape', handler);
       };
     },
+  },
+  report: {
+    savePdf: (fileName: string) =>
+      ipcRenderer.invoke('report:save-pdf', fileName) as Promise<boolean>,
   },
 };
 
