@@ -372,7 +372,7 @@ describe('AdminTraineePage', () => {
     expect(
       within(report).getByRole('heading', { level: 1, name: detail.profile.trainee.name })
     ).toBeInTheDocument();
-    expect(report).toHaveTextContent('Prepared by Mock Mentor');
+    expect(report).toHaveTextContent(/Prepared by\s*Mock Mentor/);
     expect(within(report).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
 
     act(() => {
@@ -399,9 +399,14 @@ describe('AdminTraineePage', () => {
       window.dispatchEvent(new Event('beforeprint'));
     });
 
-    const report = screen.getByRole('article', { name: 'Printable trainee report' });
-    expect(within(report).getByRole('heading', { name: /^Journal/ })).toBeInTheDocument();
-    expect(within(report).getByRole('heading', { name: 'Flagged events' })).toBeInTheDocument();
+    const report = screen.getByRole('article', {
+      name: 'Printable trainee report',
+    });
+
+    expect(within(report).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
+
+    expect(within(report).getByRole('heading', { name: 'Focus events' })).toBeInTheDocument();
+
     expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
 
     act(() => {

@@ -1,6 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import type { AdminFeedbackEntry, AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
+// @vitest-environment jsdom
+
+import { cleanup, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
 
 import PrintReport from './PrintReport';
 import { DEFAULT_PRINT_OPTIONS, type PrintReportOptions } from '../../lib/printReport';
@@ -10,102 +12,93 @@ import {
   mockAdminTraineeIds,
 } from '../../test/fixtures/admin';
 
-const detail = buildAdminTraineeDetail(mockAdminTraineeIds[0]) as AdminTraineeDetail;
-// Arjun's mock flags mix High, Normal and Low events.
-const flags = buildAdminFlags(mockAdminTraineeIds[2]) as AdminFlagEvent[];
-const importantFlags = flags.filter((flag) => flag.reviewPriority !== 'LOW');
-const feedback: AdminFeedbackEntry[] = [
-  {
-    id: 'fb-older',
-    taskId: 'task-1',
-    taskTitle: 'Semantic HTML',
-    dayId: 'html-1',
-    adminId: 'admin-1',
-    adminName: 'Mentor Alice',
-    submissionNo: 1,
-    decision: 'rework',
-    feedback: 'Add the meta viewport tag.',
-    reviewedAt: '2026-10-06T09:00:00.000Z',
-  },
-  {
-    id: 'fb-newer',
-    taskId: 'task-1',
-    taskTitle: 'Semantic HTML',
-    dayId: 'html-1',
-    adminId: 'admin-1',
-    adminName: 'Mentor Alice',
-    submissionNo: 2,
-    decision: 'approved',
-    feedback: 'The viewport tag is correct now.',
-    reviewedAt: '2026-10-07T09:00:00.000Z',
-  },
-];
+import '@testing-library/jest-dom/vitest';
 
-function renderReport(
-  overrides: {
-    detail?: AdminTraineeDetail;
-    flags?: AdminFlagEvent[] | null;
-    feedback?: AdminFeedbackEntry[] | null;
-    options?: PrintReportOptions;
-    mentorName?: string | null;
-  } = {}
-) {
-  return render(
+afterEach(() => {
+  cleanup();
+});
+
+const detail = buildAdminTraineeDetail(mockAdminTraineeIds[0]) as AdminTraineeDetail;
+
+const flags = buildAdminFlags(mockAdminTraineeIds[2]) as AdminFlagEvent[];
+
+const importantFlags = flags.filter((flag) => flag.reviewPriority !== 'LOW');
+
+type RenderOverrides = {
+  detail?: AdminTraineeDetail;
+  flags?: AdminFlagEvent[] | null;
+  options?: PrintReportOptions;
+  mentorName?: string | null;
+};
+
+function renderReport(overrides: RenderOverrides = {}) {
+  render(
     <PrintReport
       detail={overrides.detail ?? detail}
       flags={overrides.flags === undefined ? flags : overrides.flags}
-      feedback={overrides.feedback === undefined ? feedback : overrides.feedback}
-      dayLabels={new Map()}
+      dayLabels={new Map([['html-1', 'HTML · Day 1']])}
       options={overrides.options ?? DEFAULT_PRINT_OPTIONS}
       mentorName={overrides.mentorName === undefined ? 'Mock Mentor' : overrides.mentorName}
       generatedAt={new Date('2026-10-08T06:30:00.000Z')}
     />
   );
-}
 
-function section(name: RegExp) {
-  return screen.getByRole('heading', { level: 2, name }).closest('section') as HTMLElement;
+  return screen.getByRole('article', {
+    name: 'Printable trainee report',
+  });
 }
 
 describe('PrintReport', () => {
-  it('heads the report with the trainee, their course and who prepared it', () => {
-    renderReport();
-
-    const report = screen.getByRole('article', { name: 'Printable trainee report' });
+  it('renders trainee details and report metadata', () => {
+    const report = renderReport();
     const { trainee } = detail.profile;
 
     expect(
-      within(report).getByRole('heading', { level: 1, name: trainee.name })
+      within(report).getByRole('heading', {
+        level: 1,
+        name: trainee.name,
+      })
     ).toBeInTheDocument();
 
     expect(report).toHaveTextContent(trainee.email);
-    expect(report).toHaveTextContent(
-      `Currently on ${trainee.track} · Day ${trainee.currentDay} of ${trainee.totalDays}`
-    );
-    expect(report).toHaveTextContent('Prepared by Mock Mentor');
-    expect(report).toHaveTextContent('Confidential — for mentor use only');
+    expect(report).toHaveTextContent(`Day ${trainee.currentDay}`);
+    expect(report).toHaveTextContent(`of ${trainee.totalDays}`);
+    expect(report).toHaveTextContent(trainee.track);
+    expect(report).toHaveTextContent(/Prepared by\s*Mock Mentor/);
+    expect(report).toHaveTextContent('Confidential, for mentor use only');
   });
 
-  it('leaves out "Prepared by" when the mentor name is unknown', () => {
-    renderReport({ mentorName: null });
+  it('does not render prepared-by metadata when the mentor is unknown', () => {
+    const report = renderReport({ mentorName: null });
 
-    expect(screen.getByRole('article')).not.toHaveTextContent('Prepared by');
+    expect(report).not.toHaveTextContent('Prepared by');
   });
 
-  it('includes the statistics, daily activity and course grid', () => {
-    renderReport();
+  it('renders the summary metrics', () => {
+    const report = renderReport();
+    const summary = within(report).getByLabelText('Summary');
 
-    expect(screen.getByLabelText('Training statistics')).toBeInTheDocument();
-    expect(screen.getByLabelText('Daily training activity')).toBeInTheDocument();
-    expect(screen.getByLabelText('Course and day progress')).toBeInTheDocument();
+    expect(summary).toHaveTextContent('Current Course Progress');
+    expect(summary).toHaveTextContent('Tasks');
+    expect(summary).toHaveTextContent(`${detail.tasks.length}`);
+    expect(summary).toHaveTextContent('Important flags');
+    expect(summary).toHaveTextContent(`${importantFlags.length}`);
   });
 
-  it('displays the trainee typing statistics', () => {
-    renderReport();
+  it('renders performance and typing statistics', () => {
+    const report = renderReport();
 
-    const stats = screen.getByLabelText('Training statistics');
+    const performance = within(report)
+      .getByRole('heading', {
+        level: 2,
+        name: /^Performance$/,
+      })
+      .closest('section') as HTMLElement;
+
+    const stats = within(performance).getByLabelText('Training statistics');
 
     expect(stats).toHaveTextContent(`${detail.typingStats.averageWpm}`);
+
     expect(stats).toHaveTextContent(`${detail.typingStats.averageAccuracy}%`);
 
     if (detail.typingStats.highestWpm !== null) {
@@ -117,97 +110,119 @@ describe('PrintReport', () => {
     }
   });
 
-  it('lists every submitted task', () => {
-    renderReport();
-
-    const tasks = section(/^Submitted tasks/);
+  it('does not render removed report sections', () => {
+    const report = renderReport();
 
     expect(
-      within(tasks).getByRole('heading', { name: `Submitted tasks (${detail.tasks.length})` })
-    ).toBeInTheDocument();
+      within(report).queryByRole('heading', {
+        name: /progress by course/i,
+      })
+    ).not.toBeInTheDocument();
 
-    // One header row plus one row per task.
-    expect(within(tasks).getAllByRole('row')).toHaveLength(detail.tasks.length + 1);
-  });
-
-  it('says so when no tasks have been submitted', () => {
-    renderReport({ detail: { ...detail, tasks: [] } });
-
-    expect(screen.getByText('No submitted tasks yet.')).toBeInTheDocument();
-  });
-
-  it('lists review feedback newest first, with the reviewer and decision', () => {
-    renderReport();
-
-    const reviews = section(/^Review feedback/);
     expect(
-      within(reviews).getByRole('heading', { name: `Review feedback (${feedback.length})` })
-    ).toBeInTheDocument();
-    const entries = within(reviews).getAllByRole('listitem');
-    expect(entries).toHaveLength(feedback.length);
-    expect(entries[0]).toHaveTextContent('The viewport tag is correct now.');
-    expect(entries[0]).toHaveTextContent('approved');
-    expect(entries[0]).toHaveTextContent('Mentor Alice');
-    expect(entries[1]).toHaveTextContent('Add the meta viewport tag.');
+      within(report).queryByRole('heading', {
+        name: /submitted tasks|recent submissions/i,
+      })
+    ).not.toBeInTheDocument();
+
+    expect(
+      within(report).queryByRole('heading', {
+        name: /review feedback|mentor feedback/i,
+      })
+    ).not.toBeInTheDocument();
+
+    expect(
+      within(report).queryByRole('heading', {
+        name: /^journal/i,
+      })
+    ).not.toBeInTheDocument();
+
+    expect(within(report).queryByLabelText('Course and day progress')).not.toBeInTheDocument();
+
+    expect(within(report).queryByLabelText('Daily training activity')).not.toBeInTheDocument();
   });
 
-  it('says so when there is no review feedback', () => {
-    renderReport({ feedback: [] });
+  it('renders only important focus events', () => {
+    const report = renderReport();
 
-    expect(screen.getByText('No review feedback yet.')).toBeInTheDocument();
-  });
+    const focusEvents = within(report)
+      .getByRole('heading', {
+        level: 2,
+        name: /^Focus events$/,
+      })
+      .closest('section') as HTMLElement;
 
-  it('says review feedback is unavailable when it failed to load', () => {
-    renderReport({ feedback: null });
-
-    expect(screen.getByText('Review feedback unavailable.')).toBeInTheDocument();
-  });
-
-  it('includes the journal by default', () => {
-    renderReport();
-
-    const journal = section(/^Journal/);
-
-    expect(within(journal).getAllByRole('listitem')).toHaveLength(detail.journal.length);
-  });
-
-  it('leaves the journal out when it is not chosen', () => {
-    renderReport({ options: { includeJournal: false, includeFlags: true } });
-
-    expect(screen.queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
-  });
-
-  it('shows only the important flags, with a count of all recorded events', () => {
-    renderReport();
-
-    const flagged = section(/^Flagged events/);
-
-    expect(flagged).toHaveTextContent(
-      `${importantFlags.length} important of ${flags.length} recorded.`
+    expect(focusEvents).toHaveTextContent(
+      `${importantFlags.length} important events out of ${flags.length} recorded.`
     );
 
-    expect(within(flagged).getAllByRole('row')).toHaveLength(importantFlags.length + 1);
+    expect(within(focusEvents).getAllByRole('row')).toHaveLength(
+      Math.min(importantFlags.length, 8) + 1
+    );
   });
 
-  it('leaves the flags out when they are not chosen', () => {
-    renderReport({ options: { includeJournal: true, includeFlags: false } });
+  it('shows the important flag count in the summary', () => {
+    const report = renderReport();
+    const summary = within(report).getByLabelText('Summary');
 
-    expect(screen.queryByRole('heading', { name: 'Flagged events' })).not.toBeInTheDocument();
+    expect(summary).toHaveTextContent(`${importantFlags.length}`);
   });
 
-  it('says the flags are unavailable when they failed to load', () => {
-    renderReport({ flags: null });
+  it('hides focus events and their summary metric when flags are disabled', () => {
+    const report = renderReport({
+      options: {
+        ...DEFAULT_PRINT_OPTIONS,
+        includeFlags: false,
+      },
+    });
 
-    expect(screen.getByText('Flagged events unavailable.')).toBeInTheDocument();
+    expect(
+      within(report).queryByRole('heading', {
+        name: /^Focus events$/,
+      })
+    ).not.toBeInTheDocument();
+
+    expect(within(report).getByLabelText('Summary')).not.toHaveTextContent('Important flags');
   });
 
-  it('says so when there are no important flags', () => {
-    renderReport({ flags: flags.filter((flag) => flag.reviewPriority === 'LOW') });
+  it('shows an unavailable message when flags fail to load', () => {
+    const report = renderReport({ flags: null });
 
-    expect(screen.getByText('No important focus events recorded.')).toBeInTheDocument();
+    expect(within(report).getByText('Flagged events unavailable.')).toBeInTheDocument();
+
+    expect(within(report).getByLabelText('Summary')).toHaveTextContent('—');
   });
 
-  it('renders zero averages and unavailable highest WPM when there are no typing tests', () => {
+  it('shows an empty message when no important focus events exist', () => {
+    const report = renderReport({
+      flags: flags.filter((flag) => flag.reviewPriority === 'LOW'),
+    });
+
+    expect(within(report).getByText('No important focus events recorded.')).toBeInTheDocument();
+  });
+
+  it('limits the focus event table to eight entries', () => {
+    const manyFlags = Array.from({ length: 12 }, (_, index) => ({
+      ...importantFlags[0],
+      id: `flag-${index}`,
+      timestamp: new Date(Date.UTC(2026, 9, index + 1)).toISOString(),
+    }));
+
+    const report = renderReport({ flags: manyFlags });
+
+    const focusEvents = within(report)
+      .getByRole('heading', {
+        level: 2,
+        name: /^Focus events$/,
+      })
+      .closest('section') as HTMLElement;
+
+    expect(within(focusEvents).getAllByRole('row')).toHaveLength(9);
+
+    expect(focusEvents).toHaveTextContent('8 of 12 important');
+  });
+
+  it('handles missing typing test results', () => {
     const detailWithoutTypingTests: AdminTraineeDetail = {
       ...detail,
       typingStats: {
@@ -218,11 +233,27 @@ describe('PrintReport', () => {
       },
     };
 
-    renderReport({ detail: detailWithoutTypingTests });
+    const report = renderReport({
+      detail: detailWithoutTypingTests,
+    });
 
-    const stats = screen.getByLabelText('Training statistics');
+    const performance = within(report)
+      .getByRole('heading', {
+        level: 2,
+        name: /^Performance$/,
+      })
+      .closest('section') as HTMLElement;
+
+    const stats = within(performance).getByLabelText('Training statistics');
 
     expect(stats).toHaveTextContent('0');
-    expect(stats).toBeInTheDocument();
+  });
+
+  it('renders the report footer', () => {
+    const report = renderReport();
+
+    expect(report).toHaveTextContent('Vinkup trainee progress report');
+
+    expect(report).toHaveTextContent('Confidential, for mentor use only');
   });
 });

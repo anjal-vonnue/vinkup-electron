@@ -31,7 +31,10 @@ describe('print styles', () => {
   it('lets a tall card flow over a page break instead of clipping it', () => {
     const report = css('../../components/PrintReport/PrintReport.module.css');
 
-    expect(report).toContain('.report .block { overflow: visible; break-inside: auto; }');
+    expect(report).toContain('.card { break-inside: auto; }');
+
+    expect(report).toContain('.tableCard { break-inside: auto; }');
+
     expect(report).toContain('overflow-wrap: anywhere');
     expect(report).toContain('orphans: 3');
   });
