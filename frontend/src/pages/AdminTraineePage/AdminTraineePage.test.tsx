@@ -379,11 +379,37 @@ describe('AdminTraineePage', () => {
       window.dispatchEvent(new Event('afterprint'));
     });
 
+    // Kept mounted (hidden on screen) so a print snapshot taken after `afterprint` is not blank.
+    // The next print replaces it.
+    const retained = screen.getByRole('article', { name: 'Printable trainee report' });
     expect(
-      screen.queryByRole('article', { name: 'Printable trainee report' })
-    ).not.toBeInTheDocument();
+      within(retained).getByRole('heading', { level: 1, name: detail.profile.trainee.name })
+    ).toBeInTheDocument();
+    expect(within(retained).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
     expect(document.title).toBe('Vinkup');
     expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('renders the default report when printing starts from the browser menu', async () => {
+    renderPage();
+    await screen.findByRole('heading', { level: 1, name: detail.profile.trainee.name });
+    document.documentElement.dataset.theme = 'dark';
+
+    act(() => {
+      window.dispatchEvent(new Event('beforeprint'));
+    });
+
+    const report = screen.getByRole('article', { name: 'Printable trainee report' });
+    expect(within(report).getByRole('heading', { name: /^Journal/ })).toBeInTheDocument();
+    expect(within(report).getByRole('heading', { name: 'Flagged events' })).toBeInTheDocument();
+    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'));
+    });
+
+    expect(document.title).toBe('Vinkup');
+    expect(screen.getByRole('article', { name: 'Printable trainee report' })).toBeInTheDocument();
   });
 
   it('saves the selected trainee report as a PDF through the desktop app', async () => {

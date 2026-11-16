@@ -28,6 +28,7 @@ beforeEach(() => {
 
 afterEach(() => {
   printSpy.mockRestore();
+  vi.useRealTimers();
   window.localStorage.clear();
   delete document.documentElement.dataset.theme;
 });
@@ -74,7 +75,7 @@ describe('usePrintMode', () => {
     expect(document.title).toBe('Mentor view');
   });
 
-  it('puts the theme and title back after printing and removes the job', () => {
+  it('puts the title back after printing but keeps the report mounted', () => {
     const { result } = renderPrintMode();
     act(() => {
       result.current.print(DEFAULTS);
@@ -82,8 +83,23 @@ describe('usePrintMode', () => {
 
     fire('afterprint');
 
-    expect(result.current.printJob).toBeNull();
+    // Some print pipelines take their snapshot after `afterprint`, so the view must stay.
+    expect(result.current.printJob?.options).toEqual(DEFAULTS);
     expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.title).toBe('Mentor view');
+  });
+
+  it('removes the view once a desktop PDF export has finished', () => {
+    const { result } = renderPrintMode();
+    act(() => {
+      result.current.prepare(DEFAULTS);
+    });
+
+    act(() => {
+      result.current.restore();
+    });
+
+    expect(result.current.printJob).toBeNull();
     expect(document.title).toBe('Mentor view');
   });
 
@@ -107,8 +123,44 @@ describe('usePrintMode', () => {
     expect(printSpy).not.toHaveBeenCalled();
 
     fire('afterprint');
-    expect(result.current.printJob).toBeNull();
+    expect(result.current.printJob?.options).toEqual(DEFAULTS);
     expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('refreshes the report with the defaults for a later browser-menu print', () => {
+    vi.useFakeTimers();
+    const { result } = renderPrintMode();
+
+    vi.setSystemTime(new Date('2026-10-08T06:00:00.000Z'));
+    act(() => {
+      result.current.print({ includeJournal: false });
+    });
+    fire('afterprint');
+
+    vi.setSystemTime(new Date('2026-10-08T07:00:00.000Z'));
+    fire('beforeprint');
+
+    expect(result.current.printJob?.options).toEqual(DEFAULTS);
+    expect(result.current.printJob?.startedAt).toEqual(new Date('2026-10-08T07:00:00.000Z'));
+  });
+
+  it('restores the page when the print dialog cannot be opened', () => {
+    printSpy.mockImplementation(() => {
+      throw new Error('no printer');
+    });
+    const { result } = renderPrintMode();
+
+    expect(() =>
+      act(() => {
+        result.current.print(DEFAULTS);
+      })
+    ).toThrow('no printer');
+
+    // The throw aborted the act scope before React could render the cleanup.
+    act(() => {});
+
+    expect(result.current.printJob).toBeNull();
+    expect(document.title).toBe('Mentor view');
   });
 
   it('keeps the chosen options when the browser fires beforeprint after print()', () => {
