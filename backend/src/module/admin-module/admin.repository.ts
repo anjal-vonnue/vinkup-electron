@@ -6,8 +6,9 @@ export class AdminRepository {
   findTrainee = (id: string) =>
     prisma.trainee.findUnique({ where: { id }, select: { id: true, name: true, email: true } });
 
-  listTrainees = () =>
+  listTrainees = (mentorId: string) =>
     prisma.trainee.findMany({
+      where: { mentor_id: mentorId },
       select: { id: true, name: true, email: true },
       orderBy: { name: 'asc' },
     });
@@ -47,36 +48,39 @@ export class AdminRepository {
 
   // ---------- roster aggregates (all trainees at once) ----------
 
-  listCompletions = () =>
+  listCompletions = (traineeIds: string[]) =>
     prisma.day_completion.findMany({
+      where: { trainee_id: { in: traineeIds } },
       select: { trainee_id: true, curriculum_day_id: true },
     });
 
-  activityTotals = () =>
+  activityTotals = (traineeIds: string[]) =>
     prisma.activity_log.groupBy({
       by: ['trainee_id'],
+      where: { trainee_id: { in: traineeIds } },
       _sum: { active_seconds: true, coding_seconds: true },
       _max: { date: true },
     });
 
-  activityForDate = (date: Date) =>
+  activityForDate = (date: Date, traineeIds: string[]) =>
     prisma.activity_log.findMany({
-      where: { date },
+      where: { date, trainee_id: { in: traineeIds } },
       select: { trainee_id: true, active_seconds: true },
     });
 
   /** One row per trainee: their most recent typing result. */
-  latestTypingResults = () =>
+  latestTypingResults = (traineeIds: string[]) =>
     prisma.typing_test_result.findMany({
+      where: { trainee_id: { in: traineeIds } },
       distinct: ['trainee_id'],
       orderBy: [{ trainee_id: 'asc' }, { taken_at: 'desc' }],
       select: { trainee_id: true, wpm: true },
     });
 
-  flagCountsSince = (since: Date) =>
+  flagCountsSince = (since: Date, traineeIds: string[]) =>
     prisma.flag_event.groupBy({
       by: ['trainee_id'],
-      where: { timestamp: { gte: since } },
+      where: { timestamp: { gte: since }, trainee_id: { in: traineeIds } },
       _count: { _all: true },
     });
 
@@ -161,8 +165,11 @@ export class AdminRepository {
   findAdminByEmail = (email: string) =>
     prisma.admin.findUnique({ where: { email }, select: { id: true } });
 
-  createTrainee = (data: { name: string; email: string }) =>
-    prisma.trainee.create({ data, select: { id: true, name: true, email: true } });
+  createTrainee = (data: { name: string; email: string; mentorId: string }) =>
+    prisma.trainee.create({
+      data: { name: data.name, email: data.email, mentor_id: data.mentorId },
+      select: { id: true, name: true, email: true },
+    });
   /** Tasks each trainee has worked on (a task_progress row that is not "not_started"), with the task's day. */
   findStartedTasks = (traineeIds: string[]) => {
     return prisma.task_progress.findMany({

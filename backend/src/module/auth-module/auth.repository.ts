@@ -24,6 +24,13 @@ export class AuthRepository {
       select: { id: true, role: true },
     });
 
+  /** The trainee's assigned mentor, or null for an unknown or unassigned trainee. */
+  findTraineeMentorById = (id: string) =>
+    prisma.trainee.findUnique({
+      where: { id },
+      select: { mentor_id: true },
+    });
+
   findActiveAdminByEmail = (email: string) => this.findActiveStaffByEmail(email);
 
   findActiveAdminById = (id: string) => this.findActiveStaffById(id);

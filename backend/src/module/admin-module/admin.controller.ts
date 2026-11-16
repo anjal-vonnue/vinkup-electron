@@ -14,13 +14,10 @@ import { ValidationError } from '../../errors/AppError';
 const adminService = new AdminService();
 
 class AdminController {
-  listTrainees = async (
-    _req: Request,
-    res: Response<AdminTraineeSummary[]>,
-    next: NextFunction
-  ) => {
+  listTrainees = async (req: Request, res: Response<AdminTraineeSummary[]>, next: NextFunction) => {
     try {
-      res.status(200).json(await adminService.listTrainees());
+      const mentorId = (req as AuthenticatedRequest).user.id;
+      res.status(200).json(await adminService.listTrainees(mentorId));
     } catch (error) {
       next(error);
     }

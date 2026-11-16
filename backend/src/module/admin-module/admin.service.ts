@@ -42,19 +42,19 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 export class AdminService {
-  /** GET /api/admin/trainees: a fixed number of queries, however many trainees there are. */
-  listTrainees = async (): Promise<AdminTraineeSummary[]> => {
-    const [trainees, days, completions, totals, today, typing, flags] = await Promise.all([
-      repo.listTrainees(),
+  /** GET /api/admin/trainees: only the mentor's assigned trainees. */
+  listTrainees = async (mentorId: string): Promise<AdminTraineeSummary[]> => {
+    const trainees = await repo.listTrainees(mentorId);
+    const traineeIds = trainees.map((trainee) => trainee.id);
+    const [days, completions, totals, today, typing, flags] = await Promise.all([
       repo.listDaysInOrder(),
-      repo.listCompletions(),
-      repo.activityTotals(),
-      repo.activityForDate(istDateValue(0)),
-      repo.latestTypingResults(),
-      repo.flagCountsSince(new Date(Date.now() - WEEK_MS)),
+      repo.listCompletions(traineeIds),
+      repo.activityTotals(traineeIds),
+      repo.activityForDate(istDateValue(0), traineeIds),
+      repo.latestTypingResults(traineeIds),
+      repo.flagCountsSince(new Date(Date.now() - WEEK_MS), traineeIds),
     ]);
 
-    const traineeIds = trainees.map((trainee) => trainee.id);
     const [startedTasks, flagEvents] = await Promise.all([
       repo.findStartedTasks(traineeIds),
       repo.findFlagEvents(traineeIds),
@@ -416,7 +416,9 @@ export class AdminService {
 
     let created: { id: string };
     try {
-      created = await repo.createTrainee({ name, email });
+      // A mentor who adds a trainee gets that trainee assigned immediately, so the
+      // new row appears in their scoped list. Managers can reassign it later.
+      created = await repo.createTrainee({ name, email, mentorId: adminId });
     } catch (error) {
       // Two requests for the same email at the same time: the second hits the unique index.
       if (isUniqueViolation(error)) {
@@ -428,7 +430,7 @@ export class AdminService {
     console.info(`[admin] ${adminId} added trainee ${created.id}`);
 
     // Build the row exactly as the list does, so the page can insert it as is.
-    const row = (await this.listTrainees()).find((trainee) => trainee.id === created.id);
+    const row = (await this.listTrainees(adminId)).find((trainee) => trainee.id === created.id);
     if (!row) throw new NotFoundError('Trainee not found.');
     return row;
   };

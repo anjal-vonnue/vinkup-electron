@@ -7,17 +7,22 @@ import { AUTH_COOKIE_NAME } from '../module/auth-module/auth.constants';
 import { AppError } from '../errors/AppError';
 import type { AuthenticatedRequest } from '../types/auth.types';
 
-const { findActiveStaffById } = vi.hoisted(() => ({ findActiveStaffById: vi.fn() }));
+const { findActiveStaffById, findTraineeMentorById } = vi.hoisted(() => ({
+  findActiveStaffById: vi.fn(),
+  findTraineeMentorById: vi.fn(),
+}));
 
 // Staff guards re-check the staff account on every request; no real database here.
 vi.mock('../module/auth-module/auth.repository', () => ({
   AuthRepository: class {
     findActiveStaffById = findActiveStaffById;
+    findTraineeMentorById = findTraineeMentorById;
   },
 }));
 
 import {
   requireAdmin,
+  requireAssignedTrainee,
   requireAuth,
   requireManager,
   requireMentor,
@@ -73,6 +78,7 @@ function expectAppError(error: unknown, status: number, code: string): void {
 
 beforeEach(() => {
   findActiveStaffById.mockReset();
+  findTraineeMentorById.mockReset();
 });
 
 describe('requireAuth', () => {
@@ -218,5 +224,61 @@ describe('requireAdmin (backward-compatible alias)', () => {
 
   it('rejects managers', async () => {
     expectAppError(await run(requireAdmin, requestWith(signJwt(manager))), 403, 'FORBIDDEN');
+  });
+});
+
+describe('requireAssignedTrainee', () => {
+  const traineeId = '3f2c9c0e-5b1d-4c53-9a7e-0d6f2f1a9b11';
+
+  function assignedRequest(user?: JwtPayload, id = traineeId): Request {
+    const req = requestWith() as Request & { params: Record<string, string> };
+    req.params = { traineeId: id };
+    if (user) (req as AuthenticatedRequest).user = user;
+    return req;
+  }
+
+  it('lets the assigned mentor through', async () => {
+    findTraineeMentorById.mockResolvedValue({ mentor_id: mentor.id });
+
+    expect(await run(requireAssignedTrainee, assignedRequest(mentor))).toBeUndefined();
+    expect(findTraineeMentorById).toHaveBeenCalledWith(traineeId);
+  });
+
+  it('rejects a different mentor with 403 FORBIDDEN', async () => {
+    findTraineeMentorById.mockResolvedValue({ mentor_id: 'someone-else' });
+
+    expectAppError(await run(requireAssignedTrainee, assignedRequest(mentor)), 403, 'FORBIDDEN');
+  });
+
+  it('rejects an unassigned trainee with 403 FORBIDDEN', async () => {
+    findTraineeMentorById.mockResolvedValue({ mentor_id: null });
+
+    expectAppError(await run(requireAssignedTrainee, assignedRequest(mentor)), 403, 'FORBIDDEN');
+  });
+
+  it('returns 404 for an unknown trainee', async () => {
+    findTraineeMentorById.mockResolvedValue(null);
+
+    expectAppError(await run(requireAssignedTrainee, assignedRequest(mentor)), 404, 'NOT_FOUND');
+  });
+
+  it('returns 401 when the request has no authenticated user', async () => {
+    expectAppError(await run(requireAssignedTrainee, assignedRequest()), 401, 'UNAUTHENTICATED');
+    expect(findTraineeMentorById).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when the route has no trainee id', async () => {
+    expectAppError(
+      await run(requireAssignedTrainee, assignedRequest(mentor, '')),
+      403,
+      'FORBIDDEN'
+    );
+  });
+
+  it('passes database errors on unchanged', async () => {
+    const dbError = new Error('db down');
+    findTraineeMentorById.mockRejectedValue(dbError);
+
+    expect(await run(requireAssignedTrainee, assignedRequest(mentor))).toBe(dbError);
   });
 });
