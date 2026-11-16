@@ -102,6 +102,8 @@ export class AdminRepository {
       ],
       select: {
         status: true,
+        review_status: true,
+        submission_count: true,
         code_updated_at: true,
         last_submitted_at: true,
         task: {

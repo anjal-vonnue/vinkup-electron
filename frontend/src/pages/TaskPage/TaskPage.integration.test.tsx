@@ -52,7 +52,12 @@ describe('TaskPage (integration): edit, autosave, submit', () => {
     });
     vi.mocked(submitTask).mockImplementation((taskId) => {
       events.push(`submit ${taskId}`);
-      return Promise.resolve({ status: 'completed', submittedAt: new Date().toISOString() });
+      return Promise.resolve({
+        status: 'completed',
+        submittedAt: new Date().toISOString(),
+        reviewStatus: 'pending',
+        submissionCount: 1,
+      });
     });
   });
 

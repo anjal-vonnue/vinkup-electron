@@ -9,12 +9,14 @@ datasource db {
 
 // ---------- Admins (mentors). Separate from trainee: never part of trainee queries. ----------
 model admin {
-id String @id @default(uuid()) @db.Uuid
-email String @unique // stored lower-case
-name String
-is_active Boolean @default(true) // false = can no longer log in or call /api/admin
-created_at DateTime @default(now()) @db.Timestamptz
-last_login_at DateTime? @db.Timestamptz
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique // stored lower-case
+  name          String
+  is_active     Boolean   @default(true) // false = can no longer log in or call /api/admin
+  created_at    DateTime  @default(now()) @db.Timestamptz
+  last_login_at DateTime? @db.Timestamptz
+
+  reviews task_review[]
 }
 
 // ---------- Enums ----------
@@ -44,12 +46,26 @@ enum review_priority {
   HIGH
 }
 
+// Admin review of a submitted task: pending = waiting for an admin decision.
+enum review_status {
+  pending
+  approved
+  rework
+}
+
+// The decision recorded in one review history entry.
+enum review_decision {
+  approved
+  rework
+}
+
 model trainee {
   id    String @id @default(uuid()) @db.Uuid
   name  String
   email String @unique
 
   task_progress     task_progress[]
+  task_reviews      task_review[]
   day_completions   day_completion[]
   journal_responses journal_response[]
   typing_results    typing_test_result[]
@@ -129,6 +145,7 @@ model task {
   curriculum_day curriculum_day  @relation(fields: [curriculum_day_id], references: [id], onDelete: Cascade)
   progress       task_progress[]
   flag_events    flag_event[]
+  reviews        task_review[]
 
   @@unique([curriculum_day_id, sequence_order])
 }
@@ -136,20 +153,51 @@ model task {
 // ---------- Trainee data ----------
 
 model task_progress {
-  id                 String      @id @default(uuid()) @db.Uuid
-  trainee_id         String      @db.Uuid
+  id                 String         @id @default(uuid()) @db.Uuid
+  trainee_id         String         @db.Uuid
   task_id            String
-  status             task_status @default(in_progress)
+  status             task_status    @default(in_progress)
+  // Current admin review state. null = no review yet (never reviewed, including
+  // tasks submitted before reviews existed). pending = submitted, waiting for an admin.
+  review_status      review_status?
+  // How many times this trainee has submitted the task (attempt/version number).
+  submission_count   Int            @default(0)
   files              Json? // TaskFile[]; null = never saved, use task.starter_files
-  code_updated_at    DateTime?   @db.Timestamptz
-  first_submitted_at DateTime?   @db.Timestamptz
-  last_submitted_at  DateTime?   @db.Timestamptz
-  created_at         DateTime    @default(now()) @db.Timestamptz
+  code_updated_at    DateTime?      @db.Timestamptz
+  first_submitted_at DateTime?      @db.Timestamptz
+  last_submitted_at  DateTime?      @db.Timestamptz
+  created_at         DateTime       @default(now()) @db.Timestamptz
 
   trainee trainee @relation(fields: [trainee_id], references: [id], onDelete: Cascade)
   task    task    @relation(fields: [task_id], references: [id])
 
   @@unique([trainee_id, task_id])
+}
+
+// One admin review of one submission attempt. History is append-only: rows are
+// never updated or deleted by the API, so every past review stays readable.
+model task_review {
+  id            String          @id @default(uuid()) @db.Uuid
+  trainee_id    String          @db.Uuid
+  task_id       String
+  admin_id      String          @db.Uuid
+  // The task_progress.submission_count value of the submission this review judged.
+  submission_no Int
+  decision      review_decision
+  // Admin feedback. Empty for an approval written without a note.
+  feedback      String          @default("")
+  reviewed_at   DateTime        @default(now()) @db.Timestamptz
+  created_at    DateTime        @default(now()) @db.Timestamptz
+  updated_at    DateTime        @updatedAt @db.Timestamptz
+
+  trainee trainee @relation(fields: [trainee_id], references: [id], onDelete: Cascade)
+  task    task    @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  admin   admin   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+
+  // One review per submission attempt: two admins cannot both judge the same attempt.
+  @@unique([trainee_id, task_id, submission_no])
+  @@index([trainee_id, task_id, reviewed_at])
+  @@index([trainee_id, reviewed_at])
 }
 
 model day_completion {

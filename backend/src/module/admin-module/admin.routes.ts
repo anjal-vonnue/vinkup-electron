@@ -3,8 +3,12 @@ import { validate } from '../../middleware/validate';
 import { adminController } from './admin.controller';
 import { traineeIdParamsSchema, traineeTaskParamsSchema } from './admin.schema';
 import { createTraineeSchema } from './admin.schema';
+import { adminReviewRoutes } from '../review-module/review.routes';
 
 export const adminRoutes = Router();
+
+// Review endpoints live in review-module but belong under /api/admin's auth guard.
+adminRoutes.use(adminReviewRoutes);
 
 adminRoutes.get('/trainees', adminController.listTrainees);
 

@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, Printer } from 'lucide-react';
+import { useState } from 'react';
 import Header from '../../components/Header';
 import CertificateSheet from '../../components/CertificateSheet';
 import StateMessage from '../../components/StateMessage';
@@ -15,15 +16,40 @@ import styles from './CertificatePage.module.css';
 export default function CertificatePage() {
   const { courseId = '' } = useParams();
   const { isLoading, certificate, error, retry } = useCertificate(courseId);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useLandscapePageStyle();
   // Light theme + "Vinkup certificate – CSS – Asha Rao" as the PDF file name while printing.
-  const { print } = usePrintMode<null>({
+  const { print, prepare, restore } = usePrintMode<null>({
     defaults: null,
     documentTitle: certificate
       ? certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
       : 'Vinkup certificate',
   });
+
+  const handlePrint = async () => {
+    const desktopCertificate = window.desktop?.certificate;
+    if (!desktopCertificate || !certificate) {
+      print(null);
+      return;
+    }
+
+    setPdfError(null);
+    prepare(null);
+    try {
+      await desktopCertificate.savePdf(
+        certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
+      );
+    } catch (saveError: unknown) {
+      setPdfError(
+        saveError instanceof Error
+          ? `Unable to save certificate PDF: ${saveError.message}`
+          : 'Unable to save certificate PDF. Please try again.'
+      );
+    } finally {
+      restore();
+    }
+  };
 
   if (isLoading) return <LoaderOverlay fullPage label="Loading certificate…" />;
 
@@ -75,10 +101,13 @@ export default function CertificatePage() {
             <ArrowLeft size={16} aria-hidden="true" />
             Back to Dashboard
           </Link>
-          <button type="button" className={styles.printButton} onClick={() => print(null)}>
-            <Printer size={16} aria-hidden="true" />
-            Print / Save as PDF
-          </button>
+          <div>
+            <button type="button" className={styles.printButton} onClick={() => void handlePrint()}>
+              <Printer size={16} aria-hidden="true" />
+              Print / Save as PDF
+            </button>
+            {pdfError && <p role="alert">{pdfError}</p>}
+          </div>
         </div>
 
         <CertificateSheet certificate={certificate} />

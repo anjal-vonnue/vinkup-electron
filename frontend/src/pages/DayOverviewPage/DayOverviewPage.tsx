@@ -19,6 +19,7 @@ import DailyJournal from '../../components/DailyJournal';
 import DayCompletion from '../../components/DayCompletion/DayCompletion';
 import Header from '../../components/Header';
 import DayBreadcrumb from '../../components/DayBreadcrumb/DayBreadcrumb';
+import TaskFeedbackModal from '../../components/TaskFeedbackModal';
 import styles from './DayOverviewPage.module.css';
 import StateMessage from '../../components/StateMessage';
 import { ApiError } from '../../api/errors';
@@ -35,6 +36,22 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function getTaskStatusTag(task: DayTask) {
+  if (task.status === 'completed') {
+    if (task.reviewStatus === 'approved') {
+      return { label: 'Approved', className: styles.approved, isRework: false };
+    }
+    if (task.reviewStatus === 'rework') {
+      return { label: 'Rework', className: styles.rework, isRework: true };
+    }
+    return { label: 'Completed', className: styles.completed, isRework: false };
+  }
+  if (task.status === 'in_progress') {
+    return { label: 'In progress', className: styles.in_progress, isRework: false };
+  }
+  return { label: 'Not started', className: styles.not_started, isRework: false };
+}
+
 function DayTasks({
   courseTitle,
   dayNumber,
@@ -42,6 +59,7 @@ function DayTasks({
   completedTasks,
   requiredTasks,
   onSelectTask,
+  onOpenFeedback,
   integrity,
   isIntegrityLoading,
   hasIntegrityError,
@@ -52,6 +70,7 @@ function DayTasks({
   completedTasks: number;
   requiredTasks: number;
   onSelectTask: (task: DayTask) => void;
+  onOpenFeedback: (task: DayTask) => void;
   integrity: DayIntegrityResponse | null;
   isIntegrityLoading: boolean;
   hasIntegrityError: boolean;
@@ -89,36 +108,58 @@ function DayTasks({
         <p className={styles.emptyTasks}>No tasks are available for this day.</p>
       ) : (
         <div className={styles.taskList}>
-          {tasks.map((task) => (
-            <button
-              key={task.id}
-              type="button"
-              className={`${styles.taskItem} ${task.isStretchGoal ? styles.stretchTaskItem : ''}`}
-              onClick={() => onSelectTask(task)}
-            >
-              {!task.isStretchGoal && (
-                <span className={styles.taskNumber}>
-                  {String(task.sequenceOrder).padStart(2, '0')}
-                </span>
-              )}
-              <span className={styles.taskInfo}>
-                <span className={styles.taskTitle}>{task.title}</span>
-                <span className={styles.taskMeta}>
-                  <span className={`${styles.taskStatus} ${styles[task.status]}`}>
-                    {task.status === 'in_progress'
-                      ? 'In progress'
-                      : task.status === 'completed'
-                        ? 'Completed'
-                        : 'Not started'}
+          {tasks.map((task) => {
+            const tag = getTaskStatusTag(task);
+
+            return (
+              <button
+                key={task.id}
+                type="button"
+                className={`${styles.taskItem} ${task.isStretchGoal ? styles.stretchTaskItem : ''}`}
+                onClick={() => onSelectTask(task)}
+              >
+                {!task.isStretchGoal && (
+                  <span className={styles.taskNumber}>
+                    {String(task.sequenceOrder).padStart(2, '0')}
                   </span>
-                  {task.isStretchGoal && <span className={styles.stretchBadge}>Stretch goal</span>}
+                )}
+                <span className={styles.taskInfo}>
+                  <span className={styles.taskTitle}>{task.title}</span>
+                  <span className={styles.taskMeta}>
+                    {tag.isRework ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={`${styles.taskStatus} ${tag.className} ${styles.clickableStatus}`}
+                        title="Modifications requested. Click to view feedback."
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenFeedback(task);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onOpenFeedback(task);
+                          }
+                        }}
+                      >
+                        {tag.label}
+                      </span>
+                    ) : (
+                      <span className={`${styles.taskStatus} ${tag.className}`}>{tag.label}</span>
+                    )}
+                    {task.isStretchGoal && (
+                      <span className={styles.stretchBadge}>Stretch goal</span>
+                    )}
+                  </span>
                 </span>
-              </span>
-              <span className={styles.taskArrow} aria-hidden="true">
-                <ArrowRight size={20} strokeWidth={2} />
-              </span>
-            </button>
-          ))}
+                <span className={styles.taskArrow} aria-hidden="true">
+                  <ArrowRight size={20} strokeWidth={2} />
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </section>
@@ -142,6 +183,7 @@ function DayOverviewContent() {
   const [result, setResult] = useState<LoadResult | null>(null);
   const [journalError, setJournalError] = useState<string | null>(null);
   const [completionError, setCompletionError] = useState<string | null>(null);
+  const [feedbackTask, setFeedbackTask] = useState<DayTask | null>(null);
   const completionAttempted = useRef(false);
 
   // dayId is an opaque string. Never parse or build it here.
@@ -344,6 +386,7 @@ function DayOverviewContent() {
               completedTasks={completedTasks}
               requiredTasks={requiredTasks}
               onSelectTask={(task) => void navigate(`/tasks/${task.id}`)}
+              onOpenFeedback={(task) => setFeedbackTask(task)}
               integrity={integrity}
               isIntegrityLoading={integrityStatus === 'loading'}
               hasIntegrityError={integrityStatus === 'error'}
@@ -382,6 +425,16 @@ function DayOverviewContent() {
           <p className={styles.error} role="alert">
             {completionError}
           </p>
+        )}
+
+        {feedbackTask && (
+          <TaskFeedbackModal
+            isOpen={feedbackTask !== null}
+            onClose={() => setFeedbackTask(null)}
+            taskId={feedbackTask.id}
+            taskTitle={feedbackTask.title}
+            onOpenEditor={() => void navigate(`/tasks/${feedbackTask.id}`)}
+          />
         )}
       </main>
       <HelpButton />

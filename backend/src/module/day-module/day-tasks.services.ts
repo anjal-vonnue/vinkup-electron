@@ -1,4 +1,4 @@
-import type { DayTask } from '@itp/types';
+import type { DayTask, ReviewStatus } from '@itp/types';
 import { assertDayIsAccessible } from './day-access.services';
 import { dayTasksRepository } from './day-tasks.repository';
 
@@ -7,13 +7,15 @@ type TaskStatus = DayTask['status'];
 
 // If a DayTask field is missing or extra, TypeScript will point at this function:
 // this is the only place that decides the shape of one task in the list.
-function toDayTask(task: TaskRow, status: TaskStatus): DayTask {
+function toDayTask(task: TaskRow, status: TaskStatus, reviewStatus: string | null): DayTask {
   return {
     id: task.id,
     title: task.title,
     sequenceOrder: task.sequence_order,
     isStretchGoal: task.is_stretch_goal,
     status,
+    // Only a completed (submitted) task can have a review state.
+    reviewStatus: status === 'completed' ? (reviewStatus as ReviewStatus | null) : null,
   };
 }
 
@@ -27,11 +29,12 @@ export const dayTasksService = {
       dayTasksRepository.findProgressByDay(traineeId, dayId),
     ]);
 
-    const statusByTaskId = new Map<string, TaskStatus>(
-      progressRows.map((row) => [row.task_id, row.status])
-    );
+    const statusByTaskId = new Map(progressRows.map((row) => [row.task_id, row]));
 
     // No progress row yet means the trainee hasn't opened the task.
-    return tasks.map((task) => toDayTask(task, statusByTaskId.get(task.id) ?? 'not_started'));
+    return tasks.map((task) => {
+      const row = statusByTaskId.get(task.id);
+      return toDayTask(task, row?.status ?? 'not_started', row?.review_status ?? null);
+    });
   },
 };

@@ -72,10 +72,24 @@ export class ChecklistIncompleteError extends AppError {
 /** 409: the request is valid but clashes with existing data. */
 export class ConflictError extends AppError {
   constructor(
-    code: Extract<ErrorCode, 'TRAINEE_EXISTS' | 'EMAIL_BELONGS_TO_ADMIN'>,
+    code: Extract<
+      ErrorCode,
+      'TRAINEE_EXISTS' | 'EMAIL_BELONGS_TO_ADMIN' | 'ALREADY_REVIEWED' | 'ALREADY_APPROVED'
+    >,
     message: string
   ) {
     super(409, code, message);
+  }
+}
+
+/** 409: a review action on a task that has no submission waiting for review. */
+export class TaskNotSubmittedError extends AppError {
+  constructor() {
+    super(
+      409,
+      'TASK_NOT_SUBMITTED',
+      'This task has no submission waiting for review. The trainee has to submit it first.'
+    );
   }
 }
 

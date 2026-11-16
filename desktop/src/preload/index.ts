@@ -35,6 +35,10 @@ const api: DesktopApi = {
       };
     },
   },
+  certificate: {
+    savePdf: (fileName: string) =>
+      ipcRenderer.invoke('certificate:save-pdf', fileName) as Promise<boolean>,
+  },
 };
 
 contextBridge.exposeInMainWorld('desktop', api);

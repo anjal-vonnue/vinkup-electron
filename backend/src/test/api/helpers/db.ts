@@ -12,6 +12,7 @@ const TABLES = [
   'typing_test_result',
   'journal_response',
   'day_completion',
+  'task_review',
   'task_progress',
   'self_check_item',
   'learning_objective',

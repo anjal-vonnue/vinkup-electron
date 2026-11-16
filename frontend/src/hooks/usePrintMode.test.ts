@@ -39,7 +39,7 @@ describe('usePrintMode', () => {
     expect(result.current.printJob).toBeNull();
   });
 
-  it('print() renders the job, switches to the light theme and report title, then prints', () => {
+  it('print() renders the job, preserves the theme and sets the report title, then prints', () => {
     const { result } = renderPrintMode();
 
     act(() => {
@@ -48,7 +48,7 @@ describe('usePrintMode', () => {
 
     expect(result.current.printJob?.options).toEqual({ includeJournal: false });
     expect(result.current.printJob?.startedAt).toBeInstanceOf(Date);
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('dark');
     expect(document.title).toBe(TITLE);
     expect(printSpy).toHaveBeenCalledTimes(1);
   });
@@ -82,7 +82,7 @@ describe('usePrintMode', () => {
     fire('beforeprint');
 
     expect(result.current.printJob?.options).toEqual(DEFAULTS);
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('dark');
     expect(printSpy).not.toHaveBeenCalled();
 
     fire('afterprint');

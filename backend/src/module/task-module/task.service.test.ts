@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DayLockedError, NotFoundError } from '../../errors/AppError';
+import { ConflictError, DayLockedError, NotFoundError } from '../../errors/AppError';
 
 const repo = vi.hoisted(() => ({
   findTask: vi.fn(),
@@ -80,6 +80,8 @@ describe('TaskService', () => {
         sequenceOrder: 1,
         estimatedMinutes: 45,
         status: 'in_progress',
+        reviewStatus: null,
+        submissionCount: 0,
         day: { id: 'html-day-01', dayNumber: 1, courseTitle: 'HTML' },
         runtime: 'browser',
         runCommand: null,
@@ -156,12 +158,37 @@ describe('TaskService', () => {
   });
 
   describe('submit', () => {
-    it('marks the task completed and returns the submit time', async () => {
+    const submittedAt = new Date();
+
+    beforeEach(() => {
+      repo.markSubmitted.mockImplementation(() =>
+        Promise.resolve({
+          last_submitted_at: submittedAt,
+          review_status: 'pending',
+          submission_count: 1,
+        })
+      );
+    });
+
+    it('marks the task completed and returns the submit time and new attempt', async () => {
       const result = await service.submit(traineeId, taskId);
 
-      expect(result.status).toBe('completed');
-      expect(Date.parse(result.submittedAt)).not.toBeNaN();
+      expect(result).toEqual({
+        status: 'completed',
+        submittedAt: submittedAt.toISOString(),
+        reviewStatus: 'pending',
+        submissionCount: 1,
+      });
       expect(repo.markSubmitted).toHaveBeenCalledWith(traineeId, taskId, expect.any(Date));
+    });
+
+    it('rejects an approved task with a 409 without reading the row first', async () => {
+      repo.markSubmitted.mockResolvedValue(null);
+
+      await expect(service.submit(traineeId, taskId)).rejects.toBeInstanceOf(ConflictError);
+      await expect(service.submit(traineeId, taskId)).rejects.toMatchObject({
+        code: 'ALREADY_APPROVED',
+      });
     });
 
     it('leaves keeping the first submit time to the repository, without reading the row first', async () => {

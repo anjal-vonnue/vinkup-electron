@@ -19,7 +19,7 @@ export const dayTasksRepository = {
   findProgressByDay(traineeId: string, dayId: string) {
     return prisma.task_progress.findMany({
       where: { trainee_id: traineeId, task: { curriculum_day_id: dayId } },
-      select: { task_id: true, status: true },
+      select: { task_id: true, status: true, review_status: true },
     });
   },
 };
