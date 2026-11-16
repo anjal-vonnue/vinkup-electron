@@ -38,6 +38,11 @@ const YELLOW = '\x1b[33m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
+/** Matches MAX_TERMINAL_WRITE_CHARS in the main process; larger writes are rejected there. */
+const MAX_WRITE_CHARS = 16_384;
+/** Keys pressed while the PTY is still opening are kept, up to this many characters. */
+const MAX_QUEUED_INPUT_CHARS = 4_096;
+
 /** true when package.json lists anything to install */
 function hasDependencies(packageJson: string | undefined): boolean {
   if (!packageJson) return false;
@@ -93,7 +98,31 @@ export function useLocalNodeSession({
     let terminalId: string | null = null;
     terminalIdRef.current = null;
 
+    // The shell is a real PTY: every keystroke goes to main, which writes it to the process.
+    const queuedInput: string[] = [];
+    let queuedChars = 0;
+    const sendInput = (id: string, data: string) => {
+      for (let offset = 0; offset < data.length; offset += MAX_WRITE_CHARS) {
+        void terminalApi
+          .write(id, data.slice(offset, offset + MAX_WRITE_CHARS))
+          .catch(() => undefined);
+      }
+    };
+
     terminal.write(`${DIM}Starting Node…${RESET}\r\n`);
+
+    const inputSubscription = terminal.onData((data) => {
+      if (cancelled) return;
+      if (terminalId === null) {
+        // Typing before open() resolves: hold the keys and send them once the shell exists.
+        if (queuedChars + data.length <= MAX_QUEUED_INPUT_CHARS) {
+          queuedInput.push(data);
+          queuedChars += data.length;
+        }
+        return;
+      }
+      sendInput(terminalId, data);
+    });
 
     const offData = terminalApi.onData((event) => {
       if (cancelled) return;
@@ -136,6 +165,12 @@ export function useLocalNodeSession({
         terminalId = result.terminalId;
         terminalIdRef.current = result.terminalId;
 
+        if (queuedInput.length > 0) {
+          sendInput(result.terminalId, queuedInput.join(''));
+          queuedInput.length = 0;
+          queuedChars = 0;
+        }
+
         const pending = pendingSizeRef.current;
         if (pending) void terminalApi.resize(result.terminalId, pending.cols, pending.rows);
 
@@ -158,6 +193,7 @@ export function useLocalNodeSession({
 
     return () => {
       cancelled = true;
+      inputSubscription.dispose();
       offData();
       offExit();
       offEvents();

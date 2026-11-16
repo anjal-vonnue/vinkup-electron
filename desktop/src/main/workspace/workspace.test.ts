@@ -280,4 +280,25 @@ describe('WorkspaceManager', () => {
     expect(await readFile(path.join(root, '.vinkup', 'db', 'data'), 'utf8')).toBe('rows');
     await manager.close('task_2');
   });
+
+  it('writes terminal input to a real shell and streams its output back', async () => {
+    const baseDir = await temporaryRoot();
+    const output: string[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: () => undefined,
+      emitTerminalData: (event) => output.push(event.data),
+      emitTerminalExit: () => undefined,
+    });
+    await manager.open({ taskId: 'task_term', files: { 'index.js': 'console.log(1)' } });
+
+    const { terminalId } = await manager.openTerminal({ taskId: 'task_term', cols: 80, rows: 24 });
+    // The shell must evaluate this, so seeing 42 proves the keys reached the PTY.
+    await manager.writeTerminal(terminalId, 'echo $((6*7))\r');
+
+    await vi.waitFor(() => expect(output.join('')).toContain('42'), { timeout: 15_000 });
+
+    await manager.closeTerminal(terminalId);
+    await manager.close('task_term');
+  });
 });

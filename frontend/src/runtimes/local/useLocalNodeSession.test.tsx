@@ -6,16 +6,26 @@ import { useLocalNodeSession } from './useLocalNodeSession';
 
 let listeners: Array<(event: WorkspaceEvent) => void> = [];
 let dataListeners: Array<(event: { terminalId: string; data: string }) => void> = [];
+let inputListeners: Array<(data: string) => void> = [];
 let terminalApi: TerminalApi;
 let workspaceApi: WorkspaceApi;
 let install: ReturnType<typeof vi.fn>;
 let dev: ReturnType<typeof vi.fn>;
+let openTerminal = vi.fn(() => Promise.resolve({ terminalId: 'term-1' }));
 
 const terminalWrite = vi.fn();
 const terminal = {
   cols: 80,
   rows: 24,
   write: terminalWrite,
+  onData: (listener: (data: string) => void) => {
+    inputListeners.push(listener);
+    return {
+      dispose: () => {
+        inputListeners = inputListeners.filter((candidate) => candidate !== listener);
+      },
+    };
+  },
 } as unknown as XTerminal;
 
 function emit(event: WorkspaceEvent): void {
@@ -24,14 +34,22 @@ function emit(event: WorkspaceEvent): void {
   });
 }
 
+function type(data: string): void {
+  act(() => {
+    for (const listener of inputListeners) listener(data);
+  });
+}
+
 beforeEach(() => {
   listeners = [];
   dataListeners = [];
+  inputListeners = [];
   install = vi.fn(() => Promise.resolve());
   dev = vi.fn(() => Promise.resolve());
+  openTerminal = vi.fn(() => Promise.resolve({ terminalId: 'term-1' }));
 
   terminalApi = {
-    open: vi.fn(() => Promise.resolve({ terminalId: 'term-1' })),
+    open: openTerminal,
     write: vi.fn(() => Promise.resolve()),
     resize: vi.fn(() => Promise.resolve()),
     close: vi.fn(() => Promise.resolve()),
@@ -123,6 +141,54 @@ describe('useLocalNodeSession', () => {
     expect(result.current.server).not.toBeNull();
     emit({ type: 'server-closed', taskId: 't1', port: 5173 });
     expect(result.current.server).toBeNull();
+  });
+
+  it('sends keystrokes to the host shell', async () => {
+    renderHook(() =>
+      useLocalNodeSession({
+        taskId: 't1',
+        enabled: true,
+        terminal,
+        files,
+        blockedError: null,
+      })
+    );
+    await waitFor(() => expect(terminalApi.open).toHaveBeenCalled());
+
+    type('npm test');
+    type('\r');
+
+    expect(terminalApi.write).toHaveBeenCalledWith('term-1', 'npm test');
+    expect(terminalApi.write).toHaveBeenCalledWith('term-1', '\r');
+  });
+
+  it('queues keys typed before the shell is ready and sends them on open', async () => {
+    let resolveOpen: (value: { terminalId: string }) => void = () => undefined;
+    openTerminal.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOpen = resolve;
+      })
+    );
+
+    renderHook(() =>
+      useLocalNodeSession({
+        taskId: 't1',
+        enabled: true,
+        terminal,
+        files,
+        blockedError: null,
+      })
+    );
+    await waitFor(() => expect(terminalApi.open).toHaveBeenCalled());
+
+    type('ls\r');
+    expect(terminalApi.write).not.toHaveBeenCalled();
+
+    act(() => {
+      resolveOpen({ terminalId: 'term-1' });
+    });
+
+    await waitFor(() => expect(terminalApi.write).toHaveBeenCalledWith('term-1', 'ls\r'));
   });
 
   it('skips npm install when package.json has no dependencies', async () => {
