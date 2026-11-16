@@ -65,6 +65,30 @@ describe('AdminHeader', () => {
     expect(screen.queryByText('Vink')).not.toBeInTheDocument();
   });
 
+  it('supports the manager badge and navigation', () => {
+    render(
+      <MemoryRouter initialEntries={['/manager']}>
+        <AdminHeader
+          homePath="/manager"
+          badge="Manager view"
+          navItems={[{ to: '/manager', label: 'Users & assignments', end: true }]}
+          navLabel="Manager navigation"
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Manager view')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Users & assignments' })).toHaveAttribute(
+      'href',
+      '/manager'
+    );
+    expect(screen.getByRole('link', { name: 'Users & assignments' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.queryByRole('link', { name: 'My trainees' })).not.toBeInTheDocument();
+  });
+
   it('has a log out button', () => {
     renderHeader();
 

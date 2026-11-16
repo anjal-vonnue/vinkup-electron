@@ -24,6 +24,7 @@ import CertificatePage from './pages/CertificatePage';
 const TaskPage = lazy(() => import('./pages/TaskPage'));
 const AdminTraineesPage = lazy(() => import('./pages/AdminTraineesPage'));
 const AdminTraineePage = lazy(() => import('./pages/AdminTraineePage'));
+const ManagerPage = lazy(() => import('./pages/ManagerPage'));
 
 function ReferenceRoute() {
   const { dayId } = useParams();
@@ -80,6 +81,17 @@ export default function App() {
                   </Suspense>
                 }
               ></Route>
+            </Route>
+
+            <Route element={<RoleRoute role="manager" />}>
+              <Route
+                path="/manager"
+                element={
+                  <Suspense fallback={<LoaderOverlay fullPage />}>
+                    <ManagerPage />
+                  </Suspense>
+                }
+              />
             </Route>
           </Route>
           <Route element={<PublicOnlyRoute />}>

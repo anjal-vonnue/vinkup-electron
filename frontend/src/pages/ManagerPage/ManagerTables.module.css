@@ -1,0 +1,167 @@
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border-card);
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-card);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.inactiveRow {
+  opacity: 0.62;
+}
+
+.name,
+.email {
+  display: block;
+  white-space: nowrap;
+}
+
+.name {
+  font-weight: 650;
+}
+
+.email {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.role {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--color-accent-purple-wash);
+  color: var(--color-accent-purple);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.statusActive {
+  color: var(--color-status-success);
+}
+
+.statusInactive {
+  color: var(--color-text-secondary);
+}
+
+.select {
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  background: var(--color-bg-surface-1);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inlineStatus {
+  margin-left: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 7px;
+  background: var(--color-bg-button-secondary, transparent);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.actionButton:hover:not(:disabled) {
+  background: var(--color-bg-surface-2);
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dangerButton {
+  color: var(--color-status-error-text);
+  border-color: var(--color-status-error-text);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 760px) {
+  .table th,
+  .table td {
+    padding: 12px;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}

@@ -5,9 +5,24 @@ import { useAuth } from '../../context/Useauth';
 import styles from './AdminHeader.module.css';
 import ThemeToggle from '../ThemeToggle';
 
+export type AdminNavItem = {
+  to: string;
+  label: string;
+  /** Match the route exactly instead of keeping the link active on child routes. */
+  end?: boolean;
+};
+
 type AdminHeaderProps = {
   /** Replaces the app name on the left (for example a breadcrumb on the detail page). */
   leading?: ReactNode;
+  /** Where the app name links. Defaults to the mentor dashboard. */
+  homePath?: string;
+  /** Small role badge next to the app name. */
+  badge?: string;
+  /** Links shown in the header. Defaults to the mentor's trainee list. */
+  navItems?: AdminNavItem[];
+  /** Accessible name for the navigation landmark. */
+  navLabel?: string;
 };
 
 function UsersIcon() {
@@ -77,10 +92,18 @@ function getInitials(name: string): string {
 }
 
 /**
- * Header for the mentor area. The trainee Header links to Home, Typing Test and Profile,
- * which admins cannot open, and it flushes trainee activity time on logout (admins have none).
+ * Header for the staff area. The trainee Header links to Home, Typing Test and Profile,
+ * which staff cannot open, and it flushes trainee activity time on logout (staff have none).
  */
-export default function AdminHeader({ leading }: AdminHeaderProps) {
+const MENTOR_NAV: AdminNavItem[] = [{ to: '/admin', label: 'My trainees', end: true }];
+
+export default function AdminHeader({
+  leading,
+  homePath = '/admin',
+  badge = 'Mentor view',
+  navItems = MENTOR_NAV,
+  navLabel = 'Mentor navigation',
+}: AdminHeaderProps) {
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -127,27 +150,30 @@ export default function AdminHeader({ leading }: AdminHeaderProps) {
         <div className={styles.start}>
           <div className={styles.brand}>
             {leading ?? (
-              <Link to="/admin" className={styles.appName} aria-label="VinkUp home">
+              <Link to={homePath} className={styles.appName} aria-label="VinkUp home">
                 Vink<span className={styles.up}>Up</span>
               </Link>
             )}
-            <span className={styles.badge}>Mentor view</span>
+            <span className={styles.badge}>{badge}</span>
           </div>
 
           <span className={styles.divider} aria-hidden="true" />
 
           {/* No `end` prop: stays active on /admin and on a selected trainee's page */}
-          <nav className={styles.nav} aria-label="Mentor navigation">
-            <NavLink
-              to="/admin"
-              end
-              className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
-            >
-              <UsersIcon />
-              <span className={styles.label} data-text="My trainees">
-                My trainees
-              </span>
-            </NavLink>
+          <nav className={styles.nav} aria-label={navLabel}>
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+              >
+                <UsersIcon />
+                <span className={styles.label} data-text={item.label}>
+                  {item.label}
+                </span>
+              </NavLink>
+            ))}
           </nav>
         </div>
 
