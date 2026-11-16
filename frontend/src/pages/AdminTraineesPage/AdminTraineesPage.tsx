@@ -51,7 +51,7 @@ const PAGE_VIEWS: { id: PageView; label: string }[] = [
   { id: 'performance', label: 'Team performance' },
 ];
 
-/** /admin: read-only overview of every trainee, one row each, sorted by name. */
+/** /admin: read-only overview of the trainees currently assigned to this mentor. */
 export default function AdminTraineesPage() {
   const [trainees, setTrainees] = useState<AdminTraineeSummary[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -143,8 +143,8 @@ export default function AdminTraineesPage() {
       )}
       <main className={styles.page}>
         <div className={styles.titleBlock}>
-          <h1 className={styles.title}>Trainees</h1>
-          <p className={styles.subtitle}>{/* unchanged */}</p>
+          <h1 className={styles.title}>My trainees</h1>
+          <p className={styles.subtitle}>Only trainees assigned to you by a manager appear here.</p>
         </div>
         <button type="button" className={styles.addButton} onClick={() => setIsAddOpen(true)}>
           <UserPlus size={16} strokeWidth={2} aria-hidden="true" />
@@ -195,8 +195,10 @@ export default function AdminTraineesPage() {
                     <div className={styles.emptyIcon} aria-hidden="true">
                       <UsersIcon />
                     </div>
-                    <h2 className={styles.emptyTitle}>No trainees yet</h2>
-                    <p className={styles.emptyText}>Add a trainee to get started.</p>
+                    <h2 className={styles.emptyTitle}>No trainees assigned yet</h2>
+                    <p className={styles.emptyText}>
+                      Ask your manager to assign trainees to you, or add a trainee yourself.
+                    </p>
                   </div>
                 ) : (
                   <>

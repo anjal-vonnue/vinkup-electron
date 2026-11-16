@@ -144,8 +144,8 @@ export default function AdminHeader({ leading }: AdminHeaderProps) {
               className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
             >
               <UsersIcon />
-              <span className={styles.label} data-text="Trainees">
-                Trainees
+              <span className={styles.label} data-text="My trainees">
+                My trainees
               </span>
             </NavLink>
           </nav>

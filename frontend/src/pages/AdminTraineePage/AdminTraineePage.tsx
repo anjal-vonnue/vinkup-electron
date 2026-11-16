@@ -120,12 +120,21 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
 
     const isNotFound =
       !traineeId || error?.code === 'NOT_FOUND' || error?.code === 'VALIDATION_FAILED';
+    const isForbidden = error?.code === 'FORBIDDEN';
 
     return (
       <>
         <AdminHeader />
         <main className={styles.page}>
-          {isNotFound ? (
+          {isForbidden ? (
+            <StateMessage
+              icon={<UserX size={24} />}
+              title="Trainee not assigned to you"
+              description="A manager can assign this trainee to you if you need access."
+              actionLabel="Back to my trainees"
+              actionHref="/admin"
+            />
+          ) : isNotFound ? (
             <StateMessage
               icon={<UserX size={24} />}
               title="Trainee not found"
@@ -137,11 +146,9 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
             <>
               <BackLink />
               <ErrorState
-                title={
-                  error?.code === 'FORBIDDEN' ? 'Admin access required' : 'Unable to load trainee'
-                }
+                title="Unable to load trainee"
                 message={error?.message ?? ''}
-                onRetry={error?.code === 'FORBIDDEN' ? undefined : detail.retry}
+                onRetry={detail.retry}
               />
             </>
           )}

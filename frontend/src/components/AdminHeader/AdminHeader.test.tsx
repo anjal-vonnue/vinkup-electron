@@ -39,20 +39,20 @@ describe('AdminHeader', () => {
     expect(screen.getByText('Mentor One')).toBeInTheDocument();
   });
 
-  it('links to the trainee list and nowhere a mentor cannot go', () => {
+  it('links to the assigned trainee list and nowhere a mentor cannot go', () => {
     renderHeader();
 
-    expect(screen.getByRole('link', { name: 'Trainees' })).toHaveAttribute('href', '/admin');
+    expect(screen.getByRole('link', { name: 'My trainees' })).toHaveAttribute('href', '/admin');
 
     expect(screen.queryByRole('link', { name: 'Home' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Typing Test' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Mentor One' })).not.toBeInTheDocument();
   });
 
-  it('does not keep Trainees active on a trainee detail page', () => {
+  it('does not keep My trainees active on a trainee detail page', () => {
     renderHeader(<AdminHeader />, '/admin/trainees/abc');
 
-    expect(screen.getByRole('link', { name: 'Trainees' })).not.toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'My trainees' })).not.toHaveAttribute(
       'aria-current',
       'page'
     );

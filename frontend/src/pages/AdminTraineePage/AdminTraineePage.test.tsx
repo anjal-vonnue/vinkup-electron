@@ -308,14 +308,20 @@ describe('AdminTraineePage', () => {
     expect(getAdminTrainee).toHaveBeenCalledTimes(2);
   });
 
-  it('explains a removed admin account and offers no retry', async () => {
+  it('explains a trainee who is no longer assigned to this mentor', async () => {
     vi.mocked(getAdminTrainee).mockRejectedValue(
-      new ApiError(403, 'FORBIDDEN', "You don't have access to this.")
+      new ApiError(403, 'FORBIDDEN', 'This trainee is not assigned to you.')
     );
 
     renderPage();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Admin access required');
+    expect(
+      await screen.findByRole('heading', { name: 'Trainee not assigned to you' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to my trainees' })).toHaveAttribute(
+      'href',
+      '/admin'
+    );
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
