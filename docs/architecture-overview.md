@@ -105,7 +105,7 @@ The course content was first written as frontend data for mock mode, and it is s
 
 1. Edit day content in `frontend/src/api/dayOverview/` or tasks and starter files in `frontend/src/api/mockTasks/`.
 2. Run `npx tsx scripts/export-curriculum.ts` from the root. It writes `backend/prisma/seed-data/curriculum.json`.
-3. Run `npm run db:seed -w backend`. The seed upserts courses, days, objectives, checklist items, tasks and the trainee list, and never deletes trainee data.
+3. Run `npm run db:seed -w backend`. The seed upserts staff, the trainee list, courses, days, objectives, checklist items and tasks, and never deletes trainee data.
 
 Reference pages (`frontend/src/content/`) are not in the database; they ship with the frontend.
 
@@ -307,16 +307,16 @@ Curriculum tables change only through the seed; trainee tables are written by th
 
 ### Scripts
 
-| Command (from the root)                             | What it does                                                                     |
-| --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `npm run dev:frontend`                              | Vite dev server on port 5173, proxying `/api` to port 3000                       |
-| `npm run dev:backend`                               | Backend with `tsx watch`                                                         |
-| `npm test`                                          | Vitest in every workspace                                                        |
-| `npm run test:api -w backend`                       | API contract tests against a test database                                       |
-| `npm run build -w frontend`                         | Type-check and build to `frontend/dist`                                          |
-| `npm run build -w backend` / `npm start -w backend` | Compile to `backend/dist` / run it                                               |
-| `npm run db:seed -w backend`                        | Upsert trainees and curriculum (`SEED_DEMO=true` adds demo progress, local only) |
-| `npx tsx scripts/export-curriculum.ts`              | Rebuild `curriculum.json` from the frontend curriculum data                      |
+| Command (from the root)                             | What it does                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `npm run dev:frontend`                              | Vite dev server on port 5173, proxying `/api` to port 3000                              |
+| `npm run dev:backend`                               | Backend with `tsx watch`                                                                |
+| `npm test`                                          | Vitest in every workspace                                                               |
+| `npm run test:api -w backend`                       | API contract tests against a test database                                              |
+| `npm run build -w frontend`                         | Type-check and build to `frontend/dist`                                                 |
+| `npm run build -w backend` / `npm start -w backend` | Compile to `backend/dist` / run it                                                      |
+| `npm run db:seed -w backend`                        | Upsert staff, trainees and curriculum (`SEED_DEMO=true` adds demo progress, local only) |
+| `npx tsx scripts/export-curriculum.ts`              | Rebuild `curriculum.json` from the frontend curriculum data                             |
 
 The Prisma CLI needs the config file: `npx prisma migrate deploy --config prisma7.config.ts` (from `backend/`). The [setup guide](setup-guide.md) has the full local setup.
 

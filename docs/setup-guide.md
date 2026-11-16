@@ -174,9 +174,11 @@ npm run db:seed -w backend
 ```
 
 This loads the 8 courses, 54 days and 260 tasks from `backend/prisma/seed-data/curriculum.json`, and
-the `trainees` and `admins` (mentors and managers) lists at the top of `backend/src/lib/seed.ts`.
-Only people in those lists can sign in; if your email isn't there, add it (in a PR) and run the seed
-again. The seed is safe to run any number of times.
+the `staff` (one manager and two mentors) and `trainees` lists at the top of
+`backend/src/lib/seed.ts`. Six trainees are split across the two mentors, so both dashboards have
+work to show. Only people in those lists can sign in; if your email isn't there, add it (in a PR) and
+run the seed again. The seed is safe to run any number of times: it never deletes records and never
+replaces an existing mentor assignment.
 
 **Which dashboard do I get?** At sign-in the backend checks, in order, for an **active** row in
 `admin` and then for an **active** row in `trainee`, so an email in both signs in as staff:
@@ -187,8 +189,12 @@ again. The seed is safe to run any number of times.
 | `MENTOR` (also the default)  | `/admin`    | See and review only the trainees assigned to you |
 | No staff row, active trainee | `/`         | Your own workspace and records                   |
 
-To make yourself a manager in development, add `role: 'MANAGER'` to your entry in the `admins` list
-in `backend/src/lib/seed.ts` and run the seed again — or update the row directly:
+The seed makes `akshay.antony@vonnue.com` the manager. To sign in as a manager with your own account,
+pass its company email when seeding (or update the row directly):
+
+```bash
+SEED_MANAGER_EMAIL=you@vonnue.com SEED_MANAGER_NAME="Your Name" npm run db:seed -w backend
+```
 
 ```sql
 UPDATE admin SET role = 'MANAGER' WHERE email = 'you@vonnue.com';
@@ -204,22 +210,24 @@ UPDATE admin SET is_active = false WHERE email = 'you@vonnue.com';  -- true to s
 ```
 
 Mentors can add trainees from the dashboard (**Add trainee**) and those trainees are assigned to that
-mentor immediately. Trainees added by a manager stay **unassigned** until a manager assigns them, so
-seed the assignment (or use the manager console) before expecting a mentor to see them:
+mentor immediately. Trainees added by a manager stay **unassigned** until a manager assigns them. For
+an extra seeded trainee, seed the assignment (or use the manager console) before expecting a mentor to
+see them:
 
 ```sql
 UPDATE trainee SET mentor_id = (SELECT id FROM admin WHERE email = 'mentor@vonnue.com')
 WHERE email = 'trainee@vonnue.com';
 ```
 
-To get a realistic account to test with (HTML and CSS days 1–2 done, CSS Day 3 open, some activity and
-typing results):
+To add realistic data (HTML and CSS days 1–2 done, CSS Day 3 open, activity, typing results, journals
+and review history) for every seeded trainee that has a mentor:
 
 ```bash
-SEED_DEMO=true DEMO_TRAINEE_EMAIL=you@vonnue.com npm run db:seed -w backend
+SEED_DEMO=true npm run db:seed -w backend
 ```
 
-`SEED_DEMO` is for development only; the seed refuses it when `NODE_ENV=production`.
+`DEMO_TRAINEE_EMAIL=you@vonnue.com` limits the demo data to one account. `SEED_DEMO` is for
+development only; the seed refuses it when `NODE_ENV=production`.
 
 ### 5.5 Point the frontend at the real API
 

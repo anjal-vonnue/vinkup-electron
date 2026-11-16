@@ -241,9 +241,11 @@ npm run build
 ```
 
 Locally, `npx prisma migrate dev` applies the same files and regenerates the client. The seed script
-is safe to re-run: it upserts staff and trainees and never deletes records. To create a manager in a
-fresh environment, add an entry with `role: 'MANAGER'` to the `admins` list in
-`backend/src/lib/seed.ts` and run `npm run db:seed -w backend`.
+is safe to re-run: it upserts staff and trainees and never deletes records. It seeds a manager plus
+two mentors, assigns six trainees across those mentors, and leaves staff-only trainee rows
+unassigned. Set `SEED_MANAGER_EMAIL` / `SEED_MANAGER_NAME` to use your own company account for the
+manager; `SEED_DEMO=true` adds progress, journals, activity, typing results and review history for
+every assigned trainee.
 
 ### Rollback
 
