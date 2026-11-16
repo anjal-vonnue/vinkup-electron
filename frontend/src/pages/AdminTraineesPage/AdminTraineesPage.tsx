@@ -43,6 +43,14 @@ function UsersIcon() {
   );
 }
 
+/** The two views of /admin: the trainee list, or the team analytics. */
+type PageView = 'dashboard' | 'performance';
+
+const PAGE_VIEWS: { id: PageView; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard view' },
+  { id: 'performance', label: 'Team performance' },
+];
+
 /** /admin: read-only overview of every trainee, one row each, sorted by name. */
 export default function AdminTraineesPage() {
   const [trainees, setTrainees] = useState<AdminTraineeSummary[] | null>(null);
@@ -51,6 +59,7 @@ export default function AdminTraineesPage() {
   const { query, sort, attentionOnly, setQuery, setSort, setAttentionOnly } =
     useTraineeListParams();
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [view, setView] = useState<PageView>('dashboard');
   const toast = useToast();
 
   const handleCreated = (created: AdminTraineeSummary) => {
@@ -142,42 +151,81 @@ export default function AdminTraineesPage() {
           Add trainee
         </button>
 
-        {trainees.length > 0 && <CohortSummary trainees={trainees} />}
-        {trainees.length > 0 && (
-          <TeamAnalytics trainees={trainees} attentionReasons={attentionReasons} />
-        )}
+        <div
+          className={styles.viewTabs}
+          role="tablist"
+          aria-label="Trainees page view"
+          data-active={view}
+        >
+          {/* The purple pill that slides behind the chosen tab. */}
+          <span className={styles.viewIndicator} aria-hidden="true" />
+          {PAGE_VIEWS.map((item) => (
+            <button
+              key={item.id}
+              id={`view-tab-${item.id}`}
+              type="button"
+              role="tab"
+              aria-selected={view === item.id}
+              aria-controls="trainees-view-panel"
+              className={styles.viewTab}
+              onClick={() => setView(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
-        <section className={styles.card} aria-label="Trainee overview">
-          {trainees.length === 0 ? (
-            <div className={styles.empty} role="status">
-              <div className={styles.emptyIcon} aria-hidden="true">
-                <UsersIcon />
-              </div>
-              <h2 className={styles.emptyTitle}>No trainees yet</h2>
-              <p className={styles.emptyText}>Add a trainee to get started.</p>
-            </div>
+        {/* key={view}: a new panel on each switch, so its fade-in plays again. */}
+        <div
+          key={view}
+          className={styles.viewPanel}
+          role="tabpanel"
+          id="trainees-view-panel"
+          aria-labelledby={`view-tab-${view}`}
+        >
+          {view === 'performance' ? (
+            <TeamAnalytics trainees={trainees} attentionReasons={attentionReasons} />
           ) : (
             <>
-              <TraineeListToolbar
-                query={query}
-                onQueryChange={setQuery}
-                sort={sort}
-                onSortChange={setSort}
-                attentionOnly={attentionOnly}
-                attentionCount={attentionCount}
-                onAttentionChange={setAttentionOnly}
-                onExport={handleExport}
-              />
-              {visibleTrainees.length === 0 ? (
-                <p className={styles.noMatches} role="status">
-                  No trainees match your filters.
-                </p>
-              ) : (
-                <TraineeTable trainees={visibleTrainees} attentionReasons={attentionReasons} />
-              )}
+              {trainees.length > 0 && <CohortSummary trainees={trainees} />}
+
+              <section className={styles.card} aria-label="Trainee overview">
+                {trainees.length === 0 ? (
+                  <div className={styles.empty} role="status">
+                    <div className={styles.emptyIcon} aria-hidden="true">
+                      <UsersIcon />
+                    </div>
+                    <h2 className={styles.emptyTitle}>No trainees yet</h2>
+                    <p className={styles.emptyText}>Add a trainee to get started.</p>
+                  </div>
+                ) : (
+                  <>
+                    <TraineeListToolbar
+                      query={query}
+                      onQueryChange={setQuery}
+                      sort={sort}
+                      onSortChange={setSort}
+                      attentionOnly={attentionOnly}
+                      attentionCount={attentionCount}
+                      onAttentionChange={setAttentionOnly}
+                      onExport={handleExport}
+                    />
+                    {visibleTrainees.length === 0 ? (
+                      <p className={styles.noMatches} role="status">
+                        No trainees match your filters.
+                      </p>
+                    ) : (
+                      <TraineeTable
+                        trainees={visibleTrainees}
+                        attentionReasons={attentionReasons}
+                      />
+                    )}
+                  </>
+                )}
+              </section>
             </>
           )}
-        </section>
+        </div>
       </main>
     </>
   );
