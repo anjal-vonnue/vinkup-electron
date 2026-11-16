@@ -16,4 +16,12 @@ export class TypingRepository {
       select: { id: true, wpm: true, accuracy: true, taken_at: true },
     });
   }
+
+  findHighestResult(traineeId: string) {
+    return prisma.typing_test_result.findFirst({
+      where: { trainee_id: traineeId },
+      orderBy: [{ wpm: 'desc' }, { taken_at: 'desc' }, { id: 'desc' }],
+      select: { wpm: true, accuracy: true },
+    });
+  }
 }

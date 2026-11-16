@@ -40,7 +40,7 @@ export default function PrintReport({
   mentorName,
   generatedAt,
 }: PrintReportProps) {
-  const { profile, courses, tasks, journal } = detail;
+  const { profile, typingStats, courses, tasks, journal } = detail;
   const { trainee } = profile;
 
   // Curriculum order, so tasks read course by course, day by day.
@@ -48,6 +48,7 @@ export default function PrintReport({
   for (const course of courses) {
     for (const day of course.days) dayOrder.set(day.id, dayOrder.size);
   }
+
   const orderedTasks = [...tasks].sort(
     (a, b) => (dayOrder.get(a.dayId) ?? 0) - (dayOrder.get(b.dayId) ?? 0)
   );
@@ -75,7 +76,7 @@ export default function PrintReport({
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Summary</h2>
         <div className={styles.block}>
-          <StatsSummary total={profile.total} typing={profile.typing} />
+          <StatsSummary total={profile.total} typingStats={typingStats} />
         </div>
         <div className={styles.block}>
           <DailyActivityTable days={profile.dailyActivity} />
@@ -108,7 +109,7 @@ export default function PrintReport({
                     {task.title}
                     {task.isStretchGoal && <span className={styles.tag}>Stretch</span>}
                   </td>
-                  <td>{dayLabel(dayLabels, task.dayId)}</td>
+                  <td>{dayLabel(new Map(), task.dayId)}</td>
                   <td>{TASK_STATUS_LABELS[task.status]}</td>
                   <td>{task.lastSubmittedAt ? formatIstDateTime(task.lastSubmittedAt) : '—'}</td>
                 </tr>

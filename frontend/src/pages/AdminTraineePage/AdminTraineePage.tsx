@@ -33,7 +33,6 @@ type TabId = 'tasks' | 'journal' | 'flags' | 'feedbacks';
 export default function AdminTraineePage() {
   const { traineeId = '' } = useParams();
 
-  // Keyed by trainee, so opening another trainee starts with a clean page.
   return <TraineeDetail key={traineeId} traineeId={traineeId} />;
 }
 
@@ -54,7 +53,9 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
     () => (traineeId ? () => getAdminTrainee(traineeId) : null),
     [traineeId]
   );
+
   const loadFlags = useMemo(() => (traineeId ? () => getAdminFlags(traineeId) : null), [traineeId]);
+
   const loadCode = useMemo(
     () => (traineeId && selectedTaskId ? () => getAdminTaskCode(traineeId, selectedTaskId) : null),
     [traineeId, selectedTaskId]
@@ -79,6 +80,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
   }, [detail, code, feedback]);
 
   const { user } = useAuth();
+
   const { printJob, print } = usePrintMode({
     defaults: DEFAULT_PRINT_OPTIONS,
     documentTitle: reportDocumentTitle(detail.data?.profile.trainee.name ?? 'Trainee'),
@@ -86,11 +88,13 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
 
   const dayLabels = useMemo(() => {
     const labels = new Map<string, string>();
+
     for (const course of detail.data?.courses ?? []) {
       for (const day of course.days) {
         labels.set(day.id, `${course.title} · Day ${day.dayNumber}`);
       }
     }
+
     return labels;
   }, [detail.data]);
 
@@ -107,7 +111,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
 
   if (!detail.data) {
     const error = detail.error;
-    // The id is wrong (400) or nobody has it (404): the same message to the admin.
+
     const isNotFound =
       !traineeId || error?.code === 'NOT_FOUND' || error?.code === 'VALIDATION_FAILED';
 
@@ -140,10 +144,10 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
     );
   }
 
-  const { profile, courses, totalTasks, journal } = detail.data;
-  // Only work the trainee has started matters for review; the day grid already shows the rest.
-  const tasks = detail.data.tasks;
+  const { profile, typingStats, courses, totalTasks, journal, tasks } = detail.data;
+
   const selectedTask = tasks.find((task) => task.taskId === selectedTaskId);
+
   const tabs: { id: TabId; label: string }[] = [
     { id: 'tasks', label: `Tasks (${tasks.length}/${totalTasks})` },
     { id: 'journal', label: `Journal (${journal.length})` },
@@ -159,9 +163,9 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
 
   return (
     <>
-      {/* Everything on screen; hidden when printing, where only the report below is shown. */}
       <div className={styles.screenOnly}>
         <AdminHeader />
+
         <main className={styles.page}>
           <div className={styles.topBar}>
             <BackLink />
@@ -171,7 +175,8 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
           <ProfileHeader trainee={profile.trainee} />
 
           <section className={styles.card} aria-label="Progress and activity">
-            <StatsSummary total={profile.total} typing={profile.typing} />
+            <StatsSummary total={profile.total} typingStats={typingStats} />
+
             <DailyActivityTable days={profile.dailyActivity} />
           </section>
 
@@ -215,6 +220,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                     onReviewSuccess={handleReviewSuccess}
                   />
                 )}
+
                 <AdminTaskList
                   tasks={tasks}
                   courses={courses}
@@ -233,6 +239,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                     <LoaderOverlay label="Loading flags…" />
                   </div>
                 )}
+
                 {flags.error && (
                   <ErrorState
                     title="Unable to load flags"
@@ -240,6 +247,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                     onRetry={flags.retry}
                   />
                 )}
+
                 {flags.data && <AdminFlagTable flags={flags.data} dayLabels={dayLabels} />}
               </>
             )}

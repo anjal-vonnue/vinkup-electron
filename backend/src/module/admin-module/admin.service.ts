@@ -4,6 +4,7 @@ import type {
   AdminTraineeDetail,
   AdminTraineeSummary,
   TaskFile,
+  TypingStats,
 } from '@itp/types';
 
 import { NotFoundError } from '../../errors/AppError';
@@ -116,25 +117,63 @@ export class AdminService {
   getTraineeDetail = async (traineeId: string): Promise<AdminTraineeDetail> => {
     await this.assertTrainee(traineeId); // 404 before any other work
 
-    const [profile, statuses, courses, startedTasks, totalTasks, completions, journal] =
-      await Promise.all([
-        profileService.getProfile(traineeId),
-        progressService.getDayStatuses(traineeId),
-        repo.listCoursesWithDays(),
-        repo.listStartedTasks(traineeId),
-        repo.getTotalTasks(),
-        repo.listCompletionsFor(traineeId),
-        repo.listJournal(traineeId),
-      ]);
+    const [
+      profile,
+      statuses,
+      courses,
+      startedTasks,
+      totalTasks,
+      completions,
+      journal,
+      typingResults,
+    ] = await Promise.all([
+      profileService.getProfile(traineeId),
+      progressService.getDayStatuses(traineeId),
+      repo.listCoursesWithDays(),
+      repo.listStartedTasks(traineeId),
+      repo.getTotalTasks(),
+      repo.listCompletionsFor(traineeId),
+      repo.listJournal(traineeId),
+      repo.typingResultsForTrainee(traineeId),
+    ]);
 
     const statusByDay = new Map(statuses.map((day) => [day.dayId, day.status]));
     const completedAtByDay = new Map(
       completions.map((c) => [c.curriculum_day_id, c.completed_at.toISOString()])
     );
 
+    const typingStats: TypingStats = {
+      averageWpm:
+        typingResults.length > 0
+          ? Math.round(
+              (typingResults.reduce((sum, result) => sum + result.wpm, 0) / typingResults.length) *
+                10
+            ) / 10
+          : 0,
+
+      averageAccuracy:
+        typingResults.length > 0
+          ? Math.round(
+              (typingResults.reduce((sum, result) => sum + result.accuracy, 0) /
+                typingResults.length) *
+                10
+            ) / 10
+          : 0,
+
+      highestWpm:
+        typingResults.length > 0 ? Math.max(...typingResults.map((result) => result.wpm)) : null,
+
+      highestWpmAccuracy:
+        typingResults.length > 0
+          ? typingResults.reduce((highest, result) => (result.wpm > highest.wpm ? result : highest))
+              .accuracy
+          : null,
+    };
+
     return {
       id: traineeId,
       profile,
+      typingStats,
       courses: courses.map((course) => ({
         id: course.id,
         title: course.title,

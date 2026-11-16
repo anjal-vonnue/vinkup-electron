@@ -45,9 +45,11 @@ describe('PrintReport', () => {
 
     const report = screen.getByRole('article', { name: 'Printable trainee report' });
     const { trainee } = detail.profile;
+
     expect(
       within(report).getByRole('heading', { level: 1, name: trainee.name })
     ).toBeInTheDocument();
+
     expect(report).toHaveTextContent(trainee.email);
     expect(report).toHaveTextContent(
       `Currently on ${trainee.track} · Day ${trainee.currentDay} of ${trainee.totalDays}`
@@ -70,13 +72,32 @@ describe('PrintReport', () => {
     expect(screen.getByLabelText('Course and day progress')).toBeInTheDocument();
   });
 
+  it('displays the trainee typing statistics', () => {
+    renderReport();
+
+    const stats = screen.getByLabelText('Training statistics');
+
+    expect(stats).toHaveTextContent(`${detail.typingStats.averageWpm}`);
+    expect(stats).toHaveTextContent(`${detail.typingStats.averageAccuracy}%`);
+
+    if (detail.typingStats.highestWpm !== null) {
+      expect(stats).toHaveTextContent(`${detail.typingStats.highestWpm}`);
+    }
+
+    if (detail.typingStats.highestWpmAccuracy !== null) {
+      expect(stats).toHaveTextContent(`${detail.typingStats.highestWpmAccuracy}%`);
+    }
+  });
+
   it('lists every submitted task', () => {
     renderReport();
 
     const tasks = section(/^Submitted tasks/);
+
     expect(
       within(tasks).getByRole('heading', { name: `Submitted tasks (${detail.tasks.length})` })
     ).toBeInTheDocument();
+
     // One header row plus one row per task.
     expect(within(tasks).getAllByRole('row')).toHaveLength(detail.tasks.length + 1);
   });
@@ -91,6 +112,7 @@ describe('PrintReport', () => {
     renderReport();
 
     const journal = section(/^Journal/);
+
     expect(within(journal).getAllByRole('listitem')).toHaveLength(detail.journal.length);
   });
 
@@ -104,9 +126,11 @@ describe('PrintReport', () => {
     renderReport();
 
     const flagged = section(/^Flagged events/);
+
     expect(flagged).toHaveTextContent(
       `${importantFlags.length} important of ${flags.length} recorded.`
     );
+
     expect(within(flagged).getAllByRole('row')).toHaveLength(importantFlags.length + 1);
   });
 
@@ -126,5 +150,24 @@ describe('PrintReport', () => {
     renderReport({ flags: flags.filter((flag) => flag.reviewPriority === 'LOW') });
 
     expect(screen.getByText('No important focus events recorded.')).toBeInTheDocument();
+  });
+
+  it('renders zero averages and unavailable highest WPM when there are no typing tests', () => {
+    const detailWithoutTypingTests: AdminTraineeDetail = {
+      ...detail,
+      typingStats: {
+        averageWpm: 0,
+        averageAccuracy: 0,
+        highestWpm: null,
+        highestWpmAccuracy: null,
+      },
+    };
+
+    renderReport({ detail: detailWithoutTypingTests });
+
+    const stats = screen.getByLabelText('Training statistics');
+
+    expect(stats).toHaveTextContent('0');
+    expect(stats).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getProfile } from '../../api/profile';
-import { type ProfileData } from '@itp/types';
+import { getTypingStats } from '../../api/typingTest';
+import { type ProfileData, type TypingStats } from '@itp/types';
 import ProfileHeader from '../../components/ProfileHeader';
 import StatsSummary from '../../components/StatsSummary';
 import ActivityHeatmap from '../../components/ActivityHeatmap';
@@ -17,10 +18,11 @@ import { useEarnedCertificates } from '../../hooks/useEarnedCerificates';
 
 export default function ProfilePage() {
   const certificates = useEarnedCertificates();
+
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [typingStats, setTypingStats] = useState<TypingStats | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<Error | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
 
   // Loaded beside the profile; a failure here only affects the heatmap.
@@ -31,10 +33,11 @@ export default function ProfilePage() {
 
     async function loadProfile() {
       try {
-        const data = await getProfile();
+        const [profileData, statsData] = await Promise.all([getProfile(), getTypingStats()]);
 
         if (isMounted) {
-          setProfile(data);
+          setProfile(profileData);
+          setTypingStats(statsData);
         }
       } catch (error) {
         if (isMounted) {
@@ -53,6 +56,7 @@ export default function ProfilePage() {
       isMounted = false;
     };
   }, [attempt]);
+
   const handleRetry = () => {
     setIsLoading(true);
     setError(null);
@@ -61,23 +65,21 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <>
-        <main className={styles.page}>
-          <Header />
-          <LoaderOverlay />
-        </main>
-      </>
+      <main className={styles.page}>
+        <Header />
+        <LoaderOverlay />
+      </main>
     );
   }
 
-  if (!profile) {
+  if (!profile || !typingStats) {
     return (
       <>
         <Header />
         <main className={styles.page}>
           <ErrorState
             fullPage
-            message={`${error?.message}. Please try again.`}
+            message={`${error?.message ?? 'Something went wrong'}. Please try again.`}
             title="Unable to load profile"
             onRetry={handleRetry}
           />
@@ -93,7 +95,7 @@ export default function ProfilePage() {
         <ProfileHeader trainee={profile.trainee} />
 
         <section className={styles.card}>
-          <StatsSummary total={profile.total} typing={profile.typing} />
+          <StatsSummary total={profile.total} typingStats={typingStats} />
 
           <div className={styles.heatmapSlot}>
             {activity.isLoading && (
@@ -117,8 +119,10 @@ export default function ProfilePage() {
 
           <DailyActivityTable days={profile.dailyActivity} />
         </section>
+
         <CertificateList certificates={certificates} />
       </main>
+
       <HelpButton />
     </>
   );
