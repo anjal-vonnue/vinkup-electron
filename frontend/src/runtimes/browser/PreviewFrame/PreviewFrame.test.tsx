@@ -24,6 +24,8 @@ describe('PreviewFrame', () => {
 
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts allow-modals allow-forms');
     expect(iframe.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    // Required for cross-origin navigation under the app's COEP: credentialless policy.
+    expect(iframe.hasAttribute('credentialless')).toBe(true);
   });
 
   it('renders the document with srcdoc and no referrer', () => {

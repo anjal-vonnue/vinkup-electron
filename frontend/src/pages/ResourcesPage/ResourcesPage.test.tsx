@@ -165,7 +165,7 @@ describe('ResourcesPage', () => {
     );
 
     await screen.findByDisplayValue('https://react.dev/');
-    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+    fireEvent.keyDown(document, { key: 'f', ctrlKey: true });
 
     const input = await screen.findByLabelText('Find in page');
     await user.type(input, 'hooks');
