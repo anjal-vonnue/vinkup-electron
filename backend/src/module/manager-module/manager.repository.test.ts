@@ -5,11 +5,25 @@ const tx = vi.hoisted(() => ({
   admin: { findUnique: vi.fn() },
 }));
 
-vi.mock('../../lib/prisma', () => ({
-  prisma: {
-    $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+const prisma = vi.hoisted(() => ({
+  admin: {
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
   },
+  trainee: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    count: vi.fn(),
+  },
+  $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
 }));
+
+vi.mock('../../lib/prisma', () => ({ prisma }));
 
 import { ManagerRepository } from './manager.repository';
 
@@ -19,6 +33,7 @@ const row = {
   id: TRAINEE_ID,
   name: 'Test Trainee',
   email: 'trainee@vonnue.com',
+  is_active: true,
   mentor: { id: MENTOR_ID, name: 'Test Mentor', email: 'mentor@vonnue.com' },
 };
 
@@ -103,6 +118,127 @@ describe('ManagerRepository.assignMentor', () => {
         where: { id: TRAINEE_ID },
         data: { mentor_id: MENTOR_ID },
       })
+    );
+  });
+});
+
+describe('ManagerRepository staff reads', () => {
+  it('lists staff ordered by role then name, with assignment counts', async () => {
+    prisma.admin.findMany.mockResolvedValue([]);
+
+    await repository.listStaff();
+
+    expect(prisma.admin.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ role: 'asc' }, { name: 'asc' }],
+      })
+    );
+  });
+
+  it('finds an assignable mentor by role and active flag', async () => {
+    prisma.admin.findFirst.mockResolvedValue({ id: MENTOR_ID });
+
+    await repository.findAssignableMentor(MENTOR_ID);
+
+    expect(prisma.admin.findFirst).toHaveBeenCalledWith({
+      where: { id: MENTOR_ID, role: 'MENTOR', is_active: true },
+      select: { id: true },
+    });
+  });
+
+  it('counts only trainees currently linked to a staff account', async () => {
+    prisma.trainee.count.mockResolvedValue(2);
+
+    await expect(repository.countAssignedTrainees(MENTOR_ID)).resolves.toBe(2);
+    expect(prisma.trainee.count).toHaveBeenCalledWith({ where: { mentor_id: MENTOR_ID } });
+  });
+});
+
+describe('ManagerRepository staff writes', () => {
+  it('creates a staff account with the mapped database role', async () => {
+    prisma.admin.create.mockResolvedValue({ id: MENTOR_ID });
+
+    await repository.createStaff({
+      name: 'New Mentor',
+      email: 'new.mentor@vonnue.com',
+      role: 'MENTOR',
+    });
+
+    expect(prisma.admin.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { name: 'New Mentor', email: 'new.mentor@vonnue.com', role: 'MENTOR' },
+      })
+    );
+  });
+
+  it('updates and activates a staff account', async () => {
+    prisma.admin.update.mockResolvedValue({ id: MENTOR_ID });
+
+    await repository.updateStaff(MENTOR_ID, { name: 'Renamed' });
+    expect(prisma.admin.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: MENTOR_ID },
+        data: { name: 'Renamed' },
+      })
+    );
+
+    await repository.setStaffActive(MENTOR_ID, false);
+    expect(prisma.admin.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: MENTOR_ID },
+        data: { is_active: false },
+      })
+    );
+  });
+});
+
+describe('ManagerRepository trainee writes', () => {
+  it('creates a trainee with an optional mentor link', async () => {
+    prisma.trainee.create.mockResolvedValue(row);
+
+    await repository.createTrainee({
+      name: 'New Trainee',
+      email: 'new.trainee@vonnue.com',
+      mentorId: MENTOR_ID,
+    });
+
+    expect(prisma.trainee.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          name: 'New Trainee',
+          email: 'new.trainee@vonnue.com',
+          mentor_id: MENTOR_ID,
+        },
+      })
+    );
+  });
+
+  it('updates a trainee and their active flag', async () => {
+    prisma.trainee.update.mockResolvedValue(row);
+
+    await repository.updateTrainee(TRAINEE_ID, { name: 'Renamed' });
+    expect(prisma.trainee.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: TRAINEE_ID },
+        data: { name: 'Renamed' },
+      })
+    );
+
+    await repository.setTraineeActive(TRAINEE_ID, false);
+    expect(prisma.trainee.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: TRAINEE_ID },
+        data: { is_active: false },
+      })
+    );
+  });
+
+  it('lists every trainee with their current mentor, ordered by name', async () => {
+    prisma.trainee.findMany.mockResolvedValue([row]);
+
+    await expect(repository.listTraineesWithMentor()).resolves.toEqual([row]);
+    expect(prisma.trainee.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { name: 'asc' } })
     );
   });
 });

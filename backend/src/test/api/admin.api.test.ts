@@ -13,6 +13,7 @@ import {
   DAY,
   STARTER_FILES,
   TASK,
+  assignTrainees,
   createAdmin,
   freshTrainees,
   istDate,
@@ -38,6 +39,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   ({ a, b } = await freshTrainees());
   admin = await createAdmin('Test Mentor');
+  await assignTrainees(admin, a, b);
 });
 
 async function getAs<T>(path: string, cookie: string): Promise<T> {

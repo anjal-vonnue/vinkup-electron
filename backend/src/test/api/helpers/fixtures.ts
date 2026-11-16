@@ -244,16 +244,50 @@ export function minutesAgo(minutes: number): Date {
   return new Date(Date.now() - minutes * 60 * 1000);
 }
 
-export type TestAdmin = { id: string; name: string; email: string; cookie: string };
+export type TestAdmin = {
+  id: string;
+  name: string;
+  email: string;
+  role: 'MENTOR' | 'MANAGER';
+  cookie: string;
+};
 
-/** An admin (mentor) row plus a login cookie. Upserts, so calling it in every beforeEach is safe. */
-export async function createAdmin(name = 'Test Mentor', isActive = true): Promise<TestAdmin> {
+/** A staff row plus a login cookie. Upserts, so calling it in every beforeEach is safe. */
+export async function createAdmin(
+  name = 'Test Mentor',
+  isActive = true,
+  role: 'MENTOR' | 'MANAGER' = 'MENTOR'
+): Promise<TestAdmin> {
   const email = `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@vonnue.com`;
   const row = await db.admin.upsert({
     where: { email },
-    update: { name, is_active: isActive },
-    create: { name, email, is_active: isActive },
+    update: { name, is_active: isActive, role },
+    create: { name, email, is_active: isActive, role },
   });
-  const token = signJwt({ id: row.id, name: row.name, email: row.email, role: 'mentor' });
-  return { id: row.id, name: row.name, email: row.email, cookie: `${AUTH_COOKIE_NAME}=${token}` };
+  const token = signJwt({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: role === 'MANAGER' ? 'manager' : 'mentor',
+  });
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    cookie: `${AUTH_COOKIE_NAME}=${token}`,
+  };
+}
+
+/** A manager account plus a login cookie. */
+export function createManager(name = 'Test Manager'): Promise<TestAdmin> {
+  return createAdmin(name, true, 'MANAGER');
+}
+
+/** Points the given trainees at one mentor, as a manager would through the API. */
+export async function assignTrainees(mentor: TestAdmin, ...trainees: TestTrainee[]): Promise<void> {
+  await db.trainee.updateMany({
+    where: { id: { in: trainees.map((trainee) => trainee.id) } },
+    data: { mentor_id: mentor.id },
+  });
 }
