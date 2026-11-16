@@ -1,4 +1,7 @@
-/* The report exists only while printing; on screen it stays hidden behind the print dialog. */
+/*
+ * The report is mounted once printed (and kept for later snapshots), so it must never take up
+ * space on screen. Only print media shows it.
+ */
 @media screen {
   .report {
     display: none;
@@ -22,6 +25,12 @@
       font-size: 8pt;
       color: #6b6b7b;
     }
+  }
+
+  /* A dark `color-scheme` paints the print canvas (the page margins) dark too. The theme rule
+     is more specific, so this has to be important. */
+  :global(:root) {
+    color-scheme: light !important;
   }
 
   :global(html),
@@ -57,6 +66,13 @@
     color: var(--color-text-primary);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+
+    /* Long emails and URLs in journal entries must wrap, not spill off the paper. */
+    overflow-wrap: anywhere;
+
+    /* Don't leave a lone line of a paragraph alone at a page edge. */
+    orphans: 3;
+    widows: 3;
   }
 }
 
@@ -192,4 +208,20 @@
   text-align: center;
   color: var(--color-text-secondary);
   border-top: 1px solid var(--color-border-card);
+}
+
+/*
+ * These come after the screen rules above: a plain `.block` override placed earlier would be
+ * beaten by the base `.block` by source order, whatever the media query.
+ */
+@media print {
+  /* A card can be taller than one page. Let it flow over the break instead of clipping it. */
+  .report .block {
+    overflow: visible;
+    break-inside: auto;
+  }
+
+  .header {
+    break-inside: avoid;
+  }
 }

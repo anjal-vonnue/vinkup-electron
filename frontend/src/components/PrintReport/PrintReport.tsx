@@ -30,9 +30,9 @@ function dayLabel(dayLabels: ReadonlyMap<string, string>, dayId: string): string
 }
 
 /**
- * One trainee on paper: profile, stats, course grid, submitted tasks, and optionally the journal
- * and the important flagged events. Rendered only while printing (see usePrintMode); hidden on
- * screen by its CSS, so it never flashes behind the print dialog.
+ * One trainee on paper: profile, stats, course grid, submitted tasks, review feedback, and
+ * optionally the journal and the important flagged events. Mounted when printing starts (see
+ * usePrintMode); hidden on screen by its CSS, so it never flashes behind the print dialog.
  */
 export default function PrintReport({
   detail,
