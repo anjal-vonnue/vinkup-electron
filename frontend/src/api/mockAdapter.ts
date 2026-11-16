@@ -350,6 +350,10 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
     return respond(config, 200, buildDashboard());
   }
 
+  if (method === 'get' && url === '/dashboard/rework') {
+    return respond(config, 200, []);
+  }
+
   if (method === 'get' && url === '/profile') {
     return respond(config, 200, mockProfile);
   }

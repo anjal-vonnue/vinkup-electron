@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { DashboardResponse, DaySummary } from '@itp/types';
-import { getDashboard } from '../../api/dashboard';
+import type { DashboardResponse, DaySummary, ReworkTaskSummary } from '@itp/types';
+import { getDashboard, getReworkTasks } from '../../api/dashboard';
 import { getCourseDays } from '../../api/courses';
 import { CURRICULUM_COURSES } from '../../constants/courses';
 import Header from '../../components/Header';
 import CurrentLessonCard from '../../components/CurrentLessonCard';
+import ReworkBanner from '../../components/ReworkBanner';
+import TaskFeedbackModal from '../../components/TaskFeedbackModal';
 import TrackTabs from '../../components/TrackTabs';
 import ScheduleGrid from '../../components/ScheduleGrid';
 import StatsRow from '../../components/StatsRow';
@@ -33,6 +35,8 @@ export default function DashboardPage() {
   const traineeFirstName = user?.name?.trim().split(/\s+/)[0] || null;
 
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [reworkTasks, setReworkTasks] = useState<ReworkTaskSummary[]>([]);
+  const [feedbackTask, setFeedbackTask] = useState<ReworkTaskSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
@@ -46,8 +50,8 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
 
-    void getDashboard()
-      .then(async (data) => {
+    void Promise.all([
+      getDashboard().then(async (data) => {
         const courseId = data.nextDay?.courseId ?? DEFAULT_COURSE_ID;
         // This effect owns the first request, so the effect below must not repeat it
         requestedCourses.current.add(courseId);
@@ -59,12 +63,15 @@ export default function DashboardPage() {
           firstDaysError = err instanceof Error ? err : new Error('Something went wrong');
         }
         return { data, courseId, firstDays, firstDaysError };
-      })
-      .then(({ data, courseId, firstDays, firstDaysError }) => {
+      }),
+      getReworkTasks().catch(() => [] as ReworkTaskSummary[]),
+    ])
+      .then(([{ data, courseId, firstDays, firstDaysError }, rework]) => {
         if (cancelled) return;
         if (firstDays) setDaysByCourse((prev) => ({ ...prev, [courseId]: firstDays }));
         if (firstDaysError) setDaysErrors((prev) => ({ ...prev, [courseId]: firstDaysError }));
         setDashboard(data);
+        setReworkTasks(rework);
         setActiveCourseId(data.nextDay?.courseId ?? DEFAULT_COURSE_ID);
       })
       .catch((err: unknown) => {
@@ -189,6 +196,14 @@ export default function DashboardPage() {
           <p className={styles.status}>You&apos;ve completed every course. Great work!</p>
         )}
 
+        {reworkTasks.length > 0 && (
+          <ReworkBanner
+            tasks={reworkTasks}
+            onOpenFeedback={(task) => setFeedbackTask(task)}
+            onOpenTask={(taskId) => void navigate(`/tasks/${taskId}`)}
+          />
+        )}
+
         <section className={styles.section}>
           <div className={styles.trackHeader}>
             <p className={styles.sectionLabel}>Curriculum Track</p>
@@ -234,6 +249,29 @@ export default function DashboardPage() {
           />
         </section>
       </div>
+      {feedbackTask && (
+        <TaskFeedbackModal
+          isOpen={feedbackTask !== null}
+          onClose={() => setFeedbackTask(null)}
+          taskId={feedbackTask.taskId}
+          taskTitle={feedbackTask.taskTitle}
+          initialReview={
+            feedbackTask.latestReview
+              ? {
+                  id: feedbackTask.latestReview.id,
+                  taskId: feedbackTask.taskId,
+                  adminId: feedbackTask.latestReview.adminId,
+                  adminName: feedbackTask.latestReview.adminName,
+                  submissionNo: feedbackTask.submissionCount,
+                  decision: 'rework',
+                  feedback: feedbackTask.latestReview.feedback,
+                  reviewedAt: feedbackTask.latestReview.reviewedAt,
+                }
+              : null
+          }
+          onOpenEditor={() => void navigate(`/tasks/${feedbackTask.taskId}`)}
+        />
+      )}
       <HelpButton />
     </>
   );

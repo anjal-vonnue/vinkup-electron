@@ -41,3 +41,22 @@ export type CourseCertificate = {
 };
 /** GET /api/courses/:courseId/days */
 export type CourseDaysResponse = DaySummary[];
+
+export type ReworkTaskSummary = {
+  taskId: string;
+  taskTitle: string;
+  sequenceOrder: number;
+  dayId: string;
+  dayNumber: number;
+  courseId: string;
+  courseTitle: string;
+  submissionCount: number;
+  latestReview: {
+    id: string;
+    adminId: string;
+    adminName: string;
+    decision: 'rework';
+    feedback: string;
+    reviewedAt: string;
+  } | null;
+};

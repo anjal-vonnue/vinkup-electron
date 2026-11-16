@@ -9,6 +9,7 @@ import { courseIdParamsSchema } from './dashboard.schema';
 export const dashboardRoutes = Router();
 
 dashboardRoutes.get('/', dashboardController.getDashboard);
+dashboardRoutes.get('/rework', dashboardController.getReworkTasks);
 
 /** /api/courses */
 export const courseRoutes = Router();
