@@ -111,7 +111,7 @@ describe('AuthService.verifyGoogleProfile', () => {
   });
 
   describe('admins', () => {
-    it('returns id, email, name and role "admin" without a trainee row', async () => {
+    it('returns id, email, name and role "mentor" without a trainee row', async () => {
       findActiveAdminByEmail.mockResolvedValue(admin);
 
       const result = await authService.verifyGoogleProfile(createProfile(admin.email));
@@ -120,7 +120,7 @@ describe('AuthService.verifyGoogleProfile', () => {
         id: admin.id,
         email: admin.email,
         name: admin.name,
-        role: 'admin',
+        role: 'mentor',
       });
       expect(findBymail).not.toHaveBeenCalled();
     });
@@ -134,13 +134,13 @@ describe('AuthService.verifyGoogleProfile', () => {
       expect(recordAdminLogin).toHaveBeenCalledWith(admin.id);
     });
 
-    it('logs in as admin when the email is in both tables', async () => {
+    it('logs in as mentor when the email is in both tables', async () => {
       findActiveAdminByEmail.mockResolvedValue(admin);
       findBymail.mockResolvedValue({ ...trainee, email: admin.email });
 
       const result = await authService.verifyGoogleProfile(createProfile(admin.email));
 
-      expect(result.role).toBe('admin');
+      expect(result.role).toBe('mentor');
       expect(findBymail).not.toHaveBeenCalled();
     });
 

@@ -119,7 +119,7 @@ function validToken(): string {
 }
 
 function adminToken(): string {
-  return signJwt({ id: admin.id, name: admin.name, email: admin.email, role: 'admin' });
+  return signJwt({ id: admin.id, name: admin.name, email: admin.email, role: 'mentor' });
 }
 
 beforeEach(() => {
@@ -175,7 +175,7 @@ describe('GET /api/auth/google/callback', () => {
 });
 
 describe('GET /api/auth/google/callback: admins', () => {
-  it('redirects an admin to /admin with a role "admin" token', async () => {
+  it('redirects an admin to /admin with a role "mentor" token', async () => {
     findActiveAdminByEmail.mockResolvedValue(admin);
 
     const res = await request(app).get(callbackUrl({ email: admin.email }));
@@ -183,7 +183,7 @@ describe('GET /api/auth/google/callback: admins', () => {
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe(`${env.FRONTEND_URL}/admin`);
     const payload = verifyJwt(cookieValue(getAuthCookie(res) as string));
-    expect(payload).toEqual({ ...admin, role: 'admin' });
+    expect(payload).toEqual({ ...admin, role: 'mentor' });
   });
 
   it('does not look the admin up in the trainee table and records the login', async () => {
@@ -266,13 +266,13 @@ describe('GET /api/auth/me', () => {
     expect(body).toEqual({ ...trainee, role: 'trainee' });
   });
 
-  it('returns role "admin" for an admin token', async () => {
+  it('returns role "mentor" for an admin token', async () => {
     const res = await request(app)
       .get(`${BASE}/me`)
       .set('Cookie', `${AUTH_COOKIE_NAME}=${adminToken()}`);
 
     expect(res.status).toBe(200);
-    expect((res.body as { role: string }).role).toBe('admin');
+    expect((res.body as { role: string }).role).toBe('mentor');
   });
 
   it('returns role "trainee" for a token issued before roles existed', async () => {
@@ -328,7 +328,7 @@ describe('GET /api/auth/me', () => {
 
   it('returns 401 for a token signed with a different secret', async () => {
     const forged = jwt.sign(
-      { id: admin.id, name: admin.name, email: admin.email, role: 'admin' },
+      { id: admin.id, name: admin.name, email: admin.email, role: 'mentor' },
       'some-other-secret'
     );
 
@@ -383,7 +383,7 @@ describe('Full session lifecycle', () => {
     await agent.get(callbackUrl({ email: admin.email })).expect(302);
 
     const me = await agent.get(`${BASE}/me`).expect(200);
-    expect((me.body as { role: string }).role).toBe('admin');
+    expect((me.body as { role: string }).role).toBe('mentor');
 
     await agent.post(`${BASE}/logout`).expect(200);
 

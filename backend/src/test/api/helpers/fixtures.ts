@@ -254,6 +254,6 @@ export async function createAdmin(name = 'Test Mentor', isActive = true): Promis
     update: { name, is_active: isActive },
     create: { name, email, is_active: isActive },
   });
-  const token = signJwt({ id: row.id, name: row.name, email: row.email, role: 'admin' });
+  const token = signJwt({ id: row.id, name: row.name, email: row.email, role: 'mentor' });
   return { id: row.id, name: row.name, email: row.email, cookie: `${AUTH_COOKIE_NAME}=${token}` };
 }

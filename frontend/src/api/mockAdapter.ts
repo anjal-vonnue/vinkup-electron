@@ -50,7 +50,10 @@ const MOCK_DELAY_MS = 300;
  * mentor pages. Read on every call so tests can switch it with vi.stubEnv.
  */
 function currentMockUser() {
-  return import.meta.env.VITE_MOCK_ROLE === 'admin' ? mockAdmin : mockUser;
+  const mockRole = import.meta.env.VITE_MOCK_ROLE;
+  return mockRole === 'mentor' || mockRole === 'admin' || mockRole === 'manager'
+    ? mockAdmin
+    : mockUser;
 }
 
 const savedFiles = new Map<string, TaskFile[]>();
@@ -362,7 +365,7 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
 
   // Mentor endpoints: read-only, and only for the admin role, like requireAdmin on the backend.
   if (url.startsWith('/admin/')) {
-    if (currentMockUser().role !== 'admin') {
+    if (!['mentor', 'manager'].includes(currentMockUser().role)) {
       return errorResponse(config, 403, 'FORBIDDEN', 'Admin access only.');
     }
 
@@ -377,7 +380,7 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
           'Use a company email address ending in @vonnue.com.'
         );
       }
-      if (result.kind === 'admin') {
+      if (result.kind === 'mentor') {
         return errorResponse(
           config,
           409,

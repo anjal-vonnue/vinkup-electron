@@ -15,7 +15,7 @@ type Admin = {
   id: string;
   email: string;
   name: string;
-  role: 'admin';
+  role: 'mentor';
 };
 
 const trainee: Trainee = {
@@ -28,7 +28,7 @@ const admin: Admin = {
   id: '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77',
   email: 'mentor@vonnue.com',
   name: 'Test Mentor',
-  role: 'admin',
+  role: 'mentor',
 };
 
 /**
@@ -37,7 +37,12 @@ const admin: Admin = {
  * service's one-time and replay protections are exercised without a database.
  */
 const store = vi.hoisted(() => {
-  type Snapshot = { id: string; email: string; name: string; role: 'trainee' | 'admin' };
+  type Snapshot = {
+    id: string;
+    email: string;
+    name: string;
+    role: 'trainee' | 'mentor' | 'manager';
+  };
   type Transaction = {
     id: string;
     state: string;
@@ -596,7 +601,7 @@ describe('POST /api/auth/desktop/exchange', () => {
     expect((response.body as { error: { code: string } }).error.code).toBe('DESKTOP_AUTH_EXPIRED');
   });
 
-  it('signs in an admin and returns the admin role', async () => {
+  it('signs in an admin and returns the mentor role', async () => {
     authLookups.findActiveAdminByEmail.mockResolvedValue(admin);
     const { redirect } = await beginLogin(admin.email);
 

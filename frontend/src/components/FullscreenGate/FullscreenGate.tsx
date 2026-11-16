@@ -54,7 +54,8 @@ export default function FullscreenGate({ children }: { children: ReactNode }) {
   const { isAuthenticated, user } = useAuth();
   const isFullscreen = useIsFullscreen();
   // full screen is only mandatory for trainees
-  const isBlocked = isAuthenticated && user?.role !== 'admin' && !isFullscreen;
+  const isBlocked =
+    isAuthenticated && user?.role !== 'mentor' && user?.role !== 'manager' && !isFullscreen;
 
   return (
     <>

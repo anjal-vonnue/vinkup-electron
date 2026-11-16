@@ -62,7 +62,7 @@ export default function App() {
               <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
             </Route>
 
-            <Route element={<RoleRoute role="admin" />}>
+            <Route element={<RoleRoute role="mentor" />}>
               <Route
                 path="/admin"
                 element={

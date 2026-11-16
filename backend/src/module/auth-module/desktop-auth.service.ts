@@ -66,14 +66,18 @@ function toUserSnapshot(
   if (!row.user_id || !row.user_email || !row.user_name) {
     throw new AppError(401, 'DESKTOP_AUTH_FAILED', 'The sign-in did not complete.');
   }
-  if (row.user_role !== 'trainee' && row.user_role !== 'admin') {
+  const role =
+    row.user_role === 'admin'
+      ? 'mentor'
+      : (row.user_role as 'trainee' | 'mentor' | 'manager' | null);
+  if (role !== 'trainee' && role !== 'mentor' && role !== 'manager') {
     throw new AppError(401, 'DESKTOP_AUTH_FAILED', 'The sign-in did not complete.');
   }
   return {
     id: row.user_id,
     email: row.user_email,
     name: row.user_name,
-    role: row.user_role,
+    role,
   };
 }
 
@@ -342,9 +346,9 @@ export class DesktopAuthService {
   }
 
   private async assertUserStillActive(user: DesktopUserSnapshot): Promise<void> {
-    if (user.role === 'admin') {
-      const admin = await this.authRepository.findActiveAdminById(user.id);
-      if (!admin) {
+    if (user.role === 'mentor' || user.role === 'manager') {
+      const account = await this.authRepository.findActiveAdminById(user.id);
+      if (!account) {
         throw new AppError(401, 'DESKTOP_SESSION_REVOKED', 'This account is no longer active.');
       }
       return;

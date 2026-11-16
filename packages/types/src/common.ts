@@ -32,7 +32,7 @@ export type ApiErrorResponse = {
   };
 };
 
-export type UserRole = 'trainee' | 'admin';
+export type UserRole = 'trainee' | 'mentor' | 'manager';
 
 // Response returned by the authenticated user profile endpoint
 export type MeResponse = {

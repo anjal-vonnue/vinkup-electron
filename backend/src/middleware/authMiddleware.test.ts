@@ -27,11 +27,11 @@ const trainee: JwtPayload = {
   role: 'trainee',
 };
 
-const admin: JwtPayload = {
+const mentor: JwtPayload = {
   id: '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77',
   name: 'Test Mentor',
   email: 'mentor@vonnue.com',
-  role: 'admin',
+  role: 'mentor',
 };
 
 /** A token issued before roles existed: no `role` claim. */
@@ -78,11 +78,11 @@ describe('requireAuth', () => {
     expect((req as AuthenticatedRequest).user).toEqual(trainee);
   });
 
-  it('lets an admin through (role checks are the job of the other guards)', async () => {
-    const req = requestWith(signJwt(admin));
+  it('lets a mentor through (role checks are the job of the other guards)', async () => {
+    const req = requestWith(signJwt(mentor));
 
     expect(await run(requireAuth, req)).toBeUndefined();
-    expect((req as AuthenticatedRequest).user.role).toBe('admin');
+    expect((req as AuthenticatedRequest).user.role).toBe('mentor');
   });
 
   it('sets role "trainee" for a token issued before roles existed', async () => {
@@ -102,8 +102,8 @@ describe('requireTrainee', () => {
     expect(await run(requireTrainee, requestWith(legacyToken()))).toBeUndefined();
   });
 
-  it('returns 403 FORBIDDEN for an admin', async () => {
-    expectAppError(await run(requireTrainee, requestWith(signJwt(admin))), 403, 'FORBIDDEN');
+  it('returns 403 FORBIDDEN for a mentor', async () => {
+    expectAppError(await run(requireTrainee, requestWith(signJwt(mentor))), 403, 'FORBIDDEN');
   });
 
   it('returns 401, not 403, when not signed in', async () => {
@@ -111,7 +111,7 @@ describe('requireTrainee', () => {
   });
 
   it('never queries the admin table', async () => {
-    await run(requireTrainee, requestWith(signJwt(admin)));
+    await run(requireTrainee, requestWith(signJwt(mentor)));
     await run(requireTrainee, requestWith(signJwt(trainee)));
 
     expect(findActiveAdminById).not.toHaveBeenCalled();
@@ -119,19 +119,19 @@ describe('requireTrainee', () => {
 });
 
 describe('requireAdmin', () => {
-  it('lets an active admin through after checking the admin table', async () => {
-    findActiveAdminById.mockResolvedValue({ id: admin.id });
-    const req = requestWith(signJwt(admin));
+  it('lets an active mentor through after checking the admin table', async () => {
+    findActiveAdminById.mockResolvedValue({ id: mentor.id });
+    const req = requestWith(signJwt(mentor));
 
     expect(await run(requireAdmin, req)).toBeUndefined();
-    expect(findActiveAdminById).toHaveBeenCalledWith(admin.id);
-    expect((req as AuthenticatedRequest).user.role).toBe('admin');
+    expect(findActiveAdminById).toHaveBeenCalledWith(mentor.id);
+    expect((req as AuthenticatedRequest).user.role).toBe('mentor');
   });
 
-  it('returns 403 when the admin was deactivated after the token was issued', async () => {
+  it('returns 403 when the mentor was deactivated after the token was issued', async () => {
     findActiveAdminById.mockResolvedValue(null);
 
-    expectAppError(await run(requireAdmin, requestWith(signJwt(admin))), 403, 'FORBIDDEN');
+    expectAppError(await run(requireAdmin, requestWith(signJwt(mentor))), 403, 'FORBIDDEN');
   });
 
   it('returns 403 for a trainee without querying the admin table', async () => {
@@ -152,6 +152,6 @@ describe('requireAdmin', () => {
     const dbError = new Error('db down');
     findActiveAdminById.mockRejectedValue(dbError);
 
-    expect(await run(requireAdmin, requestWith(signJwt(admin)))).toBe(dbError);
+    expect(await run(requireAdmin, requestWith(signJwt(mentor)))).toBe(dbError);
   });
 });

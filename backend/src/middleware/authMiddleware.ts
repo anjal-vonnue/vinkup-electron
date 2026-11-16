@@ -22,7 +22,7 @@ export function requireAuth(request: Request, _response: Response, next: NextFun
   }
 }
 
-/** Signed in AND a trainee. Admins get 403 on trainee routes. */
+/** Signed in as a trainee. Mentors and managers get 403 on trainee routes. */
 export function requireTrainee(request: Request, response: Response, next: NextFunction) {
   requireAuth(request, response, (error?: unknown) => {
     if (error) return next(error);
@@ -33,16 +33,34 @@ export function requireTrainee(request: Request, response: Response, next: NextF
   });
 }
 
-/** Signed in as admin AND the admin row is still active (checked on every
-request). */
-export function requireAdmin(request: Request, response: Response, next: NextFunction) {
+/** Signed in as an active mentor (checked on every request). */
+export function requireMentor(request: Request, response: Response, next: NextFunction) {
   requireAuth(request, response, (error?: unknown) => {
     if (error) return next(error);
     const user = (request as AuthenticatedRequest).user;
-    if (user.role !== 'admin') return next(new ForbiddenError());
+    if (user.role !== 'mentor') return next(new ForbiddenError());
     authRepository
       .findActiveAdminById(user.id)
-      .then((admin) => (admin ? next() : next(new ForbiddenError())))
+      .then((mentor) => (mentor ? next() : next(new ForbiddenError())))
       .catch(next);
   });
 }
+
+/** Signed in as an active manager (checked on every request). */
+export function requireManager(request: Request, response: Response, next: NextFunction) {
+  requireAuth(request, response, (error?: unknown) => {
+    if (error) return next(error);
+    const user = (request as AuthenticatedRequest).user;
+    if (user.role !== 'manager') return next(new ForbiddenError());
+    authRepository
+      .findActiveAdminById(user.id)
+      .then((manager) => (manager ? next() : next(new ForbiddenError())))
+      .catch(next);
+  });
+}
+
+/**
+ * Backward-compatible alias: historically "admin" meant the mentor/reviewer role.
+ * New code should prefer requireMentor or requireManager.
+ */
+export const requireAdmin = requireMentor;

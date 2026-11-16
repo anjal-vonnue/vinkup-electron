@@ -11,7 +11,7 @@ vi.mock('../../context/Useauth', () => ({
       id: 'admin-1',
       name: 'Mentor One',
       email: 'mentor@vonnue.com',
-      role: 'admin',
+      role: 'mentor',
     },
     isLoading: false,
     logout: mockLogout,

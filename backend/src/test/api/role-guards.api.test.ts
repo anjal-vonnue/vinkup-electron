@@ -85,11 +85,11 @@ describe('GET /api/auth/me', () => {
     expect(body<{ role: string }>(res).role).toBe('trainee');
   });
 
-  it('returns role "admin" for an admin', async () => {
+  it('returns role "mentor" for an admin', async () => {
     const res = await api.get('/api/auth/me', admin.cookie);
     expect(res.status).toBe(200);
     expect(body<{ role: string; email: string }>(res)).toMatchObject({
-      role: 'admin',
+      role: 'mentor',
       email: admin.email,
     });
   });

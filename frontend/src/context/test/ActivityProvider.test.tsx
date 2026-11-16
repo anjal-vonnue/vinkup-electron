@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type AuthState = {
   isAuthenticated: boolean;
-  user: { role: 'trainee' | 'admin' } | null;
+  user: { role: 'trainee' | 'mentor' | 'manager' } | null;
 };
 
 const auth = vi.hoisted<AuthState>(() => ({
@@ -59,8 +59,8 @@ describe('ActivityProvider', () => {
     expect(batch.activeSeconds).toBeGreaterThan(0);
   });
 
-  it('never tracks or sends time for an admin', async () => {
-    auth.user = { role: 'admin' };
+  it('never tracks or sends time for a mentor', async () => {
+    auth.user = { role: 'mentor' };
     renderProvider();
 
     await advance(130_000);

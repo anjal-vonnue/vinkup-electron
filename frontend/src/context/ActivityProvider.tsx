@@ -24,7 +24,7 @@ const MAX_BATCHES_PER_FLUSH = 10;
  */
 export function ActivityProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, user } = useAuth();
-  const isTrainee = isAuthenticated && user?.role !== 'admin';
+  const isTrainee = isAuthenticated && user?.role !== 'mentor' && user?.role !== 'manager';
 
   const totalsRef = useRef<Totals>(emptyTotals());
   const modeRef = useRef<ActivityMode>('none');
