@@ -179,35 +179,6 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
     }
   };
 
-  /**
-   * In the desktop shell the main process writes the PDF through a native save
-   * dialog; in a browser we fall back to the print dialog's "Save as PDF".
-   */
-  const handlePrint = async (options: PrintReportOptions) => {
-    const desktopReport = window.desktop?.report;
-    if (!desktopReport) {
-      print(options);
-      return;
-    }
-
-    setPdfError(null);
-    setIsSavingPdf(true);
-    // Render the print-only report before the main process captures the page.
-    prepare(options);
-    try {
-      await desktopReport.savePdf(reportDocumentTitle(traineeName));
-    } catch (saveError: unknown) {
-      setPdfError(
-        saveError instanceof Error
-          ? `Unable to save report PDF: ${saveError.message}`
-          : 'Unable to save report PDF. Please try again.'
-      );
-    } finally {
-      setIsSavingPdf(false);
-      restore();
-    }
-  };
-
   const { profile, typingStats, courses, totalTasks, journal, tasks } = detail.data;
 
   const selectedTask = tasks.find((task) => task.taskId === selectedTaskId);
