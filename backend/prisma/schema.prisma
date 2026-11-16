@@ -7,16 +7,20 @@ datasource db {
   provider = "postgresql"
 }
 
-// ---------- Admins (mentors). Separate from trainee: never part of trainee queries. ----------
+// ---------- Staff accounts (mentors and managers) ----------
+// Existing rows mapped to MENTOR during role migration. Keep table name `admin`
+// for compatibility with existing review foreign keys.
 model admin {
-  id            String    @id @default(uuid()) @db.Uuid
-  email         String    @unique // stored lower-case
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String     @unique // stored lower-case
   name          String
-  is_active     Boolean   @default(true) // false = can no longer log in or call /api/admin
-  created_at    DateTime  @default(now()) @db.Timestamptz
-  last_login_at DateTime? @db.Timestamptz
+  role          staff_role @default(MENTOR)
+  is_active     Boolean    @default(true) // false = can no longer log in
+  created_at    DateTime   @default(now()) @db.Timestamptz
+  last_login_at DateTime?  @db.Timestamptz
 
-  reviews task_review[]
+  reviews           task_review[]
+  assigned_trainees trainee[]     @relation("MentorTrainees")
 }
 
 // ---------- Enums ----------
@@ -59,11 +63,18 @@ enum review_decision {
   rework
 }
 
-model trainee {
-  id    String @id @default(uuid()) @db.Uuid
-  name  String
-  email String @unique
+enum staff_role {
+  MENTOR
+  MANAGER
+}
 
+model trainee {
+  id        String  @id @default(uuid()) @db.Uuid
+  name      String
+  email     String  @unique
+  mentor_id String? @db.Uuid
+
+  mentor            admin?               @relation("MentorTrainees", fields: [mentor_id], references: [id], onDelete: SetNull)
   task_progress     task_progress[]
   task_reviews      task_review[]
   day_completions   day_completion[]
@@ -71,6 +82,8 @@ model trainee {
   typing_results    typing_test_result[]
   flag_events       flag_event[]
   activity_logs     activity_log[]
+
+  @@index([mentor_id])
 }
 
 // ---------- Curriculum (same for every trainee; loaded by the seed script) ----------
