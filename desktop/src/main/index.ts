@@ -28,6 +28,8 @@ import { getScreenProtectionDisabled } from './screenProtectionConfig';
 import { BUNDLED_ALLOWLIST } from './resources/allowlist';
 import { loadResourcesAllowlist } from './resources/allowlist-source';
 import { ResourcesBrowser } from './resources/browser';
+import { registerWorkspaceIpc } from './workspace/ipc';
+import { WorkspaceManager } from './workspace/manager';
 import {
   assertTrustedSender as assertTrustedSenderForOrigin,
   isAllowedExternalUrl,
@@ -45,6 +47,7 @@ let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
 let displayWindowManager: DisplayWindowManager | null = null;
 let resourcesBrowser: ResourcesBrowser | null = null;
+let workspaceManager: WorkspaceManager | null = null;
 
 // Set the name before `ready` so userData, cache and config use the product name.
 app.setName(APP_NAME);
@@ -81,6 +84,7 @@ async function bootstrap(): Promise<void> {
 
   authManager = createDesktopAuthManager();
   authManager.onChange(broadcastAuthState);
+  workspaceManager = createWorkspaceManager();
   registerIpcHandlers();
 
   // Restore in the background so a slow/offline backend never blocks the
@@ -203,11 +207,25 @@ function broadcastAuthState(state: DesktopAuthState): void {
   mainWindow.webContents.send('auth:state-changed', state);
 }
 
+
 function updateProtectionContext(state: DesktopAuthState): void {
   displayWindowManager?.setProtectionContext(
     state.status === 'loading' || state.status === 'pending',
     state.status === 'authenticated' ? (state.user?.role ?? null) : null
   );
+}
+function sendToRenderer(channel: string, payload: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send(channel, payload);
+}
+
+function createWorkspaceManager(): WorkspaceManager {
+  return new WorkspaceManager({
+    baseDir: path.join(app.getPath('userData'), 'workspaces'),
+    emitEvent: (event) => sendToRenderer('workspace:event', event),
+    emitTerminalData: (event) => sendToRenderer('terminal:data', event),
+    emitTerminalExit: (event) => sendToRenderer('terminal:exit', event),
+  });
 }
 
 function createMainWindow(): BrowserWindow {
@@ -253,6 +271,7 @@ function createMainWindow(): BrowserWindow {
   window.on('close', () => {
     resourcesBrowser?.dispose();
     resourcesBrowser = null;
+    void workspaceManager?.closeAll();
   });
 
   window.on('resize', () => {
@@ -331,6 +350,8 @@ async function loadRenderer(window: BrowserWindow, attempts = 0): Promise<void> 
 }
 
 function registerIpcHandlers(): void {
+  registerWorkspaceIpc({ manager: getWorkspaceManager(), assertTrustedSender });
+
   ipcMain.handle('app:get-info', (event) => {
     assertTrustedSender(event);
     return getAppInfo();
@@ -517,6 +538,11 @@ function getResourcesBrowser(): ResourcesBrowser {
   return resourcesBrowser;
 }
 
+function getWorkspaceManager(): WorkspaceManager {
+  if (!workspaceManager) throw new Error('The workspace manager is not ready.');
+  return workspaceManager;
+}
+
 function parseBrowserBounds(value: unknown): ResourcesBrowserBounds {
   if (typeof value !== 'object' || value === null) {
     throw new Error('Invalid browser bounds.');
@@ -679,14 +705,14 @@ function installMenu(): void {
         { role: 'togglefullscreen' },
         ...(isDev
           ? [
-              { type: 'separator' as const },
-              {
-                label: 'Toggle Developer Tools',
-                click: (_item: Electron.MenuItem, window: Electron.BaseWindow | undefined) => {
-                  if (window instanceof BrowserWindow) window.webContents.toggleDevTools();
-                },
+            { type: 'separator' as const },
+            {
+              label: 'Toggle Developer Tools',
+              click: (_item: Electron.MenuItem, window: Electron.BaseWindow | undefined) => {
+                if (window instanceof BrowserWindow) window.webContents.toggleDevTools();
               },
-            ]
+            },
+          ]
           : []),
       ],
     },
@@ -734,6 +760,9 @@ app.on('before-quit', () => {
   displayWindowManager = null;
   authManager?.dispose();
   authManager = null;
+  const manager = workspaceManager;
+  workspaceManager = null;
+  void manager?.closeAll();
   if (!localServer) return;
   const server = localServer;
   localServer = null;

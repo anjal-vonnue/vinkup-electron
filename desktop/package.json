@@ -15,10 +15,13 @@
     "test:watch": "vitest",
     "dev": "npm run build && NODE_ENV=development node scripts/run-electron.mjs .",
     "start": "npm run build && NODE_ENV=production node scripts/run-electron.mjs .",
+    "rebuild": "electron-builder install-app-deps",
     "dist": "npm run build && electron-builder --linux"
   },
   "dependencies": {
-    "http-proxy": "^1.18.1"
+    "esbuild": "^0.28.2",
+    "http-proxy": "^1.18.1",
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "@itp/types": "^1.0.0",
@@ -26,7 +29,6 @@
     "@types/node": "^24.19.0",
     "electron": "45.2.3",
     "electron-builder": "^26.18.0",
-    "esbuild": "^0.28.2",
     "typescript": "~6.0.2"
   }
 }
