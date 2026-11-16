@@ -1,13 +1,22 @@
 import { prisma } from '../../lib/prisma';
 
 export class AuthRepository {
+  /** Only active trainees can sign in or keep a session. */
   findBymail = (email: string) => {
-    return prisma.trainee.findUnique({ where: { email: email.toLowerCase() } });
+    return prisma.trainee.findFirst({
+      where: { email: email.toLowerCase(), is_active: true },
+    });
   };
 
   findById = (id: string) => {
-    return prisma.trainee.findUnique({ where: { id } });
+    return prisma.trainee.findFirst({ where: { id, is_active: true } });
   };
+
+  findActiveTraineeById = (id: string) =>
+    prisma.trainee.findFirst({
+      where: { id, is_active: true },
+      select: { id: true },
+    });
 
   findActiveStaffByEmail = (email: string) =>
     prisma.admin.findFirst({

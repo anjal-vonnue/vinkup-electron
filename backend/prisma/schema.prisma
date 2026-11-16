@@ -72,6 +72,7 @@ model trainee {
   id        String  @id @default(uuid()) @db.Uuid
   name      String
   email     String  @unique
+  is_active Boolean @default(true) // false = can no longer log in
   mentor_id String? @db.Uuid
 
   mentor            admin?               @relation("MentorTrainees", fields: [mentor_id], references: [id], onDelete: SetNull)

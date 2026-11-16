@@ -22,14 +22,18 @@ export function requireAuth(request: Request, _response: Response, next: NextFun
   }
 }
 
-/** Signed in as a trainee. Mentors and managers get 403 on trainee routes. */
+/** Signed in as an active trainee. Mentors and managers get 403 on trainee routes. */
 export function requireTrainee(request: Request, response: Response, next: NextFunction) {
   requireAuth(request, response, (error?: unknown) => {
     if (error) return next(error);
-    if ((request as AuthenticatedRequest).user.role !== 'trainee') {
+    const user = (request as AuthenticatedRequest).user;
+    if (user.role !== 'trainee') {
       return next(new ForbiddenError('This page is for trainees.'));
     }
-    next();
+    authRepository
+      .findActiveTraineeById(user.id)
+      .then((trainee) => (trainee ? next() : next(new ForbiddenError())))
+      .catch(next);
   });
 }
 

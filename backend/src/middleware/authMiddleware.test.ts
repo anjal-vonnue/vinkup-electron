@@ -7,15 +7,17 @@ import { AUTH_COOKIE_NAME } from '../module/auth-module/auth.constants';
 import { AppError } from '../errors/AppError';
 import type { AuthenticatedRequest } from '../types/auth.types';
 
-const { findActiveStaffById, findTraineeMentorById } = vi.hoisted(() => ({
+const { findActiveStaffById, findActiveTraineeById, findTraineeMentorById } = vi.hoisted(() => ({
   findActiveStaffById: vi.fn(),
+  findActiveTraineeById: vi.fn(),
   findTraineeMentorById: vi.fn(),
 }));
 
-// Staff guards re-check the staff account on every request; no real database here.
+// Staff and trainee guards re-check the account on every request; no real database here.
 vi.mock('../module/auth-module/auth.repository', () => ({
   AuthRepository: class {
     findActiveStaffById = findActiveStaffById;
+    findActiveTraineeById = findActiveTraineeById;
     findTraineeMentorById = findTraineeMentorById;
   },
 }));
@@ -78,6 +80,8 @@ function expectAppError(error: unknown, status: number, code: string): void {
 
 beforeEach(() => {
   findActiveStaffById.mockReset();
+  findActiveTraineeById.mockReset();
+  findActiveTraineeById.mockResolvedValue({ id: trainee.id });
   findTraineeMentorById.mockReset();
 });
 
@@ -113,16 +117,24 @@ describe('requireAuth', () => {
 });
 
 describe('requireTrainee', () => {
-  it('lets a trainee through', async () => {
+  it('lets a trainee through after checking the trainee account', async () => {
     expect(await run(requireTrainee, requestWith(signJwt(trainee)))).toBeUndefined();
+    expect(findActiveTraineeById).toHaveBeenCalledWith(trainee.id);
   });
 
   it('lets a token issued before roles existed through', async () => {
     expect(await run(requireTrainee, requestWith(legacyToken()))).toBeUndefined();
   });
 
+  it('returns 403 when the trainee was deactivated after the token was issued', async () => {
+    findActiveTraineeById.mockResolvedValue(null);
+
+    expectAppError(await run(requireTrainee, requestWith(signJwt(trainee))), 403, 'FORBIDDEN');
+  });
+
   it('returns 403 FORBIDDEN for a mentor', async () => {
     expectAppError(await run(requireTrainee, requestWith(signJwt(mentor))), 403, 'FORBIDDEN');
+    expect(findActiveTraineeById).not.toHaveBeenCalled();
   });
 
   it('returns 401, not 403, when not signed in', async () => {

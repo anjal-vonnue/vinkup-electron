@@ -75,6 +75,8 @@ export class ConflictError extends AppError {
     code: Extract<
       ErrorCode,
       | 'TRAINEE_EXISTS'
+      | 'STAFF_EXISTS'
+      | 'STAFF_HAS_TRAINEES'
       | 'EMAIL_BELONGS_TO_ADMIN'
       | 'ALREADY_REVIEWED'
       | 'ALREADY_APPROVED'
