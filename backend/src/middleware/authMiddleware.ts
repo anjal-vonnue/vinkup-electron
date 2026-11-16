@@ -40,8 +40,8 @@ export function requireMentor(request: Request, response: Response, next: NextFu
     const user = (request as AuthenticatedRequest).user;
     if (user.role !== 'mentor') return next(new ForbiddenError());
     authRepository
-      .findActiveAdminById(user.id)
-      .then((mentor) => (mentor ? next() : next(new ForbiddenError())))
+      .findActiveStaffById(user.id)
+      .then((staff) => (staff?.role === 'MENTOR' ? next() : next(new ForbiddenError())))
       .catch(next);
   });
 }
@@ -53,8 +53,8 @@ export function requireManager(request: Request, response: Response, next: NextF
     const user = (request as AuthenticatedRequest).user;
     if (user.role !== 'manager') return next(new ForbiddenError());
     authRepository
-      .findActiveAdminById(user.id)
-      .then((manager) => (manager ? next() : next(new ForbiddenError())))
+      .findActiveStaffById(user.id)
+      .then((staff) => (staff?.role === 'MANAGER' ? next() : next(new ForbiddenError())))
       .catch(next);
   });
 }

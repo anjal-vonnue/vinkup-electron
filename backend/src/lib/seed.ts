@@ -16,10 +16,11 @@ const prisma = new PrismaClient({ adapter });
 
 // ---------- Data ----------
 
-// Mentors who can open the admin dashboard. Emails must be on ALLOWED_EMAIL_DOMAIN.
+// Staff who can open the mentor dashboard or manager console. Emails must be on ALLOWED_EMAIL_DOMAIN.
+// Existing admin rows migrate to MENTOR; add `role: 'MANAGER'` to provision a manager.
 const admins = [
-  { email: 'hawas.backer@vonnue.com', name: 'hawas' },
-  { email: 'ameesha.t@vonnue.com', name: 'Ameesha T' },
+  { email: 'hawas.backer@vonnue.com', name: 'hawas', role: 'MENTOR' as const },
+  { email: 'ameesha.t@vonnue.com', name: 'Ameesha T', role: 'MENTOR' as const },
 ];
 
 const trainees = [
@@ -352,8 +353,8 @@ async function main() {
     const email = admin.email.toLowerCase();
     await prisma.admin.upsert({
       where: { email },
-      update: { name: admin.name },
-      create: { email, name: admin.name },
+      update: { name: admin.name, role: admin.role },
+      create: { email, name: admin.name, role: admin.role },
     });
   }
 

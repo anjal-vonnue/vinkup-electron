@@ -7,11 +7,11 @@ import { env } from '../../../config/env';
 import { signJwt, verifyJwt } from '../../../utils/jwt';
 import { AUTH_COOKIE_NAME } from '../auth.constants';
 
-const { findBymail, findActiveAdminByEmail, findActiveAdminById, recordAdminLogin } = vi.hoisted(
+const { findBymail, findActiveStaffByEmail, findActiveStaffById, recordAdminLogin } = vi.hoisted(
   () => ({
     findBymail: vi.fn(),
-    findActiveAdminByEmail: vi.fn(),
-    findActiveAdminById: vi.fn(),
+    findActiveStaffByEmail: vi.fn(),
+    findActiveStaffById: vi.fn(),
     recordAdminLogin: vi.fn(),
   })
 );
@@ -20,8 +20,8 @@ vi.mock('../auth.repository', () => ({
   AuthRepository: class {
     findBymail = findBymail;
     findById = vi.fn();
-    findActiveAdminByEmail = findActiveAdminByEmail;
-    findActiveAdminById = findActiveAdminById;
+    findActiveStaffByEmail = findActiveStaffByEmail;
+    findActiveStaffById = findActiveStaffById;
     recordAdminLogin = recordAdminLogin;
   },
 }));
@@ -99,6 +99,14 @@ const admin = {
   id: '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77',
   email: `mentor@${env.ALLOWED_EMAIL_DOMAIN}`,
   name: 'Test Mentor',
+  role: 'MENTOR' as const,
+};
+
+const manager = {
+  id: 'b5f9c5d1-2a44-4f4d-8a1e-6f2c9d7b3e55',
+  email: `manager@${env.ALLOWED_EMAIL_DOMAIN}`,
+  name: 'Test Manager',
+  role: 'MANAGER' as const,
 };
 
 function callbackUrl(params: Record<string, string> = {}): string {
@@ -124,10 +132,10 @@ function adminToken(): string {
 
 beforeEach(() => {
   findBymail.mockReset();
-  findActiveAdminById.mockReset();
-  findActiveAdminByEmail.mockReset();
+  findActiveStaffById.mockReset();
+  findActiveStaffByEmail.mockReset();
   recordAdminLogin.mockReset();
-  findActiveAdminByEmail.mockResolvedValue(null); // by default nobody is an admin
+  findActiveStaffByEmail.mockResolvedValue(null); // by default nobody is an admin
   recordAdminLogin.mockResolvedValue(undefined);
 });
 afterEach(() => {
@@ -174,20 +182,41 @@ describe('GET /api/auth/google/callback', () => {
   });
 });
 
-describe('GET /api/auth/google/callback: admins', () => {
-  it('redirects an admin to /admin with a role "mentor" token', async () => {
-    findActiveAdminByEmail.mockResolvedValue(admin);
+describe('GET /api/auth/google/callback: staff', () => {
+  it('redirects an existing admin/mentor to /admin with a role "mentor" token', async () => {
+    findActiveStaffByEmail.mockResolvedValue(admin);
 
     const res = await request(app).get(callbackUrl({ email: admin.email }));
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe(`${env.FRONTEND_URL}/admin`);
     const payload = verifyJwt(cookieValue(getAuthCookie(res) as string));
-    expect(payload).toEqual({ ...admin, role: 'mentor' });
+    expect(payload).toEqual({
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: 'mentor',
+    });
+  });
+
+  it('redirects a manager to /manager with a role "manager" token', async () => {
+    findActiveStaffByEmail.mockResolvedValue(manager);
+
+    const res = await request(app).get(callbackUrl({ email: manager.email }));
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(`${env.FRONTEND_URL}/manager`);
+    const payload = verifyJwt(cookieValue(getAuthCookie(res) as string));
+    expect(payload).toEqual({
+      id: manager.id,
+      email: manager.email,
+      name: manager.name,
+      role: 'manager',
+    });
   });
 
   it('does not look the admin up in the trainee table and records the login', async () => {
-    findActiveAdminByEmail.mockResolvedValue(admin);
+    findActiveStaffByEmail.mockResolvedValue(admin);
 
     await request(app).get(callbackUrl({ email: admin.email }));
 
@@ -196,7 +225,7 @@ describe('GET /api/auth/google/callback: admins', () => {
   });
 
   it('returns 500 and sets no cookie when the admin lookup throws', async () => {
-    findActiveAdminByEmail.mockRejectedValue(new Error('connection refused'));
+    findActiveStaffByEmail.mockRejectedValue(new Error('connection refused'));
 
     const res = await request(app).get(callbackUrl({ email: admin.email }));
 
@@ -215,7 +244,7 @@ describe('GET /api/auth/google/callback: failures', () => {
     expect(location.searchParams.get('error')).toBe('DOMAIN_NOT_PERMITTED');
     expect(location.searchParams.get('email')).toBe('someone@gmail.com');
     expect(getAuthCookie(res)).toBeUndefined();
-    expect(findActiveAdminByEmail).not.toHaveBeenCalled();
+    expect(findActiveStaffByEmail).not.toHaveBeenCalled();
     expect(findBymail).not.toHaveBeenCalled();
   });
 
@@ -377,7 +406,7 @@ describe('Full session lifecycle', () => {
   });
 
   it('admin: login -> /me says admin -> logout -> /me is rejected', async () => {
-    findActiveAdminByEmail.mockResolvedValue(admin);
+    findActiveStaffByEmail.mockResolvedValue(admin);
     const agent = request.agent(app);
 
     await agent.get(callbackUrl({ email: admin.email })).expect(302);

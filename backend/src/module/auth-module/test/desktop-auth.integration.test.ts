@@ -30,6 +30,12 @@ const admin: Admin = {
   name: 'Test Mentor',
   role: 'mentor',
 };
+const manager = {
+  id: 'b5f9c5d1-2a44-4f4d-8a1e-6f2c9d7b3e55',
+  email: 'manager@vonnue.com',
+  name: 'Test Manager',
+  role: 'manager' as const,
+};
 
 /**
  * An in-memory stand-in for the Prisma repository. The semantics of the
@@ -261,8 +267,8 @@ const store = vi.hoisted(() => {
 const authLookups = vi.hoisted(() => ({
   findBymail: vi.fn(),
   findById: vi.fn(),
-  findActiveAdminByEmail: vi.fn(),
-  findActiveAdminById: vi.fn(),
+  findActiveStaffByEmail: vi.fn(),
+  findActiveStaffById: vi.fn(),
   recordAdminLogin: vi.fn(),
 }));
 
@@ -274,8 +280,8 @@ vi.mock('../auth.repository', () => ({
   AuthRepository: class {
     findBymail = authLookups.findBymail;
     findById = authLookups.findById;
-    findActiveAdminByEmail = authLookups.findActiveAdminByEmail;
-    findActiveAdminById = authLookups.findActiveAdminById;
+    findActiveStaffByEmail = authLookups.findActiveStaffByEmail;
+    findActiveStaffById = authLookups.findActiveStaffById;
     recordAdminLogin = authLookups.recordAdminLogin;
   },
 }));
@@ -377,14 +383,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   authLookups.findBymail.mockReset();
   authLookups.findById.mockReset();
-  authLookups.findActiveAdminByEmail.mockReset();
-  authLookups.findActiveAdminById.mockReset();
+  authLookups.findActiveStaffByEmail.mockReset();
+  authLookups.findActiveStaffById.mockReset();
   authLookups.recordAdminLogin.mockReset();
 
   authLookups.findBymail.mockResolvedValue(trainee);
   authLookups.findById.mockResolvedValue(trainee);
-  authLookups.findActiveAdminByEmail.mockResolvedValue(null);
-  authLookups.findActiveAdminById.mockResolvedValue(admin);
+  authLookups.findActiveStaffByEmail.mockResolvedValue(null);
+  authLookups.findActiveStaffById.mockResolvedValue(admin);
   authLookups.recordAdminLogin.mockResolvedValue(undefined);
 });
 
@@ -602,7 +608,7 @@ describe('POST /api/auth/desktop/exchange', () => {
   });
 
   it('signs in an admin and returns the mentor role', async () => {
-    authLookups.findActiveAdminByEmail.mockResolvedValue(admin);
+    authLookups.findActiveStaffByEmail.mockResolvedValue(admin);
     const { redirect } = await beginLogin(admin.email);
 
     const response = await request(app)
@@ -611,6 +617,17 @@ describe('POST /api/auth/desktop/exchange', () => {
       .expect(200);
     expect((response.body as { user: unknown }).user).toEqual(admin);
     expect(authLookups.recordAdminLogin).toHaveBeenCalledWith(admin.id);
+  });
+
+  it('signs in a manager and returns the manager role', async () => {
+    authLookups.findActiveStaffByEmail.mockResolvedValue({ ...manager, role: 'MANAGER' });
+    const { redirect } = await beginLogin(manager.email);
+
+    const response = await request(app)
+      .post(`${BASE}/exchange`)
+      .send({ code: handoffCode(redirect), codeVerifier: CODE_VERIFIER })
+      .expect(200);
+    expect((response.body as { user: unknown }).user).toEqual(manager);
   });
 });
 

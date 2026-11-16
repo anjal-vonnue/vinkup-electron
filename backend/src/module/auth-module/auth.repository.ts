@@ -9,21 +9,24 @@ export class AuthRepository {
     return prisma.trainee.findUnique({ where: { id } });
   };
 
-  findActiveAdminByEmail = (email: string) =>
+  findActiveStaffByEmail = (email: string) =>
     prisma.admin.findFirst({
       where: {
         email: email.toLowerCase(),
         is_active: true,
       },
+      select: { id: true, email: true, name: true, role: true },
     });
 
-  findActiveAdminById = (id: string) =>
+  findActiveStaffById = (id: string) =>
     prisma.admin.findFirst({
       where: { id, is_active: true },
-      select: {
-        id: true,
-      },
+      select: { id: true, role: true },
     });
+
+  findActiveAdminByEmail = (email: string) => this.findActiveStaffByEmail(email);
+
+  findActiveAdminById = (id: string) => this.findActiveStaffById(id);
 
   recordAdminLogin = (id: string) =>
     prisma.admin.update({

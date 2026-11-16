@@ -347,7 +347,7 @@ export class DesktopAuthService {
 
   private async assertUserStillActive(user: DesktopUserSnapshot): Promise<void> {
     if (user.role === 'mentor' || user.role === 'manager') {
-      const account = await this.authRepository.findActiveAdminById(user.id);
+      const account = await this.authRepository.findActiveStaffById(user.id);
       if (!account) {
         throw new AppError(401, 'DESKTOP_SESSION_REVOKED', 'This account is no longer active.');
       }
