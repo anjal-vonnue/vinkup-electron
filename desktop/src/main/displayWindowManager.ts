@@ -48,7 +48,7 @@ export class DisplayWindowManager {
   private isMoving = false;
   private isRelocatingByManager = false;
   private isAuthenticationInProgress = false;
-  private isAdminSession = false;
+  private isStaffSession = false;
   private isCertificatePrintInProgress = false;
   private isQuitting = false;
   private isStarted = false;
@@ -186,7 +186,7 @@ export class DisplayWindowManager {
     if (
       this.isQuitting ||
       this.isAuthenticationInProgress ||
-      this.isAdminSession ||
+      this.isStaffSession ||
       this.isMoving
     ) {
       return;
@@ -225,17 +225,17 @@ export class DisplayWindowManager {
 
   setProtectionContext(authenticationInProgress: boolean, role: UserRole | null): void {
     if (this.isQuitting) return;
-    const wasProtectionSuspended = this.isAuthenticationInProgress || this.isAdminSession;
+    const wasProtectionSuspended = this.isAuthenticationInProgress || this.isStaffSession;
     this.isAuthenticationInProgress = authenticationInProgress;
-    this.isAdminSession = role === 'admin';
-    const isProtectionSuspended = this.isAuthenticationInProgress || this.isAdminSession;
+    this.isStaffSession = role === 'mentor' || role === 'manager';
+    const isProtectionSuspended = this.isAuthenticationInProgress || this.isStaffSession;
     if (!this.enabled) return;
 
     if (isProtectionSuspended) {
       this.focusLostAt = null;
       this.clearAlerts();
       this.destroyAllOverlays();
-      if (this.isAdminSession) {
+      if (this.isStaffSession) {
         for (const timer of this.launchFocusTimers) clearTimeout(timer);
         this.launchFocusTimers = [];
         if (isAlive(this.mainWindow)) {
@@ -246,7 +246,7 @@ export class DisplayWindowManager {
       return;
     }
 
-    if ((!wasProtectionSuspended && !this.isAdminSession) || this.isMoving) return;
+    if ((!wasProtectionSuspended && !this.isStaffSession) || this.isMoving) return;
     if (this.isCertificatePrintInProgress) {
       this.reconcile();
       return;
@@ -263,7 +263,7 @@ export class DisplayWindowManager {
   }
 
   isProtectionEnabledForCurrentUser(): boolean {
-    return this.enabled && !this.isAdminSession;
+    return this.enabled && !this.isStaffSession;
   }
 
   shouldPreventMinimize(): boolean {
@@ -279,7 +279,7 @@ export class DisplayWindowManager {
   };
 
   private readonly onDisplayRemoved = (_event: Electron.Event, removed: Display): void => {
-    if (this.isAdminSession) return;
+    if (this.isStaffSession) return;
     if (removed.id === this.appDisplayId) {
       void this.moveToDisplay(screen.getPrimaryDisplay()).catch((error: unknown) => {
         console.error('[desktop] Failed to move the app to the primary display', error);
@@ -290,7 +290,7 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowWillMove = (): void => {
-    if (this.isQuitting || this.isAdminSession || this.isMoving || !isAlive(this.mainWindow)) {
+    if (this.isQuitting || this.isStaffSession || this.isMoving || !isAlive(this.mainWindow)) {
       return;
     }
     this.isMoving = true;
@@ -298,7 +298,7 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowMove = (): void => {
-    if (this.isQuitting || this.isAdminSession || !isAlive(this.mainWindow)) return;
+    if (this.isQuitting || this.isStaffSession || !isAlive(this.mainWindow)) return;
     if (this.isRelocatingByManager) {
       this.keepMainWindowOnCorrectWorkspaces();
       return;
@@ -310,7 +310,7 @@ export class DisplayWindowManager {
   private readonly onMainWindowBlur = (): void => {
     if (
       this.isAuthenticationInProgress ||
-      this.isAdminSession ||
+      this.isStaffSession ||
       this.isCertificatePrintInProgress
     ) {
       return;
@@ -345,7 +345,7 @@ export class DisplayWindowManager {
     if (
       this.isMoving ||
       this.isCertificatePrintInProgress ||
-      this.isAdminSession ||
+      this.isStaffSession ||
       this.isQuitting ||
       !isAlive(this.mainWindow)
     ) {
@@ -383,7 +383,7 @@ export class DisplayWindowManager {
       if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
     }
     this.keepMainWindowOnCorrectWorkspaces();
-    if (this.isAdminSession || this.isAuthenticationInProgress) return;
+    if (this.isStaffSession || this.isAuthenticationInProgress) return;
     this.mainWindow.focus();
 
     this.launchFocusTimers.push(
@@ -392,7 +392,7 @@ export class DisplayWindowManager {
           isAlive(this.mainWindow) &&
           !this.isQuitting &&
           !this.isAuthenticationInProgress &&
-          !this.isAdminSession
+          !this.isStaffSession
         ) {
           this.mainWindow.focus();
           this.isReadyForFocusTracking = true;
@@ -406,7 +406,7 @@ export class DisplayWindowManager {
       !this.isReadyForFocusTracking ||
       this.isQuitting ||
       this.isAuthenticationInProgress ||
-      this.isAdminSession ||
+      this.isStaffSession ||
       this.isCertificatePrintInProgress ||
       this.isMoving ||
       !isAlive(this.mainWindow)
@@ -463,7 +463,7 @@ export class DisplayWindowManager {
     if (
       this.isQuitting ||
       this.isAuthenticationInProgress ||
-      this.isAdminSession ||
+      this.isStaffSession ||
       this.isMoving ||
       !isAlive(this.mainWindow)
     ) {
@@ -499,7 +499,7 @@ export class DisplayWindowManager {
   };
 
   private async moveToDisplay(requestedDisplay: Display): Promise<void> {
-    if (this.isQuitting || this.isAdminSession || !isAlive(this.mainWindow)) return;
+    if (this.isQuitting || this.isStaffSession || !isAlive(this.mainWindow)) return;
     if (this.isMoving) {
       this.pendingDisplayId = requestedDisplay.id;
       return;
@@ -522,11 +522,11 @@ export class DisplayWindowManager {
       this.destroyOverlay(target.id);
 
       await this.setFullscreen(false);
-      if (!isAlive(this.mainWindow) || this.isQuitting || this.isAdminSession) return;
+      if (!isAlive(this.mainWindow) || this.isQuitting || this.isStaffSession) return;
 
       this.mainWindow.setBounds(target.bounds);
       await this.setFullscreen(true);
-      if (!isAlive(this.mainWindow) || this.isQuitting || this.isAdminSession) return;
+      if (!isAlive(this.mainWindow) || this.isQuitting || this.isStaffSession) return;
 
       this.appDisplayId = target.id;
     } catch (error) {
@@ -534,7 +534,7 @@ export class DisplayWindowManager {
       if (
         isAlive(this.mainWindow) &&
         !this.isQuitting &&
-        !this.isAdminSession &&
+        !this.isStaffSession &&
         !this.mainWindow.isFullScreen()
       ) {
         try {
@@ -552,7 +552,7 @@ export class DisplayWindowManager {
     } finally {
       this.isRelocatingByManager = false;
       this.isMoving = false;
-      if (this.isAdminSession && isAlive(this.mainWindow)) {
+      if (this.isStaffSession && isAlive(this.mainWindow)) {
         if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
         this.mainWindow.setVisibleOnAllWorkspaces(false);
       }
@@ -561,7 +561,7 @@ export class DisplayWindowManager {
         isAlive(this.mainWindow) &&
         !this.isQuitting &&
         !this.isAuthenticationInProgress &&
-        !this.isAdminSession
+        !this.isStaffSession
       ) {
         this.mainWindow.focus();
       }
@@ -613,7 +613,7 @@ export class DisplayWindowManager {
   private async syncAppDisplay(): Promise<void> {
     if (
       this.isQuitting ||
-      this.isAdminSession ||
+      this.isStaffSession ||
       this.isRelocatingByManager ||
       !isAlive(this.mainWindow)
     ) {
@@ -625,7 +625,7 @@ export class DisplayWindowManager {
         this.appDisplayId = current.id;
         if (!this.mainWindow.isFullScreen()) await this.setFullscreen(true);
         if (!isAlive(this.mainWindow) || this.isQuitting) return;
-        if (this.isAdminSession) {
+        if (this.isStaffSession) {
           if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
           this.mainWindow.setVisibleOnAllWorkspaces(false);
           return;
@@ -729,7 +729,7 @@ export class DisplayWindowManager {
       this.areAlertsOpen ||
       this.isQuitting ||
       this.isAuthenticationInProgress ||
-      this.isAdminSession ||
+      this.isStaffSession ||
       this.isMoving ||
       !isAlive(this.mainWindow)
     ) {
@@ -836,7 +836,7 @@ export class DisplayWindowManager {
   }
 
   private raiseOverlays(): void {
-    if (this.isQuitting || this.isAdminSession || this.isAuthenticationInProgress) return;
+    if (this.isQuitting || this.isStaffSession || this.isAuthenticationInProgress) return;
     for (const window of this.overlays.values()) {
       if (isAlive(window)) {
         window.setAlwaysOnTop(true, 'screen-saver');
