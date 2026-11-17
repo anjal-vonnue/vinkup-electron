@@ -131,7 +131,17 @@ export default function DashboardPage() {
     setAttempt((n) => n + 1);
   };
 
-  if (isLoading) return <LoaderOverlay fullPage />;
+  if (isLoading) {
+    return (
+      <>
+        <Header />
+        <div className={styles.loadingRegion}>
+          <LoaderOverlay />
+        </div>
+        <HelpButton />
+      </>
+    );
+  }
   if (error) {
     return (
       <ErrorState
