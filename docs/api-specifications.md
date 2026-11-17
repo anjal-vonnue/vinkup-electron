@@ -167,6 +167,7 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | GET    | `/api/admin/trainees/:traineeId`                       | Admin   | One trainee: profile, course progress, worked-on tasks, journal                     |
 | GET    | `/api/admin/trainees/:traineeId/flags`                 | Admin   | The trainee's flag events, newest first                                             |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Admin   | The trainee's saved files for a task (read-only)                                    |
+| GET    | `/api/admin/analytics`                                 | Admin   | Team analytics for a period: progress, comparison, task status, typing, integrity   |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Admin   | Approve the current submission                                                      |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Admin   | Send the current submission back for rework                                         |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Admin   | Review history for one task                                                         |
@@ -1046,6 +1047,64 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 ```
 
 - **Errors:** 400; 401; 403; 404 `"Trainee not found."`.
+
+### GET /api/admin/analytics
+
+- **Auth:** admin. Like `GET /api/admin/trainees`, every active mentor sees every trainee (there are no mentor teams yet).
+- **Query** (validated in the controller with `analyticsQuerySchema`):
+  - `from`, `to`: IST calendar days `YYYY-MM-DD`, both included. `from` ≤ `to`, `to` not in the future, at most 366 days.
+  - `traineeId` (optional): a trainee's UUID. Left out = the whole team.
+- **Response 200** (`AdminAnalytics`). Every number comes from stored records; nothing is estimated.
+  - `totals`: days completed, tasks first submitted, active and coding seconds, and typing tests **in the period**.
+  - `progressTrend`: one point per day from `from` to `to`: average curriculum days completed per trainee by the end of that day (completions before `from` count).
+  - `traineeComparison`: **every** trainee (even when `traineeId` is sent), sorted by name: all-time `daysCompleted`/`totalDays`, and coding/active seconds in the period. Only ids and names, no emails.
+  - `taskStatus`: current task counts, split by mentor review (`task_progress.status` + `review_status`). Only the current status is stored, so the period does not change them. The five counts add up to tasks in the curriculum × trainees.
+    - `approved`: `completed` + `approved`.
+    - `waitingForReview`: `completed` + `pending`, **and** `completed` + `NULL` (submitted before reviews existed; admins can still review these exactly like `pending`).
+    - `sentBack`: `completed` + `rework` (stays here while the trainee edits, until they resubmit).
+    - `inProgress`: `in_progress` rows (saved, never submitted).
+    - `notStarted`: tasks × trainees minus the four groups above, never below 0 (tasks with no progress row).
+    - There are no due dates, so there is no "overdue".
+  - `typingTrend`: on each day someone took a test, the average of each trainee's **latest** WPM so far (like the WPM column). `traineesIncluded` says how many trainees had a result.
+  - `integrityTrend`: on each day a curriculum day was completed, the average score of **every completed day so far**, scored like the trainee list. Days still in progress have no date and are left out.
+
+```json
+{
+  "from": "2026-11-07",
+  "to": "2026-11-13",
+  "traineeId": null,
+  "traineeCount": 5,
+  "totals": {
+    "daysCompleted": 12,
+    "tasksSubmitted": 31,
+    "activeSeconds": 95040,
+    "codingSeconds": 52272,
+    "typingTests": 10
+  },
+  "progressTrend": [{ "date": "2026-11-07", "averageDaysCompleted": 17.4 }],
+  "traineeComparison": [
+    {
+      "traineeId": "8f2c1d4e-6a3b-4c1e-9f7a-2b5d8e0c1a33",
+      "name": "Asha K",
+      "daysCompleted": 12,
+      "totalDays": 54,
+      "codingSeconds": 9000,
+      "activeSeconds": 16200
+    }
+  ],
+  "taskStatus": {
+    "approved": 548,
+    "waitingForReview": 30,
+    "sentBack": 8,
+    "inProgress": 3,
+    "notStarted": 711
+  },
+  "typingTrend": [{ "date": "2026-11-08", "averageWpm": 72, "traineesIncluded": 4 }],
+  "integrityTrend": [{ "date": "2026-11-09", "averageScore": 76, "daysScored": 89 }]
+}
+```
+
+- **Errors:** 400 `VALIDATION_FAILED` (bad dates, period too long, bad `traineeId`); 401; 403; 404 `"Trainee not found."`.
 
 ### GET /api/admin/trainees/:traineeId/tasks/:taskId/code
 

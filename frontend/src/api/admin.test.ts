@@ -5,6 +5,7 @@ vi.mock('./client', () => ({ apiClient: { get, post } }));
 
 import {
   createAdminTrainee,
+  getAdminAnalytics,
   getAdminFlags,
   getAdminTaskCode,
   getAdminTrainee,
@@ -58,5 +59,14 @@ describe('admin API', () => {
       email: 'asha.rao@vonnue.com',
     });
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it('getAdminAnalytics sends the filters as query parameters and returns the data', async () => {
+    const data = { marker: 'analytics' };
+    get.mockResolvedValue({ data });
+
+    const query = { from: '2026-10-15', to: '2026-11-13', traineeId: 't-1' };
+    await expect(getAdminAnalytics(query)).resolves.toBe(data);
+    expect(get).toHaveBeenCalledWith('/admin/analytics', { params: query });
   });
 });
