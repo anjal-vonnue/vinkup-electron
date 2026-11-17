@@ -37,6 +37,20 @@ afterEach(() => {
 
 function installDesktopPrintApi(begin: () => Promise<void> = () => Promise.resolve()) {
   const end = vi.fn(() => Promise.resolve());
+  const resourcesState = {
+    url: '',
+    title: '',
+    isLoading: false,
+    canGoBack: false,
+    canGoForward: false,
+    isHome: true,
+    isBlocked: false,
+    blockedUrl: null,
+    blockedHost: null,
+    error: null,
+    errorKind: null,
+    zoom: 100,
+  };
   const desktopApi: DesktopApi = {
     app: {
       getInfo: () => Promise.resolve({ version: '0.0.0', platform: 'linux', isPackaged: false }),
@@ -73,6 +87,43 @@ function installDesktopPrintApi(begin: () => Promise<void> = () => Promise.resol
       beginCertificatePrint: begin,
       endCertificatePrint: end,
       onFullscreenChange: () => () => undefined,
+    },
+    certificate: {
+      savePdf: () => Promise.resolve(false),
+    },
+    resources: {
+      getAllowlist: () =>
+        Promise.resolve({
+          version: 1,
+          updatedAt: '',
+          domains: [],
+          categories: [],
+          descriptions: {},
+        }),
+      getState: () => Promise.resolve(resourcesState),
+      open: () => Promise.resolve(resourcesState),
+      setBounds: () => Promise.resolve(),
+      close: () => Promise.resolve(),
+      home: () => Promise.resolve(),
+      navigate: () => Promise.resolve(resourcesState),
+      goBack: () => Promise.resolve(),
+      goForward: () => Promise.resolve(),
+      reload: () => Promise.resolve(),
+      stop: () => Promise.resolve(),
+      find: () => Promise.resolve(),
+      findNext: () => Promise.resolve(),
+      stopFind: () => Promise.resolve(),
+      zoomIn: () => Promise.resolve(),
+      zoomOut: () => Promise.resolve(),
+      zoomReset: () => Promise.resolve(),
+      onChange: () => () => undefined,
+      onFocusAddress: () => () => undefined,
+      onOpenFind: () => () => undefined,
+      onFindResult: () => () => undefined,
+      onEscape: () => () => undefined,
+    },
+    report: {
+      savePdf: () => Promise.resolve(false),
     },
   };
   window.desktop = desktopApi;

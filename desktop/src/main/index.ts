@@ -367,13 +367,18 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
-    return savePdf(event, fileName, {
-      label: 'certificate',
-      fallbackFileName: 'certificate',
-      landscape: true,
-    });
-  });
 
+    displayWindowManager?.beginCertificatePrint();
+    try {
+      return await savePdf(event, fileName, {
+        label: 'certificate',
+        fallbackFileName: 'certificate',
+        landscape: true,
+      });
+    } finally {
+      displayWindowManager?.endCertificatePrint();
+    }
+  });
   ipcMain.handle('report:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
     return savePdf(event, fileName, {
