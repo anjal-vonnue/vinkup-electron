@@ -14,13 +14,10 @@ import { ValidationError } from '../../errors/AppError';
 const adminService = new AdminService();
 
 class AdminController {
-  listTrainees = async (
-    _req: Request,
-    res: Response<AdminTraineeSummary[]>,
-    next: NextFunction
-  ) => {
+  listTrainees = async (req: Request, res: Response<AdminTraineeSummary[]>, next: NextFunction) => {
     try {
-      res.status(200).json(await adminService.listTrainees());
+      const mentorId = (req as AuthenticatedRequest).user.id;
+      res.status(200).json(await adminService.listTrainees(mentorId));
     } catch (error) {
       next(error);
     }
@@ -65,10 +62,11 @@ class AdminController {
 
   getAnalytics = async (req: Request, res: Response<AdminAnalytics>, next: NextFunction) => {
     try {
+      const mentorId = (req as AuthenticatedRequest).user.id;
       // Never trust the query string: check dates, period length and traineeId first.
       const query = analyticsQuerySchema.safeParse(req.query);
       if (!query.success) throw new ValidationError(query.error.issues);
-      res.status(200).json(await adminService.getAnalytics(query.data));
+      res.status(200).json(await adminService.getAnalytics(query.data, mentorId));
     } catch (error) {
       next(error);
     }

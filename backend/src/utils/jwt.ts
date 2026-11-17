@@ -1,13 +1,19 @@
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
 
-export type UserRole = 'trainee' | 'admin';
+export type UserRole = 'trainee' | 'mentor' | 'manager';
 
 export interface JwtPayload {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+}
+
+function normalizeRole(role: unknown): UserRole {
+  if (role === 'admin' || role === 'mentor') return 'mentor';
+  if (role === 'manager') return 'manager';
+  return 'trainee';
 }
 
 export function signJwt(payload: JwtPayload) {
@@ -19,13 +25,13 @@ export function signJwt(payload: JwtPayload) {
 
 export function verifyJwt(token: string): JwtPayload {
   const decoded = jwt.verify(token, env.JWT_SECRET) as Omit<JwtPayload, 'role'> & {
-    role?: UserRole;
+    role?: unknown;
   };
   return {
     id: decoded.id,
     email: decoded.email,
     name: decoded.name,
-    role: decoded.role ?? 'trainee',
+    role: normalizeRole(decoded.role),
   };
 }
 
@@ -44,22 +50,27 @@ export function signDesktopAccessToken(payload: JwtPayload, sessionId: string): 
 }
 
 export function verifyDesktopAccessToken(token: string): DesktopAccessTokenPayload {
-  const decoded = jwt.verify(token, env.JWT_SECRET) as Partial<DesktopAccessTokenPayload>;
+  const decoded = jwt.verify(token, env.JWT_SECRET) as Partial<DesktopAccessTokenPayload> & {
+    role?: unknown;
+  };
   if (
     decoded.typ !== 'desktop' ||
     typeof decoded.sid !== 'string' ||
     typeof decoded.id !== 'string' ||
     typeof decoded.email !== 'string' ||
-    typeof decoded.name !== 'string' ||
-    (decoded.role !== 'trainee' && decoded.role !== 'admin')
+    typeof decoded.name !== 'string'
   ) {
+    throw new Error('Not a desktop access token');
+  }
+  const role = normalizeRole(decoded.role);
+  if (role !== 'trainee' && role !== 'mentor' && role !== 'manager') {
     throw new Error('Not a desktop access token');
   }
   return {
     id: decoded.id,
     email: decoded.email,
     name: decoded.name,
-    role: decoded.role,
+    role,
     sid: decoded.sid,
     typ: 'desktop',
   };

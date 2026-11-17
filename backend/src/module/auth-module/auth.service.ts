@@ -17,15 +17,15 @@ export class AuthService {
 
     if (!email.endsWith(`@${env.ALLOWED_EMAIL_DOMAIN}`)) throw new DomainNotPermittedError();
 
-    const admin = await authRepository.findActiveAdminByEmail(email);
-    if (admin) {
-      await authRepository.recordAdminLogin(admin.id);
+    const staff = await authRepository.findActiveStaffByEmail(email);
+    if (staff) {
+      await authRepository.recordAdminLogin(staff.id);
 
       return {
-        id: admin.id,
-        email: admin.email,
-        name: admin.name,
-        role: 'admin',
+        id: staff.id,
+        email: staff.email,
+        name: staff.name,
+        role: staff.role === 'MANAGER' ? 'manager' : 'mentor',
       };
     }
 

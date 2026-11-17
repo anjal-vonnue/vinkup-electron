@@ -6,7 +6,7 @@ _9 October 2026 · v0.2.0_
 
 This document explains how Vinkup is built: the parts of the system, how the frontend moves a trainee from sign-in to Submit Day, and how the backend is organised. It's written for the developers who will maintain the platform. For requirements see the TRD and PRD; for every endpoint see the [API reference](api-specifications.md); to run it locally see the [setup guide](setup-guide.md); for the tables see the [database documentation](database.md).
 
-Vinkup is Vonnue's in-house training platform for new engineering trainees. It carries 8 courses (HTML, CSS, JavaScript, TypeScript, Node.js, PostgreSQL, Prisma, React) with 54 days and 260 tasks. A trainee signs in with their company Google account, opens the day that's unlocked, reads the lesson, solves the tasks in a code editor in the browser, submits them, and submits the day to unlock the next. While they work, the platform records active time, coding time and focus events (leaving fullscreen, switching tabs), and turns the focus events into an integrity score. Mentors sign in to a separate mentor dashboard (`/admin`) to follow every trainee, read their submitted code and journal, review their flags, add trainees and print progress reports.
+Vinkup is Vonnue's in-house training platform for new engineering trainees. It carries 8 courses (HTML, CSS, JavaScript, TypeScript, Node.js, PostgreSQL, Prisma, React) with 54 days and 260 tasks. A trainee signs in with their company Google account, opens the day that's unlocked, reads the lesson, solves the tasks in a code editor in the browser, submits them, and submits the day to unlock the next. While they work, the platform records active time, coding time and focus events (leaving fullscreen, switching tabs), and turns the focus events into an integrity score. Mentors sign in to a separate mentor dashboard (`/admin`) to follow the trainees assigned to them, read their submitted code and journal, review their flags, add trainees and print progress reports. Managers sign in to the manager console (`/manager`) to manage accounts and decide which mentor sees each trainee.
 
 The main design decision: **all trainee code runs in the browser.** Web pages render in a sandboxed iframe, Node.js projects run in a WebContainer, and SQL runs in PGlite (PostgreSQL compiled to WebAssembly). The server never executes trainee code; it stores files, applies progress rules and records activity. That removes the risk of running untrusted code on a server.
 
@@ -21,7 +21,7 @@ The main design decision: **all trainee code runs in the browser.** Web pages re
 | Backend       | Node.js 22, Express 5, Zod 4, Passport (Google), JWT      | Render                           |
 | Database      | PostgreSQL, Prisma 7 with `@prisma/adapter-pg`            | Neon                             |
 | Shared types  | `@itp/types` (TypeScript only)                            | Imported by frontend and backend |
-| Users         | Trainees, and mentors (role `admin`) with their own pages | Same app, routed by role         |
+| Users         | Trainees, mentors and managers, each with their own pages | Same app, routed by role         |
 
 ## 2. Architecture
 
@@ -41,15 +41,15 @@ In every environment the frontend calls a relative `/api` path. Because Netlify 
 
 1. A page calls a function in `frontend/src/api/` (for example `getDayTasks`), which uses the shared Axios client: base URL `/api`, cookies included, 15-second timeout.
 2. Netlify's `_redirects` rule forwards `/api/*` to Render. Netlify waits about 26 seconds; a sleeping Render service can take longer to wake, so the first request after a quiet spell can fail.
-3. Express parses JSON (5 MB limit) and cookies. The router's guard (`requireTrainee` or `requireAdmin`, both built on `requireAuth`) reads the `auth_token` cookie and verifies the JWT; the user's id, name, email and role go on `req.user`. The wrong role gets 403; `requireAdmin` also checks that the mentor's `admin` row is still active.
+3. Express parses JSON (5 MB limit) and cookies. The router's guard (`requireTrainee`, `requireMentor` or `requireManager`, all built on `requireAuth`) reads the `auth_token` cookie and verifies the JWT; the user's id, name, email and role go on `req.user`. The wrong role gets 403. Staff guards also check that the `admin` row is still active, and mentor routes that name a trainee check that it is assigned to that mentor on every request.
 4. The route's Zod schema validates params and body; the controller calls a service; the service applies the rules and calls a repository; the repository uses Prisma against Neon.
 5. Errors are thrown as `AppError` subclasses and turned into `{ error: { code, message, details? } }` by the error handler. The Axios interceptor converts them to an `ApiError`; a 401 signs the trainee out.
 
 ### Sign-in
 
 1. **Continue with Google** sends the browser to `/api/auth/google`; Passport redirects to Google.
-2. Google returns to `/api/auth/google/callback`. The backend checks the email's domain against `ALLOWED_EMAIL_DOMAIN`, then looks for an **active** row in the `admin` table, then for a row in the `trainee` table. Mentors are checked first, so an email in both signs in as a mentor.
-3. If one matches, it signs a JWT (`id`, `name`, `email`, `role`), sets it as the httpOnly `auth_token` cookie for 7 days, and redirects mentors to `/admin` and trainees to the dashboard. If not, it redirects to `/login?error=DOMAIN_NOT_PERMITTED` or `NOT_PROVISIONED`, and the login page shows Access Restricted.
+2. Google returns to `/api/auth/google/callback`. The backend checks the email's domain against `ALLOWED_EMAIL_DOMAIN`, then looks for an **active** row in the `admin` table, then for an **active** row in the `trainee` table. Staff are checked first, so an email in both signs in as staff. The `admin.role` column decides mentor or manager.
+3. If one matches, it signs a JWT (`id`, `name`, `email`, `role`), sets it as the httpOnly `auth_token` cookie for 7 days, and redirects managers to `/manager`, mentors to `/admin` and trainees to the dashboard. If not, it redirects to `/login?error=DOMAIN_NOT_PERMITTED` or `NOT_PROVISIONED`, and the login page shows Access Restricted.
 4. On every page load `AuthProvider` calls `GET /api/auth/me` to learn who is signed in and their role. **Log out** calls `POST /api/auth/logout`, which clears the cookie.
 
 There are no server sessions: the JWT is the session. Its lifetime is `JWT_EXPIRES_IN` (default 1 hour), so production must set it to `7d` to match the cookie.
@@ -87,7 +87,7 @@ Training-platform/
 │  └─ src/
 │     ├─ app.ts, server.ts   Express app and its startup
 │     ├─ module/             one folder per feature (auth, admin, dashboard, day, task, ...)
-│     ├─ middleware/         requireAuth/Trainee/Admin, validate, notFound, errorHandler
+│     ├─ middleware/         requireAuth/Trainee/Mentor/Manager, assigned-trainee guard, validate, errorHandler
 │     ├─ errors/             AppError and its subclasses
 │     ├─ config/env.ts       environment variables, checked with Zod at startup
 │     ├─ lib/                Prisma client, seed script
@@ -105,7 +105,7 @@ The course content was first written as frontend data for mock mode, and it is s
 
 1. Edit day content in `frontend/src/api/dayOverview/` or tasks and starter files in `frontend/src/api/mockTasks/`.
 2. Run `npx tsx scripts/export-curriculum.ts` from the root. It writes `backend/prisma/seed-data/curriculum.json`.
-3. Run `npm run db:seed -w backend`. The seed upserts courses, days, objectives, checklist items, tasks and the trainee list, and never deletes trainee data.
+3. Run `npm run db:seed -w backend`. The seed upserts staff, the trainee list, courses, days, objectives, checklist items and tasks, and never deletes trainee data.
 
 Reference pages (`frontend/src/content/`) are not in the database; they ship with the frontend.
 
@@ -123,7 +123,7 @@ A single-page React app built with Vite. Plain CSS modules. Monaco is the code e
 | `FullscreenGate`   | For signed-in trainees (not mentors), blocks the app until the browser is in fullscreen ("Fullscreen required")                                 |
 | `ActivityProvider` | For trainees only: counts active, coding and reading time and sends it to the API every 60 seconds and when the page is hidden                  |
 
-`ProtectedRoute` shows a loader while `/me` is pending and redirects to `/login` when signed out; `PublicOnlyRoute` keeps signed-in users off the login page. Inside it, `RoleRoute` splits the routes by role: trainee routes send a mentor to `/admin`, and mentor routes send a trainee to `/`. The task page is lazy-loaded, because Monaco and the runtimes are large.
+`ProtectedRoute` shows a loader while `/me` is pending and redirects to `/login` when signed out; `PublicOnlyRoute` keeps signed-in users off the login page. Inside it, `RoleRoute` splits the routes by role: each role has a home route and opening another role's route sends the user to their own home (`/` for trainees, `/admin` for mentors, `/manager` for managers). The task page is lazy-loaded, because Monaco and the runtimes are large.
 
 ### Page flow
 
@@ -131,21 +131,22 @@ A single-page React app built with Vite. Plain CSS modules. Monaco is the code e
 
 ![Frontend page flow: Login, Dashboard, Day overview and Task workspace, with Profile, Typing test, References and the next day branching off](images/frontend-page-flow.png)
 
-| Route                        | Page              | Data it loads                                                                                                                 |
-| ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `/login`                     | LoginPage         | None. Reads `?error=` and shows Access Restricted for `DOMAIN_NOT_PERMITTED`, `NOT_PROVISIONED` or `LOGIN_FAILED`             |
-| `/`                          | DashboardPage     | `GET /dashboard`, then `GET /courses/:courseId/days` for the selected course tab                                              |
-| `/days/:dayId`               | DayOverviewPage   | In parallel: `GET /days/:dayId`, `/tasks`, `/status`, `/journal`. Saves with `PUT /journal`, completes with `PATCH /complete` |
-| `/days/:dayId/references`    | ReferencePage     | None: the reference content ships with the frontend (`src/content/`)                                                          |
-| `/tasks/:taskId`             | TaskPage          | In parallel: `GET /tasks/:taskId` and `GET /tasks/:taskId/code`                                                               |
-| `/profile`                   | ProfilePage       | `GET /profile`                                                                                                                |
-| `/typing-test`               | TypingTestPage    | `GET /typing-test/results`; saves with `POST /typing-test/results`                                                            |
-| `/journal`                   | JournalPage       | `GET /journal`; today's entry saves with `PUT /days/:dayId/journal`                                                           |
-| `/help`                      | HelpPage          | None: the help content ships with the frontend                                                                                |
-| `/certificates/:courseId`    | CertificatePage   | `GET /courses/:courseId/certificate`; prints landscape with Print / Save as PDF                                               |
-| `/admin`                     | AdminTraineesPage | Mentors. `GET /admin/trainees`; adds with `POST /admin/trainees`; search, sort, filter and CSV export run in the browser      |
-| `/admin/trainees/:traineeId` | AdminTraineePage  | Mentors. `GET /admin/trainees/:traineeId` and `/flags`; `/tasks/:taskId/code` when a task is opened; print report             |
-| `*`                          | NotFoundPage      | None                                                                                                                          |
+| Route                        | Page              | Data it loads                                                                                                                            |
+| ---------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `/login`                     | LoginPage         | None. Reads `?error=` and shows Access Restricted for `DOMAIN_NOT_PERMITTED`, `NOT_PROVISIONED` or `LOGIN_FAILED`                        |
+| `/`                          | DashboardPage     | `GET /dashboard`, then `GET /courses/:courseId/days` for the selected course tab                                                         |
+| `/days/:dayId`               | DayOverviewPage   | In parallel: `GET /days/:dayId`, `/tasks`, `/status`, `/journal`. Saves with `PUT /journal`, completes with `PATCH /complete`            |
+| `/days/:dayId/references`    | ReferencePage     | None: the reference content ships with the frontend (`src/content/`)                                                                     |
+| `/tasks/:taskId`             | TaskPage          | In parallel: `GET /tasks/:taskId` and `GET /tasks/:taskId/code`                                                                          |
+| `/profile`                   | ProfilePage       | `GET /profile`                                                                                                                           |
+| `/typing-test`               | TypingTestPage    | `GET /typing-test/results`; saves with `POST /typing-test/results`                                                                       |
+| `/journal`                   | JournalPage       | `GET /journal`; today's entry saves with `PUT /days/:dayId/journal`                                                                      |
+| `/help`                      | HelpPage          | None: the help content ships with the frontend                                                                                           |
+| `/certificates/:courseId`    | CertificatePage   | `GET /courses/:courseId/certificate`; prints landscape with Print / Save as PDF                                                          |
+| `/admin`                     | AdminTraineesPage | Mentors. `GET /admin/trainees` (assigned only); adds with `POST /admin/trainees`; search, sort, filter and CSV export run in the browser |
+| `/admin/trainees/:traineeId` | AdminTraineePage  | Mentors. `GET /admin/trainees/:traineeId` and `/flags`; `/tasks/:taskId/code` when a task is opened; print report                        |
+| `/manager`                   | ManagerPage       | Managers. `GET /manager/staff` and `/manager/trainees`; creates/edits accounts; assigns mentors; confirms activation changes             |
+| `*`                          | NotFoundPage      | None                                                                                                                                     |
 
 The day page also loads `GET /days/:dayId/integrity` for its integrity badge (if the request fails, the badge shows Unavailable; a day with no score yet shows 100). The profile page lists earned certificates: it reads `completedCourseIds` from `GET /dashboard` and loads each certificate. The dashboard's course tabs show a Certificate badge for those courses.
 
@@ -306,16 +307,16 @@ Curriculum tables change only through the seed; trainee tables are written by th
 
 ### Scripts
 
-| Command (from the root)                             | What it does                                                                     |
-| --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `npm run dev:frontend`                              | Vite dev server on port 5173, proxying `/api` to port 3000                       |
-| `npm run dev:backend`                               | Backend with `tsx watch`                                                         |
-| `npm test`                                          | Vitest in every workspace                                                        |
-| `npm run test:api -w backend`                       | API contract tests against a test database                                       |
-| `npm run build -w frontend`                         | Type-check and build to `frontend/dist`                                          |
-| `npm run build -w backend` / `npm start -w backend` | Compile to `backend/dist` / run it                                               |
-| `npm run db:seed -w backend`                        | Upsert trainees and curriculum (`SEED_DEMO=true` adds demo progress, local only) |
-| `npx tsx scripts/export-curriculum.ts`              | Rebuild `curriculum.json` from the frontend curriculum data                      |
+| Command (from the root)                             | What it does                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `npm run dev:frontend`                              | Vite dev server on port 5173, proxying `/api` to port 3000                              |
+| `npm run dev:backend`                               | Backend with `tsx watch`                                                                |
+| `npm test`                                          | Vitest in every workspace                                                               |
+| `npm run test:api -w backend`                       | API contract tests against a test database                                              |
+| `npm run build -w frontend`                         | Type-check and build to `frontend/dist`                                                 |
+| `npm run build -w backend` / `npm start -w backend` | Compile to `backend/dist` / run it                                                      |
+| `npm run db:seed -w backend`                        | Upsert staff, trainees and curriculum (`SEED_DEMO=true` adds demo progress, local only) |
+| `npx tsx scripts/export-curriculum.ts`              | Rebuild `curriculum.json` from the frontend curriculum data                             |
 
 The Prisma CLI needs the config file: `npx prisma migrate deploy --config prisma7.config.ts` (from `backend/`). The [setup guide](setup-guide.md) has the full local setup.
 

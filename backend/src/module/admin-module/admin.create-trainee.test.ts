@@ -68,6 +68,7 @@ describe('AdminService.createTrainee', () => {
     expect(repo.createTrainee).toHaveBeenCalledWith({
       name: 'Asha Rao',
       email: 'asha.rao@vonnue.com',
+      mentorId: ADMIN_ID,
     });
     expect(result).toEqual(row());
   });
@@ -78,6 +79,7 @@ describe('AdminService.createTrainee', () => {
     expect(repo.createTrainee).toHaveBeenCalledWith({
       name: 'Asha Rao',
       email: 'asha.rao@vonnue.com',
+      mentorId: ADMIN_ID,
     });
   });
 

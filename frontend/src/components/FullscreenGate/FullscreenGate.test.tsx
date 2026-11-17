@@ -5,7 +5,7 @@ import FullscreenGate from './FullscreenGate';
 
 const auth = vi.hoisted(() => ({
   isAuthenticated: true,
-  user: null as { role: 'trainee' | 'admin' } | null,
+  user: null as { role: 'trainee' | 'mentor' | 'manager' } | null,
 }));
 const requestAppFullscreen = vi.hoisted(() => vi.fn());
 vi.mock('../../context/Useauth', () => ({ useAuth: () => auth }));
@@ -77,8 +77,8 @@ describe('FullscreenGate', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy();
   });
 
-  it('never blocks an admin (mentors are not monitored)', () => {
-    auth.user = { role: 'admin' };
+  it('never blocks a mentor (staff are not monitored)', () => {
+    auth.user = { role: 'mentor' };
     renderGate();
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByText('app content').closest('[inert]')).toBeNull();

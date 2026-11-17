@@ -70,7 +70,8 @@ export default function AddTraineeDialog({ onClose, onCreated }: AddTraineeDialo
           Add trainee
         </h2>
         <p className={styles.intro}>
-          They can sign in with their company Google account straight away and start on day 1.
+          They can sign in with their company Google account straight away, and they are assigned to
+          you.
         </p>
 
         <form noValidate onSubmit={(event) => void handleSubmit(event)}>

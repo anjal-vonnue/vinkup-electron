@@ -25,7 +25,7 @@ export const mockAdmin: MeResponse = {
   id: 'mock-admin-001',
   email: 'mentor@vonnue.com',
   name: 'Mock Mentor',
-  role: 'admin',
+  role: 'mentor',
 };
 
 type MockTrainee = {
@@ -438,14 +438,14 @@ export const mockAdminTraineeIds = trainees.map((t) => t.id);
 export type AddMockTraineeResult =
   | { kind: 'created'; trainee: AdminTraineeSummary }
   | { kind: 'exists' }
-  | { kind: 'admin' }
+  | { kind: 'mentor' }
   | { kind: 'domain' };
 
 /** POST /admin/trainees in mock mode. Same rules as the backend. */
 export function addMockTrainee(body: CreateTraineeRequest): AddMockTraineeResult {
   const email = body.email.trim().toLowerCase();
   if (!email.endsWith('@vonnue.com')) return { kind: 'domain' };
-  if (email === mockAdmin.email) return { kind: 'admin' };
+  if (email === mockAdmin.email) return { kind: 'mentor' };
   if (trainees.some((t) => t.email === email)) return { kind: 'exists' };
 
   const id = crypto.randomUUID();

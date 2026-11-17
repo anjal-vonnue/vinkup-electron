@@ -17,7 +17,7 @@ const admin: MeResponse = {
   id: 'a1',
   email: 'mentor@vonnue.com',
   name: 'Test Mentor',
-  role: 'admin',
+  role: 'mentor',
 };
 
 const asTrainee = { status: 'authenticated', user, isAuthenticated: true } as const;
@@ -48,7 +48,7 @@ function AppRoutes() {
           <Route path="/" element={<div>home page</div>} />
           <Route path="/private" element={<div>private page</div>} />
         </Route>
-        <Route element={<RoleRoute role="admin" />}>
+        <Route element={<RoleRoute role="mentor" />}>
           <Route path="/admin" element={<div>admin page</div>} />
           <Route path="/admin/trainees/:traineeId" element={<div>admin trainee page</div>} />
         </Route>

@@ -4,7 +4,7 @@ export type DesktopUserSnapshot = {
   id: string;
   email: string;
   name: string;
-  role: 'trainee' | 'admin';
+  role: 'trainee' | 'mentor' | 'manager';
 };
 
 export class DesktopAuthRepository {

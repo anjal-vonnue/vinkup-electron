@@ -62,7 +62,7 @@ Electron main                     Backend                         System browser
 
 Step 5 keeps the existing backend middleware working: the renderer's `/api`
 calls go through its local proxy and carry the short-lived `auth_token` cookie,
-so `requireAuth`/`requireTrainee`/`requireAdmin` are unchanged.
+so `requireAuth`/`requireTrainee`/`requireMentor`/`requireManager` are unchanged.
 
 ## Endpoints
 
@@ -132,7 +132,7 @@ loopback.
 ```ts
 type DesktopAuthState = {
   status: 'loading' | 'pending' | 'authenticated' | 'unauthenticated';
-  user: { id: string; email: string; name: string; role: 'trainee' | 'admin' } | null;
+  user: { id: string; email: string; name: string; role: 'trainee' | 'mentor' | 'manager' } | null;
   error: DesktopAuthErrorCode | null;
   persistent: boolean;
 };

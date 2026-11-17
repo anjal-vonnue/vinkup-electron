@@ -4,7 +4,7 @@
 interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   readonly VITE_USE_MOCKS?: string;
-  /** Mock mode only: 'admin' makes /auth/me answer as a mentor. Anything else = trainee. */
+  /** Mock mode only: 'mentor' or 'admin' makes /auth/me answer as a mentor. Anything else = trainee. */
   readonly VITE_MOCK_ROLE?: string;
 }
 

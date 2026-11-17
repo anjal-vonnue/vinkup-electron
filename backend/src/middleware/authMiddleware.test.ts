@@ -7,16 +7,29 @@ import { AUTH_COOKIE_NAME } from '../module/auth-module/auth.constants';
 import { AppError } from '../errors/AppError';
 import type { AuthenticatedRequest } from '../types/auth.types';
 
-const { findActiveAdminById } = vi.hoisted(() => ({ findActiveAdminById: vi.fn() }));
+const { findActiveStaffById, findActiveTraineeById, findTraineeMentorById } = vi.hoisted(() => ({
+  findActiveStaffById: vi.fn(),
+  findActiveTraineeById: vi.fn(),
+  findTraineeMentorById: vi.fn(),
+}));
 
-// requireAdmin re-checks the admin table on every request; no real database here.
+// Staff and trainee guards re-check the account on every request; no real database here.
 vi.mock('../module/auth-module/auth.repository', () => ({
   AuthRepository: class {
-    findActiveAdminById = findActiveAdminById;
+    findActiveStaffById = findActiveStaffById;
+    findActiveTraineeById = findActiveTraineeById;
+    findTraineeMentorById = findTraineeMentorById;
   },
 }));
 
-import { requireAdmin, requireAuth, requireTrainee } from './authMiddleware';
+import {
+  requireAdmin,
+  requireAssignedTrainee,
+  requireAuth,
+  requireManager,
+  requireMentor,
+  requireTrainee,
+} from './authMiddleware';
 
 type Middleware = (req: Request, res: Response, next: NextFunction) => void;
 
@@ -27,11 +40,18 @@ const trainee: JwtPayload = {
   role: 'trainee',
 };
 
-const admin: JwtPayload = {
+const mentor: JwtPayload = {
   id: '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77',
   name: 'Test Mentor',
   email: 'mentor@vonnue.com',
-  role: 'admin',
+  role: 'mentor',
+};
+
+const manager: JwtPayload = {
+  id: 'b5f9c5d1-2a44-4f4d-8a1e-6f2c9d7b3e55',
+  name: 'Test Manager',
+  email: 'manager@vonnue.com',
+  role: 'manager',
 };
 
 /** A token issued before roles existed: no `role` claim. */
@@ -59,7 +79,10 @@ function expectAppError(error: unknown, status: number, code: string): void {
 }
 
 beforeEach(() => {
-  findActiveAdminById.mockReset();
+  findActiveStaffById.mockReset();
+  findActiveTraineeById.mockReset();
+  findActiveTraineeById.mockResolvedValue({ id: trainee.id });
+  findTraineeMentorById.mockReset();
 });
 
 describe('requireAuth', () => {
@@ -78,11 +101,11 @@ describe('requireAuth', () => {
     expect((req as AuthenticatedRequest).user).toEqual(trainee);
   });
 
-  it('lets an admin through (role checks are the job of the other guards)', async () => {
-    const req = requestWith(signJwt(admin));
+  it('lets a mentor through (role checks are the job of the other guards)', async () => {
+    const req = requestWith(signJwt(mentor));
 
     expect(await run(requireAuth, req)).toBeUndefined();
-    expect((req as AuthenticatedRequest).user.role).toBe('admin');
+    expect((req as AuthenticatedRequest).user.role).toBe('mentor');
   });
 
   it('sets role "trainee" for a token issued before roles existed', async () => {
@@ -94,16 +117,24 @@ describe('requireAuth', () => {
 });
 
 describe('requireTrainee', () => {
-  it('lets a trainee through', async () => {
+  it('lets a trainee through after checking the trainee account', async () => {
     expect(await run(requireTrainee, requestWith(signJwt(trainee)))).toBeUndefined();
+    expect(findActiveTraineeById).toHaveBeenCalledWith(trainee.id);
   });
 
   it('lets a token issued before roles existed through', async () => {
     expect(await run(requireTrainee, requestWith(legacyToken()))).toBeUndefined();
   });
 
-  it('returns 403 FORBIDDEN for an admin', async () => {
-    expectAppError(await run(requireTrainee, requestWith(signJwt(admin))), 403, 'FORBIDDEN');
+  it('returns 403 when the trainee was deactivated after the token was issued', async () => {
+    findActiveTraineeById.mockResolvedValue(null);
+
+    expectAppError(await run(requireTrainee, requestWith(signJwt(trainee))), 403, 'FORBIDDEN');
+  });
+
+  it('returns 403 FORBIDDEN for a mentor', async () => {
+    expectAppError(await run(requireTrainee, requestWith(signJwt(mentor))), 403, 'FORBIDDEN');
+    expect(findActiveTraineeById).not.toHaveBeenCalled();
   });
 
   it('returns 401, not 403, when not signed in', async () => {
@@ -111,47 +142,155 @@ describe('requireTrainee', () => {
   });
 
   it('never queries the admin table', async () => {
-    await run(requireTrainee, requestWith(signJwt(admin)));
+    await run(requireTrainee, requestWith(signJwt(mentor)));
     await run(requireTrainee, requestWith(signJwt(trainee)));
 
-    expect(findActiveAdminById).not.toHaveBeenCalled();
+    expect(findActiveStaffById).not.toHaveBeenCalled();
   });
 });
 
-describe('requireAdmin', () => {
-  it('lets an active admin through after checking the admin table', async () => {
-    findActiveAdminById.mockResolvedValue({ id: admin.id });
-    const req = requestWith(signJwt(admin));
+describe('requireMentor', () => {
+  it('lets an active mentor through after checking the staff table', async () => {
+    findActiveStaffById.mockResolvedValue({ id: mentor.id, role: 'MENTOR' });
+    const req = requestWith(signJwt(mentor));
 
-    expect(await run(requireAdmin, req)).toBeUndefined();
-    expect(findActiveAdminById).toHaveBeenCalledWith(admin.id);
-    expect((req as AuthenticatedRequest).user.role).toBe('admin');
+    expect(await run(requireMentor, req)).toBeUndefined();
+    expect(findActiveStaffById).toHaveBeenCalledWith(mentor.id);
+    expect((req as AuthenticatedRequest).user.role).toBe('mentor');
   });
 
-  it('returns 403 when the admin was deactivated after the token was issued', async () => {
-    findActiveAdminById.mockResolvedValue(null);
+  it('returns 403 when the mentor was deactivated after the token was issued', async () => {
+    findActiveStaffById.mockResolvedValue(null);
 
-    expectAppError(await run(requireAdmin, requestWith(signJwt(admin))), 403, 'FORBIDDEN');
+    expectAppError(await run(requireMentor, requestWith(signJwt(mentor))), 403, 'FORBIDDEN');
   });
 
-  it('returns 403 for a trainee without querying the admin table', async () => {
-    expectAppError(await run(requireAdmin, requestWith(signJwt(trainee))), 403, 'FORBIDDEN');
-    expect(findActiveAdminById).not.toHaveBeenCalled();
+  it('returns 403 when the staff account has been promoted to manager', async () => {
+    findActiveStaffById.mockResolvedValue({ id: mentor.id, role: 'MANAGER' });
+
+    expectAppError(await run(requireMentor, requestWith(signJwt(mentor))), 403, 'FORBIDDEN');
+  });
+
+  it('returns 403 for a manager without querying the staff table', async () => {
+    expectAppError(await run(requireMentor, requestWith(signJwt(manager))), 403, 'FORBIDDEN');
+    expect(findActiveStaffById).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for a trainee without querying the staff table', async () => {
+    expectAppError(await run(requireMentor, requestWith(signJwt(trainee))), 403, 'FORBIDDEN');
+    expect(findActiveStaffById).not.toHaveBeenCalled();
   });
 
   it('returns 403 for a token issued before roles existed', async () => {
-    expectAppError(await run(requireAdmin, requestWith(legacyToken())), 403, 'FORBIDDEN');
+    expectAppError(await run(requireMentor, requestWith(legacyToken())), 403, 'FORBIDDEN');
   });
 
   it('returns 401 when not signed in', async () => {
-    expectAppError(await run(requireAdmin, requestWith()), 401, 'UNAUTHENTICATED');
-    expect(findActiveAdminById).not.toHaveBeenCalled();
+    expectAppError(await run(requireMentor, requestWith()), 401, 'UNAUTHENTICATED');
+    expect(findActiveStaffById).not.toHaveBeenCalled();
   });
 
   it('passes database errors on unchanged (the error handler turns them into 500)', async () => {
     const dbError = new Error('db down');
-    findActiveAdminById.mockRejectedValue(dbError);
+    findActiveStaffById.mockRejectedValue(dbError);
 
-    expect(await run(requireAdmin, requestWith(signJwt(admin)))).toBe(dbError);
+    expect(await run(requireMentor, requestWith(signJwt(mentor)))).toBe(dbError);
+  });
+});
+
+describe('requireManager', () => {
+  it('lets an active manager through after checking the staff table', async () => {
+    findActiveStaffById.mockResolvedValue({ id: manager.id, role: 'MANAGER' });
+    const req = requestWith(signJwt(manager));
+
+    expect(await run(requireManager, req)).toBeUndefined();
+    expect(findActiveStaffById).toHaveBeenCalledWith(manager.id);
+  });
+
+  it('returns 403 when the manager was deactivated after the token was issued', async () => {
+    findActiveStaffById.mockResolvedValue(null);
+
+    expectAppError(await run(requireManager, requestWith(signJwt(manager))), 403, 'FORBIDDEN');
+  });
+
+  it('returns 403 when the staff account has been demoted to mentor', async () => {
+    findActiveStaffById.mockResolvedValue({ id: manager.id, role: 'MENTOR' });
+
+    expectAppError(await run(requireManager, requestWith(signJwt(manager))), 403, 'FORBIDDEN');
+  });
+
+  it('returns 403 for a mentor without querying the staff table', async () => {
+    expectAppError(await run(requireManager, requestWith(signJwt(mentor))), 403, 'FORBIDDEN');
+    expect(findActiveStaffById).not.toHaveBeenCalled();
+  });
+});
+
+describe('requireAdmin (backward-compatible alias)', () => {
+  it('behaves like requireMentor', async () => {
+    findActiveStaffById.mockResolvedValue({ id: mentor.id, role: 'MENTOR' });
+    const req = requestWith(signJwt(mentor));
+
+    expect(await run(requireAdmin, req)).toBeUndefined();
+    expect(findActiveStaffById).toHaveBeenCalledWith(mentor.id);
+  });
+
+  it('rejects managers', async () => {
+    expectAppError(await run(requireAdmin, requestWith(signJwt(manager))), 403, 'FORBIDDEN');
+  });
+});
+
+describe('requireAssignedTrainee', () => {
+  const traineeId = '3f2c9c0e-5b1d-4c53-9a7e-0d6f2f1a9b11';
+
+  function assignedRequest(user?: JwtPayload, id = traineeId): Request {
+    const req = requestWith() as Request & { params: Record<string, string> };
+    req.params = { traineeId: id };
+    if (user) (req as AuthenticatedRequest).user = user;
+    return req;
+  }
+
+  it('lets the assigned mentor through', async () => {
+    findTraineeMentorById.mockResolvedValue({ mentor_id: mentor.id });
+
+    expect(await run(requireAssignedTrainee, assignedRequest(mentor))).toBeUndefined();
+    expect(findTraineeMentorById).toHaveBeenCalledWith(traineeId);
+  });
+
+  it('rejects a different mentor with 403 FORBIDDEN', async () => {
+    findTraineeMentorById.mockResolvedValue({ mentor_id: 'someone-else' });
+
+    expectAppError(await run(requireAssignedTrainee, assignedRequest(mentor)), 403, 'FORBIDDEN');
+  });
+
+  it('rejects an unassigned trainee with 403 FORBIDDEN', async () => {
+    findTraineeMentorById.mockResolvedValue({ mentor_id: null });
+
+    expectAppError(await run(requireAssignedTrainee, assignedRequest(mentor)), 403, 'FORBIDDEN');
+  });
+
+  it('returns 404 for an unknown trainee', async () => {
+    findTraineeMentorById.mockResolvedValue(null);
+
+    expectAppError(await run(requireAssignedTrainee, assignedRequest(mentor)), 404, 'NOT_FOUND');
+  });
+
+  it('returns 401 when the request has no authenticated user', async () => {
+    expectAppError(await run(requireAssignedTrainee, assignedRequest()), 401, 'UNAUTHENTICATED');
+    expect(findTraineeMentorById).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when the route has no trainee id', async () => {
+    expectAppError(
+      await run(requireAssignedTrainee, assignedRequest(mentor, '')),
+      403,
+      'FORBIDDEN'
+    );
+  });
+
+  it('passes database errors on unchanged', async () => {
+    const dbError = new Error('db down');
+    findTraineeMentorById.mockRejectedValue(dbError);
+
+    expect(await run(requireAssignedTrainee, assignedRequest(mentor))).toBe(dbError);
   });
 });
