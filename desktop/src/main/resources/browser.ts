@@ -350,13 +350,21 @@ export class ResourcesBrowser {
     contents.on('will-navigate', (event, url) => {
       if (isAllowedNavigationUrl(url, this.allowlist)) return;
       event.preventDefault();
-      this.block(url);
+      // this.block(url);
+      // Keep the current approved page visible when it tries to navigate to an
+      // unapproved host (for example, an ad or identity-sync redirect).
+      // Resource loads such as scripts, images, and fetches do not emit this
+      // main-frame navigation event and remain unaffected by the allowlist.
     });
 
     contents.on('will-redirect', (event, url) => {
       if (isAllowedNavigationUrl(url, this.allowlist)) return;
       event.preventDefault();
-      this.block(url);
+      // this.block(url);
+      // Keep the current approved page visible when it tries to navigate to an
+      // unapproved host (for example, an ad or identity-sync redirect).
+      // Resource loads such as scripts, images, and fetches do not emit this
+      // main-frame navigation event and remain unaffected by the allowlist.
     });
 
     contents.on('will-attach-webview', (event) => {
