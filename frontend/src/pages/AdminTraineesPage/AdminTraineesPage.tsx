@@ -19,9 +19,6 @@ import {
 } from '../../lib/adminTrainees';
 import { csvFilename, downloadCsv } from '../../lib/downloadCsv';
 import { todayKey } from '../../lib/platformDate';
-import { UserPlus } from 'lucide-react';
-import { useToast } from '../../components/Toast';
-import AddTraineeDialog from './AddTraineeDialog';
 
 function UsersIcon() {
   return (
@@ -58,16 +55,7 @@ export default function AdminTraineesPage() {
   const [attempt, setAttempt] = useState(0);
   const { query, sort, attentionOnly, setQuery, setSort, setAttentionOnly } =
     useTraineeListParams();
-  const [isAddOpen, setIsAddOpen] = useState(false);
   const [view, setView] = useState<PageView>('dashboard');
-  const toast = useToast();
-
-  const handleCreated = (created: AdminTraineeSummary) => {
-    // Insert without reloading: the response is already a full list row.
-    setTrainees((current) => sortTraineesByName([...(current ?? []), created]));
-    setIsAddOpen(false);
-    toast.show({ message: `${created.name} was added and can sign in now.`, variant: 'success' });
-  };
 
   useEffect(() => {
     // Ignore a response that arrives after the mentor left the page or retried.
@@ -138,18 +126,11 @@ export default function AdminTraineesPage() {
   return (
     <>
       <AdminHeader />
-      {isAddOpen && (
-        <AddTraineeDialog onClose={() => setIsAddOpen(false)} onCreated={handleCreated} />
-      )}
       <main className={styles.page}>
         <div className={styles.titleBlock}>
           <h1 className={styles.title}>My trainees</h1>
           <p className={styles.subtitle}>Only trainees assigned to you by a manager appear here.</p>
         </div>
-        <button type="button" className={styles.addButton} onClick={() => setIsAddOpen(true)}>
-          <UserPlus size={16} strokeWidth={2} aria-hidden="true" />
-          Add trainee
-        </button>
 
         <div
           className={styles.viewTabs}
@@ -196,9 +177,7 @@ export default function AdminTraineesPage() {
                       <UsersIcon />
                     </div>
                     <h2 className={styles.emptyTitle}>No trainees assigned yet</h2>
-                    <p className={styles.emptyText}>
-                      Ask your manager to assign trainees to you, or add a trainee yourself.
-                    </p>
+                    <p className={styles.emptyText}>Ask your manager to assign trainees to you.</p>
                   </div>
                 ) : (
                   <>
