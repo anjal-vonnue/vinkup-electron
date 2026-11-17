@@ -1,0 +1,117 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 14, 26, 0.55);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 460px;
+  padding: 24px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  background: var(--color-bg-card);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+}
+
+.title {
+  margin: 0 0 4px;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.intro {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.optional {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  background: var(--color-bg-surface-1);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--color-accent-purple);
+  outline-offset: 1px;
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--color-status-error-text);
+}
+
+.fieldError,
+.formError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-status-error-text);
+}
+
+.formError {
+  margin-bottom: 12px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cancel,
+.submit {
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cancel {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-button-secondary);
+  color: var(--color-text-primary);
+}
+
+.submit {
+  border: 1px solid var(--color-accent-purple);
+  background: var(--color-accent-purple);
+  color: var(--color-text-on-accent);
+}
+
+.cancel:disabled,
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

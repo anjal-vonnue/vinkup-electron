@@ -12,12 +12,22 @@ import {
 } from 'electron';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { DesktopAppInfo, DesktopAuthState, DesktopPlatform } from '@itp/types';
-import { APP_NAME, DEV_RENDERER_URL, getApiUrl } from './config';
+import type {
+  DesktopAppInfo,
+  DesktopAuthState,
+  DesktopPlatform,
+  ResourcesBrowserBounds,
+} from '@itp/types';
+import { APP_NAME, DEV_RENDERER_URL, getApiUrl, getResourcesAllowlistUrl } from './config';
 import { startLocalServer, type LocalServer } from './server';
 import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager';
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
+import { DisplayWindowManager } from './displayWindowManager';
+import { getScreenProtectionDisabled } from './screenProtectionConfig';
+import { BUNDLED_ALLOWLIST } from './resources/allowlist';
+import { loadResourcesAllowlist } from './resources/allowlist-source';
+import { ResourcesBrowser } from './resources/browser';
 import {
   assertTrustedSender as assertTrustedSenderForOrigin,
   isAllowedExternalUrl,
@@ -27,11 +37,14 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const AUTH_COOKIE_NAME = 'auth_token';
+const DISABLE_SCREEN_PROTECTION = getScreenProtectionDisabled();
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
+let displayWindowManager: DisplayWindowManager | null = null;
+let resourcesBrowser: ResourcesBrowser | null = null;
 
 // Set the name before `ready` so userData, cache and config use the product name.
 app.setName(APP_NAME);
@@ -77,8 +90,66 @@ async function bootstrap(): Promise<void> {
     console.error('[auth] Failed to restore the session', error);
   });
 
-  mainWindow = createMainWindow();
-  await loadRenderer(mainWindow);
+  const window = createMainWindow();
+  mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
+  );
+  updateProtectionContext(authManager.getState());
+  await displayWindowManager.start();
+
+  resourcesBrowser = createResourcesBrowser(window);
+
+  // The shared allowlist can be updated without shipping a release. This never
+  // blocks startup: the bundled copy is already in use.
+  void refreshResourcesAllowlist();
+
+  await loadRenderer(window);
+}
+
+function createResourcesBrowser(window: BrowserWindow): ResourcesBrowser {
+  return new ResourcesBrowser(window, BUNDLED_ALLOWLIST, {
+    onState: (state) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:state-changed', state);
+    },
+    onFocusAddress: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:focus-address');
+    },
+    onOpenFind: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:open-find');
+    },
+    onFindResult: (result) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:find-result', result);
+    },
+    onEscape: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:escape');
+    },
+  });
+}
+
+async function refreshResourcesAllowlist(): Promise<void> {
+  try {
+    const { allowlist, source } = await loadResourcesAllowlist({
+      bundled: BUNDLED_ALLOWLIST,
+      remoteUrl: getResourcesAllowlistUrl(),
+      cacheFile: path.join(app.getPath('userData'), 'resources', 'allowlist.json'),
+    });
+    resourcesBrowser?.setAllowlist(allowlist);
+    if (source !== 'bundled') {
+      console.info(`[resources] Using the ${source} allowlist (v${allowlist.version}).`);
+    }
+  } catch (error) {
+    console.warn('[resources] Failed to refresh the allowlist', error);
+  }
 }
 
 function createDesktopAuthManager(): DesktopAuthManager {
@@ -127,8 +198,16 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
+  updateProtectionContext(state);
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
+}
+
+function updateProtectionContext(state: DesktopAuthState): void {
+  displayWindowManager?.setProtectionContext(
+    state.status === 'loading' || state.status === 'pending',
+    state.status === 'authenticated' ? (state.user?.role ?? null) : null
+  );
 }
 
 function createMainWindow(): BrowserWindow {
@@ -139,7 +218,7 @@ function createMainWindow(): BrowserWindow {
     y,
     width,
     height,
-    fullscreen: true,
+    fullscreen: false,
     useContentSize: true,
     frame: false,
     title: APP_NAME,
@@ -154,15 +233,30 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  window.on('minimize', () => window.restore());
-  window.on('leave-full-screen', () => window.setFullScreen(true));
+  window.on('minimize', () => {
+    if (displayWindowManager?.shouldPreventMinimize() ?? !DISABLE_SCREEN_PROTECTION) {
+      window.restore();
+    }
+  });
 
   window.once('ready-to-show', () => {
     window.show();
   });
 
   window.on('closed', () => {
+    displayWindowManager?.dispose();
+    displayWindowManager = null;
     mainWindow = null;
+    app.quit();
+  });
+
+  window.on('close', () => {
+    resourcesBrowser?.dispose();
+    resourcesBrowser = null;
+  });
+
+  window.on('resize', () => {
+    resourcesBrowser?.handleWindowResize();
   });
 
   window.on('enter-full-screen', () => {
@@ -185,6 +279,22 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.webContents.on('before-input-event', (event, input) => {
+    const key = input.key.toLowerCase();
+    const moveToNextDisplay =
+      (displayWindowManager?.isProtectionEnabledForCurrentUser() ?? !DISABLE_SCREEN_PROTECTION) &&
+      input.type === 'keyDown' &&
+      input.control &&
+      input.shift &&
+      input.alt &&
+      key === 'm';
+    if (moveToNextDisplay) {
+      event.preventDefault();
+      void displayWindowManager?.moveToNextDisplay().catch((error: unknown) => {
+        console.error('[desktop] Failed to move to the next display', error);
+      });
+      return;
+    }
+
     if (!isDevToolsShortcut(input)) return;
     event.preventDefault();
     // The custom menu below replaces Electron's default menu, so the built-in
@@ -239,33 +349,43 @@ function registerIpcHandlers(): void {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
 
+  ipcMain.handle('window:begin-certificate-print', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    const frameUrl = event.senderFrame?.url;
+    if (!frameUrl || !isCertificatePageUrl(frameUrl)) {
+      throw new Error('Certificate printing can only start from the certificate page.');
+    }
+    displayWindowManager?.beginCertificatePrint();
+  });
+
+  ipcMain.handle('window:end-certificate-print', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    displayWindowManager?.endCertificatePrint();
+  });
+
   ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
-    if (typeof fileName !== 'string' || !fileName.trim()) {
-      throw new Error('A certificate file name is required.');
+
+    displayWindowManager?.beginCertificatePrint();
+    try {
+      return await savePdf(event, fileName, {
+        label: 'certificate',
+        fallbackFileName: 'certificate',
+        landscape: true,
+      });
+    } finally {
+      displayWindowManager?.endCertificatePrint();
     }
-
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) throw new Error('The certificate window is not available.');
-
-    const result = await dialog.showSaveDialog(window, {
-      defaultPath: `${sanitizePdfFileName(fileName)}.pdf`,
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  ipcMain.handle('report:save-pdf', async (event, fileName: unknown) => {
+    assertTrustedSender(event);
+    return savePdf(event, fileName, {
+      label: 'report',
+      fallbackFileName: 'trainee-report',
+      landscape: false,
     });
-    if (result.canceled || !result.filePath) return false;
-
-    const filePath =
-      path.extname(result.filePath).toLowerCase() === '.pdf'
-        ? result.filePath
-        : `${result.filePath}.pdf`;
-    const pdf = await event.sender.printToPDF({
-      pageSize: 'A4',
-      landscape: true,
-      printBackground: true,
-      preferCSSPageSize: true,
-    });
-    await writeFile(filePath, pdf);
-    return true;
   });
 
   ipcMain.handle('auth:get-state', (event) => {
@@ -292,6 +412,99 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     await getAuthManager().logout();
   });
+
+  ipcMain.on('display-alert:choice', (event, choice: unknown) => {
+    const manager = displayWindowManager;
+    if (!manager?.ownsAlertSender(event.sender)) return;
+    manager.handleAlertChoice(choice);
+  });
+
+  ipcMain.handle('resources:get-allowlist', (event) => {
+    assertTrustedSender(event);
+    return getResourcesBrowser().getAllowlist();
+  });
+
+  ipcMain.handle('resources:get-state', (event) => {
+    assertTrustedSender(event);
+    return getResourcesBrowser().getState();
+  });
+
+  ipcMain.handle('resources:open', (event, bounds: unknown) => {
+    assertTrustedSender(event);
+    return getResourcesBrowser().open(parseBrowserBounds(bounds));
+  });
+
+  ipcMain.handle('resources:set-bounds', (event, bounds: unknown) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().setBounds(parseBrowserBounds(bounds));
+  });
+
+  ipcMain.handle('resources:close', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().close();
+  });
+
+  ipcMain.handle('resources:home', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().home();
+  });
+
+  ipcMain.handle('resources:navigate', (event, input: unknown) => {
+    assertTrustedSender(event);
+    if (typeof input !== 'string') throw new Error('Invalid navigation input.');
+    return getResourcesBrowser().navigate(input);
+  });
+
+  ipcMain.handle('resources:back', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().goBack();
+  });
+
+  ipcMain.handle('resources:forward', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().goForward();
+  });
+
+  ipcMain.handle('resources:reload', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().reload();
+  });
+
+  ipcMain.handle('resources:stop', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().stop();
+  });
+
+  ipcMain.handle('resources:find', (event, query: unknown) => {
+    assertTrustedSender(event);
+    if (typeof query !== 'string') throw new Error('Invalid search text.');
+    getResourcesBrowser().find(query);
+  });
+
+  ipcMain.handle('resources:find-next', (event, forward: unknown) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().findNext(forward !== false);
+  });
+
+  ipcMain.handle('resources:stop-find', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().stopFind();
+  });
+
+  ipcMain.handle('resources:zoom-in', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().zoomIn();
+  });
+
+  ipcMain.handle('resources:zoom-out', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().zoomOut();
+  });
+
+  ipcMain.handle('resources:zoom-reset', (event) => {
+    assertTrustedSender(event);
+    getResourcesBrowser().zoomReset();
+  });
 }
 
 function getAuthManager(): DesktopAuthManager {
@@ -299,8 +512,55 @@ function getAuthManager(): DesktopAuthManager {
   return authManager;
 }
 
+function getResourcesBrowser(): ResourcesBrowser {
+  if (!resourcesBrowser) throw new Error('The resources browser is not ready.');
+  return resourcesBrowser;
+}
+
+function parseBrowserBounds(value: unknown): ResourcesBrowserBounds {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Invalid browser bounds.');
+  }
+
+  const record = value as Record<string, unknown>;
+  const { x, y, width, height } = record;
+  if (
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height)
+  ) {
+    throw new Error('Invalid browser bounds.');
+  }
+
+  return { x, y, width, height };
+}
+
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
   assertTrustedSenderForOrigin(event, trustedOrigin);
+}
+
+function assertMainWindowSender(event: IpcMainInvokeEvent): void {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== mainWindow ||
+    event.senderFrame !== event.sender.mainFrame
+  ) {
+    throw new Error('IPC request is not from the main application window.');
+  }
+}
+
+function isCertificatePageUrl(url: string): boolean {
+  try {
+    return /^\/certificates\/[^/]+\/?$/.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
 }
 
 function getAppInfo(): DesktopAppInfo {
@@ -311,7 +571,50 @@ function getAppInfo(): DesktopAppInfo {
   };
 }
 
-function sanitizePdfFileName(fileName: string): string {
+type PdfSaveRequest = {
+  /** Used in error messages: "A certificate file name is required." */
+  label: string;
+  /** Used if the suggested name has no characters left after sanitising. */
+  fallbackFileName: string;
+  landscape: boolean;
+};
+
+async function savePdf(
+  event: IpcMainInvokeEvent,
+  fileName: unknown,
+  request: PdfSaveRequest
+): Promise<boolean> {
+  if (typeof fileName !== 'string' || !fileName.trim()) {
+    throw new Error(`A ${request.label} file name is required.`);
+  }
+
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) throw new Error(`The ${request.label} window is not available.`);
+
+  const result = await dialog.showSaveDialog(window, {
+    defaultPath: `${sanitizePdfFileName(fileName, request.fallbackFileName)}.pdf`,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (result.canceled || !result.filePath) return false;
+
+  const filePath =
+    path.extname(result.filePath).toLowerCase() === '.pdf'
+      ? result.filePath
+      : `${result.filePath}.pdf`;
+
+  // The page's print CSS supplies the paper size and margins: A4 portrait for a
+  // report, A4 landscape for a certificate. Keep the backgrounds in the PDF.
+  const pdf = await event.sender.printToPDF({
+    pageSize: 'A4',
+    landscape: request.landscape,
+    printBackground: true,
+    preferCSSPageSize: true,
+  });
+  await writeFile(filePath, pdf);
+  return true;
+}
+
+function sanitizePdfFileName(fileName: string, fallbackFileName: string): string {
   const name = path
     .basename(fileName)
     .split('')
@@ -322,7 +625,7 @@ function sanitizePdfFileName(fileName: string): string {
     .join('')
     .replace(/\.pdf$/i, '')
     .trim();
-  return name || 'certificate';
+  return name || fallbackFileName;
 }
 
 function isTrusted(url: string): boolean {
@@ -332,6 +635,11 @@ function isTrusted(url: string): boolean {
 function openExternal(url: string): void {
   if (!isAllowedExternalUrl(url)) return;
   void shell.openExternal(url);
+}
+
+function handleExitChoice(): void {
+  // TODO: report the student's exit choice when the backend supports it.
+  app.quit();
 }
 
 function isDevToolsShortcut(input: Electron.Input): boolean {
@@ -402,12 +710,28 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length > 0) return;
-  mainWindow = createMainWindow();
-  void loadRenderer(mainWindow);
+  const window = createMainWindow();
+  mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
+  );
+  updateProtectionContext(getAuthManager().getState());
+  resourcesBrowser = createResourcesBrowser(window);
+  void refreshResourcesAllowlist();
+  void displayWindowManager
+    .start()
+    .then(() => loadRenderer(window))
+    .catch(handleStartupError);
 });
 
 app.on('before-quit', () => {
   // TODO: ask the renderer to flush activity time before the app exits.
+  displayWindowManager?.dispose();
+  displayWindowManager = null;
   authManager?.dispose();
   authManager = null;
   if (!localServer) return;

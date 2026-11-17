@@ -27,11 +27,13 @@ their code and journal, and add new trainees.
 - **Course certificates:** finishing every day of a course unlocks a printable certificate.
 - **Journal, help and reference pages:** past journal entries with search, a help guide, and reading
   material for every day.
-- **Mentor dashboard** (`/admin`): cohort summary; trainee list with search, sort, a "needs
-  attention" filter and CSV export; add trainee; per-trainee detail with read-only code, journal,
-  flags and a printable progress report.
-- **Two roles:** trainees and mentors (admins) sign in the same way; each role only reaches its own
-  pages and endpoints.
+- **Mentor dashboard** (`/admin`): only the trainees assigned to that mentor; cohort summary;
+  trainee list with search, sort, a "needs attention" filter and CSV export; add trainee;
+  per-trainee detail with read-only code, journal, flags and a printable progress report.
+- **Manager console** (`/manager`): create, edit, activate and deactivate mentors, managers and
+  trainees; assign, reassign and unassign trainees. Reassignment takes effect immediately.
+- **Three roles:** trainees, mentors and managers sign in the same way; each role only reaches its
+  own pages and endpoints. See [roles and assignments](docs/roles-and-assignments.md).
 
 ## Tech stack
 
@@ -69,8 +71,8 @@ cd ..
 npm run db:seed -w backend
 ```
 
-Add your company email to the trainee list in `backend/src/lib/seed.ts` before seeding, or you won't
-be able to sign in.
+Add your company email to the staff or trainee list in `backend/src/lib/seed.ts` before seeding, or
+you won't be able to sign in. Staff land on `/admin` (mentor) or `/manager` (manager).
 
 Start the backend and the frontend in two terminals:
 
@@ -102,7 +104,7 @@ Run from the repository root.
 | `npm run format`                       | Prettier on the whole repository                            |
 | `npm run build -w frontend`            | Type-check and build the frontend to `frontend/dist`        |
 | `npm run build -w backend`             | Compile the backend to `backend/dist`                       |
-| `npm run db:seed -w backend`           | Load trainees and the curriculum (safe to run again)        |
+| `npm run db:seed -w backend`           | Load staff, trainees and the curriculum (safe to run again) |
 | `npx tsx scripts/export-curriculum.ts` | Rebuild the seed's `curriculum.json` from the frontend data |
 
 Every commit runs lint-staged, type checks and the unit tests, and checks the message with
@@ -129,6 +131,7 @@ Training-platform/
 | [Architecture overview](docs/architecture-overview.md) | How the system fits together: frontend flow, backend layers, hosting |
 | [API reference](docs/api-specifications.md)            | Every endpoint, with requests, responses and errors                  |
 | [Database](docs/database.md)                           | ER diagram and data dictionary                                       |
+| [Roles and assignments](docs/roles-and-assignments.md) | Role hierarchy, mentor assignment, authorization, migration strategy |
 | [Release notes v0.2.0](docs/release-notes/v0.2.0.md)   | Mentor dashboard, certificates, integrity score and other changes    |
 | [Release notes v0.1.0](docs/release-notes/v0.1.0.md)   | What's in the first beta, known limitations and future scope         |
 

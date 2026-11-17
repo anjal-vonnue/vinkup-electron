@@ -8,9 +8,9 @@ import {
   NotProvisionedError,
 } from '../../../errors/AppError';
 
-const { findBymail, findActiveAdminByEmail, recordAdminLogin } = vi.hoisted(() => ({
+const { findBymail, findActiveStaffByEmail, recordAdminLogin } = vi.hoisted(() => ({
   findBymail: vi.fn(),
-  findActiveAdminByEmail: vi.fn(),
+  findActiveStaffByEmail: vi.fn(),
   recordAdminLogin: vi.fn(),
 }));
 
@@ -19,7 +19,7 @@ const { findBymail, findActiveAdminByEmail, recordAdminLogin } = vi.hoisted(() =
 vi.mock('../auth.repository', () => {
   class AuthRepository {
     findBymail = findBymail;
-    findActiveAdminByEmail = findActiveAdminByEmail;
+    findActiveStaffByEmail = findActiveStaffByEmail;
     recordAdminLogin = recordAdminLogin;
   }
   return { AuthRepository, authRepository: new AuthRepository() };
@@ -47,6 +47,7 @@ describe('AuthService.verifyGoogleProfile', () => {
     id: '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77',
     email: 'mentor@company.com',
     name: 'Test Mentor',
+    role: 'MENTOR' as const,
     is_active: true,
     created_at: new Date('2026-10-01T00:00:00.000Z'),
     last_login_at: null,
@@ -62,10 +63,10 @@ describe('AuthService.verifyGoogleProfile', () => {
 
   beforeEach(() => {
     findBymail.mockReset();
-    findActiveAdminByEmail.mockReset();
+    findActiveStaffByEmail.mockReset();
     recordAdminLogin.mockReset();
     // By default nobody is an admin
-    findActiveAdminByEmail.mockResolvedValue(null);
+    findActiveStaffByEmail.mockResolvedValue(null);
     recordAdminLogin.mockResolvedValue(undefined);
   });
 
@@ -85,8 +86,8 @@ describe('AuthService.verifyGoogleProfile', () => {
 
       await authService.verifyGoogleProfile(createProfile(allowedEmail));
 
-      expect(findActiveAdminByEmail).toHaveBeenCalledWith(allowedEmail);
-      expect(findActiveAdminByEmail.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(findActiveStaffByEmail).toHaveBeenCalledWith(allowedEmail);
+      expect(findActiveStaffByEmail.mock.invocationCallOrder[0]).toBeLessThan(
         findBymail.mock.invocationCallOrder[0]
       );
     });
@@ -110,9 +111,36 @@ describe('AuthService.verifyGoogleProfile', () => {
     });
   });
 
-  describe('admins', () => {
-    it('returns id, email, name and role "admin" without a trainee row', async () => {
-      findActiveAdminByEmail.mockResolvedValue(admin);
+  describe('staff accounts', () => {
+    it('maps an existing MENTOR account to the mentor role', async () => {
+      findActiveStaffByEmail.mockResolvedValue(admin);
+
+      const result = await authService.verifyGoogleProfile(createProfile(admin.email));
+
+      expect(result.role).toBe('mentor');
+    });
+
+    it('maps a MANAGER staff account to the manager role', async () => {
+      const manager = {
+        ...admin,
+        email: 'manager@company.com',
+        name: 'Test Manager',
+        role: 'MANAGER' as const,
+      };
+      findActiveStaffByEmail.mockResolvedValue(manager);
+
+      const result = await authService.verifyGoogleProfile(createProfile(manager.email));
+
+      expect(result).toEqual({
+        id: manager.id,
+        email: manager.email,
+        name: manager.name,
+        role: 'manager',
+      });
+    });
+
+    it('returns id, email, name and role "mentor" without a trainee row', async () => {
+      findActiveStaffByEmail.mockResolvedValue(admin);
 
       const result = await authService.verifyGoogleProfile(createProfile(admin.email));
 
@@ -120,13 +148,13 @@ describe('AuthService.verifyGoogleProfile', () => {
         id: admin.id,
         email: admin.email,
         name: admin.name,
-        role: 'admin',
+        role: 'mentor',
       });
       expect(findBymail).not.toHaveBeenCalled();
     });
 
     it('records the login time on the admin row', async () => {
-      findActiveAdminByEmail.mockResolvedValue(admin);
+      findActiveStaffByEmail.mockResolvedValue(admin);
 
       await authService.verifyGoogleProfile(createProfile(admin.email));
 
@@ -134,19 +162,19 @@ describe('AuthService.verifyGoogleProfile', () => {
       expect(recordAdminLogin).toHaveBeenCalledWith(admin.id);
     });
 
-    it('logs in as admin when the email is in both tables', async () => {
-      findActiveAdminByEmail.mockResolvedValue(admin);
+    it('logs in as mentor when the email is in both tables', async () => {
+      findActiveStaffByEmail.mockResolvedValue(admin);
       findBymail.mockResolvedValue({ ...trainee, email: admin.email });
 
       const result = await authService.verifyGoogleProfile(createProfile(admin.email));
 
-      expect(result.role).toBe('admin');
+      expect(result.role).toBe('mentor');
       expect(findBymail).not.toHaveBeenCalled();
     });
 
     it('treats a deactivated admin as not an admin', async () => {
       // The repository only returns ACTIVE admins, so a deactivated one comes back as null
-      findActiveAdminByEmail.mockResolvedValue(null);
+      findActiveStaffByEmail.mockResolvedValue(null);
       findBymail.mockResolvedValue(null);
 
       await expect(
@@ -162,12 +190,12 @@ describe('AuthService.verifyGoogleProfile', () => {
         authService.verifyGoogleProfile(createProfile('mentor@gmail.com'))
       ).rejects.toBeInstanceOf(DomainNotPermittedError);
 
-      expect(findActiveAdminByEmail).not.toHaveBeenCalled();
+      expect(findActiveStaffByEmail).not.toHaveBeenCalled();
     });
 
     it('fails the login when recording the login time fails', async () => {
       const dbError = new Error('db down');
-      findActiveAdminByEmail.mockResolvedValue(admin);
+      findActiveStaffByEmail.mockResolvedValue(admin);
       recordAdminLogin.mockRejectedValue(dbError);
 
       await expect(authService.verifyGoogleProfile(createProfile(admin.email))).rejects.toBe(
@@ -182,7 +210,7 @@ describe('AuthService.verifyGoogleProfile', () => {
         UnauthorizedError
       );
 
-      expect(findActiveAdminByEmail).not.toHaveBeenCalled();
+      expect(findActiveStaffByEmail).not.toHaveBeenCalled();
       expect(findBymail).not.toHaveBeenCalled();
     });
 
@@ -192,7 +220,7 @@ describe('AuthService.verifyGoogleProfile', () => {
       ).rejects.toBeInstanceOf(DomainNotPermittedError);
 
       // The domain check must run before any database lookup
-      expect(findActiveAdminByEmail).not.toHaveBeenCalled();
+      expect(findActiveStaffByEmail).not.toHaveBeenCalled();
       expect(findBymail).not.toHaveBeenCalled();
     });
 
@@ -203,14 +231,14 @@ describe('AuthService.verifyGoogleProfile', () => {
           DomainNotPermittedError
         );
 
-        expect(findActiveAdminByEmail).not.toHaveBeenCalled();
+        expect(findActiveStaffByEmail).not.toHaveBeenCalled();
         expect(findBymail).not.toHaveBeenCalled();
       }
     );
 
     it('lets admin-lookup errors propagate unchanged', async () => {
       const dbError = new Error('db down');
-      findActiveAdminByEmail.mockRejectedValue(dbError);
+      findActiveStaffByEmail.mockRejectedValue(dbError);
 
       await expect(authService.verifyGoogleProfile(createProfile(allowedEmail))).rejects.toBe(
         dbError

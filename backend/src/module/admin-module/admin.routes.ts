@@ -4,6 +4,7 @@ import { adminController } from './admin.controller';
 import { traineeIdParamsSchema, traineeTaskParamsSchema } from './admin.schema';
 import { createTraineeSchema } from './admin.schema';
 import { adminReviewRoutes } from '../review-module/review.routes';
+import { requireAssignedTrainee } from '../../middleware/authMiddleware';
 
 export const adminRoutes = Router();
 
@@ -12,21 +13,27 @@ adminRoutes.use(adminReviewRoutes);
 
 adminRoutes.get('/trainees', adminController.listTrainees);
 
+// Query string (from, to, traineeId) is validated in the controller.
+adminRoutes.get('/analytics', adminController.getAnalytics);
+
 adminRoutes.get(
   '/trainees/:traineeId',
   validate({ params: traineeIdParamsSchema }),
+  requireAssignedTrainee,
   adminController.getTrainee
 );
 
 adminRoutes.get(
   '/trainees/:traineeId/flags',
   validate({ params: traineeIdParamsSchema }),
+  requireAssignedTrainee,
   adminController.listFlags
 );
 
 adminRoutes.get(
   '/trainees/:traineeId/tasks/:taskId/code',
   validate({ params: traineeTaskParamsSchema }),
+  requireAssignedTrainee,
   adminController.getTaskCode
 );
 

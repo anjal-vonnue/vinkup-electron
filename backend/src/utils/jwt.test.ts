@@ -14,7 +14,7 @@ const adminPayload: JwtPayload = {
   id: 'a1',
   name: 'Test Mentor',
   email: 'mentor@vonnue.com',
-  role: 'admin',
+  role: 'mentor',
 };
 
 const nowInSeconds = () => Math.floor(Date.now() / 1000);

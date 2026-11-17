@@ -5,7 +5,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { DashboardResponse, DaySummary, DayStatus } from '@itp/types';
 
 import DashboardPage from './DashboardPage';
-import { getDashboard } from '../../api/dashboard';
+import { getDashboard, getReworkTasks } from '../../api/dashboard';
 import { getCourseDays } from '../../api/courses';
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
@@ -17,6 +17,7 @@ vi.mock('react-router', async () => {
 
 vi.mock('../../api/dashboard', () => ({
   getDashboard: vi.fn(),
+  getReworkTasks: vi.fn(),
 }));
 
 vi.mock('../../api/courses', () => ({
@@ -209,6 +210,7 @@ describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.sessionStorage.clear();
+    vi.mocked(getReworkTasks).mockResolvedValue([]);
     vi.mocked(getCourseDays).mockImplementation((courseId: string) => {
       const days = daysByCourse[courseId];
       return days ? Promise.resolve(days) : Promise.reject(new Error('Course not found.'));
@@ -581,6 +583,81 @@ describe('DashboardPage', () => {
       renderPage();
 
       expect(await screen.findByText('HTML Module — Schedule')).toBeInTheDocument();
+    });
+  });
+
+  describe('rework section', () => {
+    it('does not display rework banner when no tasks need rework', async () => {
+      vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
+      vi.mocked(getReworkTasks).mockResolvedValue([]);
+
+      renderPage();
+
+      await screen.findByRole('heading', { name: 'Closures and Higher-Order Functions' });
+      expect(screen.queryByText('Rework Requested')).not.toBeInTheDocument();
+    });
+
+    it('displays rework banner when mentor requested rework and expands when clicked', async () => {
+      vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
+      vi.mocked(getReworkTasks).mockResolvedValue([
+        {
+          taskId: 'html-day-01-t-1',
+          taskTitle: 'Structure a Personal Portfolio',
+          sequenceOrder: 1,
+          dayId: 'html-day-01',
+          dayNumber: 1,
+          courseId: 'html',
+          courseTitle: 'HTML & Semantic Web',
+          submissionCount: 2,
+          latestReview: {
+            id: 'rev-1',
+            adminId: 'admin-1',
+            adminName: 'Mentor Hawas',
+            decision: 'rework',
+            feedback: 'Fix heading hierarchy.',
+            reviewedAt: '2026-10-01T10:00:00.000Z',
+          },
+        },
+      ]);
+
+      renderPage();
+
+      const bannerButton = await screen.findByRole('button', { name: /rework requested/i });
+      expect(bannerButton).toBeInTheDocument();
+      expect(screen.queryByText('Structure a Personal Portfolio')).not.toBeInTheDocument();
+
+      // Click to expand
+      await userEvent.click(bannerButton);
+
+      expect(screen.getByText('Structure a Personal Portfolio')).toBeInTheDocument();
+      expect(screen.getByText(/Fix heading hierarchy/)).toBeInTheDocument();
+    });
+
+    it('navigates to task when Go to Task is clicked', async () => {
+      vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
+      vi.mocked(getReworkTasks).mockResolvedValue([
+        {
+          taskId: 'html-day-01-t-1',
+          taskTitle: 'Structure a Personal Portfolio',
+          sequenceOrder: 1,
+          dayId: 'html-day-01',
+          dayNumber: 1,
+          courseId: 'html',
+          courseTitle: 'HTML & Semantic Web',
+          submissionCount: 2,
+          latestReview: null,
+        },
+      ]);
+
+      renderPage();
+
+      const bannerButton = await screen.findByRole('button', { name: /rework requested/i });
+      await userEvent.click(bannerButton);
+
+      const taskButton = await screen.findByRole('button', { name: /go to task/i });
+      await userEvent.click(taskButton);
+
+      expect(navigate).toHaveBeenCalledWith('/tasks/html-day-01-t-1');
     });
   });
 });

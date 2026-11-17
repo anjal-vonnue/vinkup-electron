@@ -5,17 +5,21 @@ review is kept as history.
 
 ## Roles and identity
 
-Only the existing `Trainee` and `Admin` accounts are used. There is no separate student,
-mentor or reviewer entity.
+Reviews use the existing `Trainee` and staff accounts. Managers do not review tasks; a mentor
+reviews only the trainees assigned to them. See [roles-and-assignments.md](./roles-and-assignments.md).
 
-| Actor   | Who they are                | Where identity comes from             |
-| ------- | --------------------------- | ------------------------------------- |
-| Trainee | The signed-in `trainee` row | `req.user.id` behind `requireTrainee` |
-| Admin   | The signed-in `admin` row   | `req.user.id` behind `requireAdmin`   |
+| Actor   | Who they are                                  | Where identity comes from                                 |
+| ------- | --------------------------------------------- | --------------------------------------------------------- |
+| Trainee | The signed-in `trainee` row                   | `req.user.id` behind `requireTrainee`                     |
+| Mentor  | The signed-in `admin` row with role `MENTOR`  | `req.user.id` behind `requireMentor`                      |
+| Manager | The signed-in `admin` row with role `MANAGER` | Account management only; cannot call the review endpoints |
 
 The server **never** trusts a trainee id sent by the browser. Trainee endpoints take the
-trainee from the session, and admin endpoints take the target trainee from the `:traineeId`
-path parameter (validated as a UUID) with the reviewing admin taken from the session.
+trainee from the session. Mentor endpoints take the target trainee from the `:traineeId`
+path parameter (validated as a UUID) with the reviewing mentor taken from the session, and
+`requireAssignedTrainee` checks on **every request** that `trainee.mentor_id` is that mentor.
+Reassigning or unassigning a trainee closes approve, rework, review history and feedback
+immediately, including direct URLs.
 `GET /api/tasks/:taskId/review` also checks that the task belongs to a day the trainee has
 unlocked, so a review cannot leak across trainees or locked days.
 
@@ -27,7 +31,7 @@ not started / in progress
           ▼
       completed · review_status = pending        ── admin approval ──▶ approved (final)
           │
-          │  Admin requests rework (feedback required)
+          │  Mentor requests rework (feedback required)
           ▼
       completed · review_status = rework
           │  Trainee edits and resubmits
@@ -40,8 +44,8 @@ Allowed transitions:
 | Transition            | Performed by | Effect                                                                   |
 | --------------------- | ------------ | ------------------------------------------------------------------------ |
 | Submit / resubmit     | Trainee      | `status = completed`, `review_status = pending`, `submission_count += 1` |
-| Approve               | Admin        | `review_status = approved`; optional note, may be empty                  |
-| Request rework        | Admin        | `review_status = rework`; feedback is required                           |
+| Approve               | Mentor       | `review_status = approved`; optional note, may be empty                  |
+| Request rework        | Mentor       | `review_status = rework`; feedback is required                           |
 | Resubmit after rework | Trainee      | Back to `pending`, attempt count increases                               |
 
 Blocked transitions:
@@ -118,16 +122,17 @@ npx prisma generate
 ## API
 
 All endpoints require a signed-in session. Trainee endpoints are mounted behind
-`requireTrainee`; admin endpoints behind `requireAdmin`.
+`requireTrainee`; mentor endpoints behind `requireMentor`, plus `requireAssignedTrainee`
+for every route that names a trainee.
 
-| Method | Path                                                   | Actor   | Purpose                                     |
-| ------ | ------------------------------------------------------ | ------- | ------------------------------------------- |
-| GET    | `/api/tasks/:taskId/review`                            | Trainee | Own review state + latest review            |
-| GET    | `/api/tasks/:taskId/reviews`                           | Trainee | Own review history, newest first            |
-| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Admin   | Approve the current submission              |
-| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Admin   | Send the current submission back            |
-| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Admin   | Review history for one task                 |
-| GET    | `/api/admin/trainees/:traineeId/feedback`              | Admin   | Every feedback-bearing review, newest first |
+| Method | Path                                                   | Actor   | Purpose                                        |
+| ------ | ------------------------------------------------------ | ------- | ---------------------------------------------- |
+| GET    | `/api/tasks/:taskId/review`                            | Trainee | Own review state + latest review               |
+| GET    | `/api/tasks/:taskId/reviews`                           | Trainee | Own review history, newest first               |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Mentor  | Approve an assigned trainee's submission       |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Mentor  | Send an assigned submission back               |
+| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Mentor  | Review history for an assigned task            |
+| GET    | `/api/admin/trainees/:traineeId/feedback`              | Mentor  | Feedback for an assigned trainee, newest first |
 
 ### `GET /api/tasks/:taskId/review`
 
@@ -225,7 +230,8 @@ Backend:
 
 - `backend/src/test/api/task-review.api.test.ts` — 20 API tests covering submit → pending,
   approve, rework (including validation), resubmission after rework, attempt counts, preserved
-  history, blocked transitions, trainee isolation, admin authorization, task/trainee not found,
+  history, blocked transitions, trainee isolation, mentor authorization and assignment scoping,
+  task/trainee not found,
   feedback feed filtering/sorting and legacy unreviewed submissions.
 - Updated unit and exact-shape API tests for the new fields.
 
@@ -243,7 +249,7 @@ Frontend:
 
 ## Limitations
 
-- **One decision per attempt.** An admin cannot silently change an earlier decision; they
+- **One decision per attempt.** A mentor cannot silently change an earlier decision; they
   must ask for rework (or the trainee resubmits) so each decision stays in history.
 - **No notifications.** The trainee sees a decision on the day/workspace the next time they
   load it; there is no email or push notification.
@@ -251,7 +257,7 @@ Frontend:
   is a fixed cap rather than pagination.
 - **Feedback feed only includes non-empty feedback.** A plain approval with no note appears in
   the task history but not in the Feedbacks tab.
-- **Admin-only, single reviewer.** Any admin can review any trainee; there is no assignment or
-  reviewer-ownership model.
+- **One mentor per trainee.** A mentor can review only their assigned trainees; a manager cannot
+  review tasks. There is no second-reviewer or approval-chain model.
 - **No status changes to `task_progress.status`.** Approval does not change `completed`; it only
   changes `review_status`, so day completion rules keep working exactly as before.

@@ -74,11 +74,24 @@ export class ConflictError extends AppError {
   constructor(
     code: Extract<
       ErrorCode,
-      'TRAINEE_EXISTS' | 'EMAIL_BELONGS_TO_ADMIN' | 'ALREADY_REVIEWED' | 'ALREADY_APPROVED'
+      | 'TRAINEE_EXISTS'
+      | 'STAFF_EXISTS'
+      | 'STAFF_HAS_TRAINEES'
+      | 'EMAIL_BELONGS_TO_ADMIN'
+      | 'ALREADY_REVIEWED'
+      | 'ALREADY_APPROVED'
+      | 'ALREADY_ASSIGNED'
     >,
     message: string
   ) {
     super(409, code, message);
+  }
+}
+
+/** 400: the target staff account cannot mentor trainees (wrong role or inactive). */
+export class InvalidMentorError extends AppError {
+  constructor(message = 'Choose an active mentor account.') {
+    super(400, 'INVALID_MENTOR', message);
   }
 }
 

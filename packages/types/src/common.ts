@@ -9,10 +9,14 @@ export type ErrorCode =
   | 'DOMAIN_NOT_PERMITTED'
   | 'NOT_PROVISIONED'
   | 'TRAINEE_EXISTS'
+  | 'STAFF_EXISTS'
+  | 'STAFF_HAS_TRAINEES'
   | 'EMAIL_BELONGS_TO_ADMIN'
   | 'TASK_NOT_SUBMITTED'
   | 'ALREADY_REVIEWED'
   | 'ALREADY_APPROVED'
+  | 'ALREADY_ASSIGNED'
+  | 'INVALID_MENTOR'
   | 'DESKTOP_AUTH_INVALID_STATE'
   | 'DESKTOP_AUTH_INVALID_PKCE'
   | 'DESKTOP_AUTH_INVALID_CODE'
@@ -32,7 +36,7 @@ export type ApiErrorResponse = {
   };
 };
 
-export type UserRole = 'trainee' | 'admin';
+export type UserRole = 'trainee' | 'mentor' | 'manager';
 
 // Response returned by the authenticated user profile endpoint
 export type MeResponse = {

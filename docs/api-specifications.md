@@ -19,22 +19,25 @@ All paths below include the `/api` prefix. The frontend axios client uses the re
 
 - **Mechanism:** a JWT in an HTTP cookie. Web routes have no `Authorization` header support; the desktop-only `/api/auth/desktop/session` and `/logout` use a Bearer access token instead.
 - **Cookie name:** `auth_token` (`AUTH_COOKIE_NAME`, `auth.constants.ts:3`).
-- **How it is set:** by `GET /api/auth/google/callback` after a web Google login, or by the Electron main process after a successful desktop exchange. The web JWT payload is `{ id, name, email, role }` of the trainee or mentor, signed with `JWT_SECRET`, `expiresIn: JWT_EXPIRES_IN` (env, default `'1h'`; set it to `7d` in production to match the cookie). The desktop cookie is a short-lived access JWT (`typ: "desktop"`; see the desktop section below).
+- **How it is set:** by `GET /api/auth/google/callback` after a web Google login, or by the Electron main process after a successful desktop exchange. The web JWT payload is `{ id, name, email, role }` of the trainee, mentor or manager, signed with `JWT_SECRET`, `expiresIn: JWT_EXPIRES_IN` (env, default `'1h'`; set it to `7d` in production to match the cookie). The desktop cookie is a short-lived access JWT (`typ: "desktop"`; see the desktop section below).
 - **requireAuth** (`middleware/authMiddleware.ts`): reads `req.cookies.auth_token`.
   - Missing cookie: `401 UNAUTHENTICATED`, message `"Not authenticated"`.
   - Invalid/expired JWT: `401 UNAUTHENTICATED`, message `"Invalid or expired token"`.
   - On success `req.user = { id, email, name, role }` from the token claims (no database lookup).
-- **Roles:** `role` is `'trainee'` or `'admin'` (a mentor). Two guards build on `requireAuth` (`middleware/authMiddleware.ts`):
-  - **requireTrainee:** signed in **and** `role === 'trainee'`. A mentor gets `403 FORBIDDEN` `"This page is for trainees."`.
-  - **requireAdmin:** signed in **and** `role === 'admin'` **and** an `admin` row with that id and `is_active = true` still exists (checked on every request, so switching an admin off takes effect at once). Otherwise `403 FORBIDDEN` `"You don't have access to this."`.
+- **Roles:** `role` is `'trainee'`, `'mentor'` or `'manager'`. A legacy `'admin'` claim is normalized to `'mentor'` when the token is verified. Guards build on `requireAuth` (`middleware/authMiddleware.ts`):
+  - **requireTrainee:** signed in, `role === 'trainee'` **and** the `trainee` row is still active. Otherwise `403 FORBIDDEN` `"This page is for trainees."`.
+  - **requireMentor** (also exported as **requireAdmin**): signed in, `role === 'mentor'` **and** an `admin` row with that id, `role = MENTOR` and `is_active = true` still exists (checked on every request, so deactivation or a role change takes effect at once). Otherwise `403 FORBIDDEN` `"You don't have access to this."`.
+  - **requireManager:** the same check for `role === 'manager'` and an active `admin` row with `role = MANAGER`.
+  - **requireAssignedTrainee:** on mentor routes with `:traineeId`, the trainee's current `mentor_id` must equal the signed-in mentor. Otherwise `403 FORBIDDEN`. This runs on every request, so reassignment or unassignment closes direct URLs immediately.
 - **Which routes require what** (`app.ts`):
   - Public: `GET /api/health`, `GET /api/auth/google`, `GET /api/auth/google/callback`, and the desktop transaction/google/callback/exchange/refresh endpoints (the desktop `session` and `logout` endpoints use a Bearer token).
   - Any signed-in user (`requireAuth` on the route, `auth.routes.ts`): `POST /api/auth/logout`, `GET /api/auth/me`.
   - Trainees only (`requireTrainee`): everything under `/api/profile`, `/api/activity`, `/api/dashboard`, `/api/courses`, `/api/tasks`, `/api/days`, `/api/journal`, `/api/typing-test` (at the mount), and `POST /api/activity/:taskId/events` (on the route, `flag.routes.ts`).
-  - Mentors only (`requireAdmin`): everything under `/api/admin`.
+  - Mentors only (`requireMentor`): everything under `/api/admin`.
+  - Managers only (`requireManager`): everything under `/api/manager`.
   - Because the guards run at the mount, an **unknown path under those prefixes returns 401 (not 404) when the caller is unauthenticated**, and 403 for the wrong role.
-- **Identity:** the trainee is always taken from the token (`req.user.id`), never from the body or URL. Mentor endpoints take the trainee from the URL (`:traineeId`) and are read-only, except `POST /api/admin/trainees`.
-- **In this document,** "Auth: required" on a trainee endpoint means `requireTrainee`; mentor endpoints say "Auth: admin".
+- **Identity:** the trainee's own records always use the id from the token (`req.user.id`), never the body or URL. Mentor endpoints take the trainee from the URL (`:traineeId`) and check the current assignment. Managers never use mentor endpoints.
+- **In this document,** "Auth: required" on a trainee endpoint means `requireTrainee`; mentor endpoints say "Auth: mentor"; manager endpoints say "Auth: manager".
 - **CORS:** `origin: env.FRONTEND_URL` (default `http://localhost:5173`), `credentials: true`.
 
 ### Request/response format
@@ -82,8 +85,12 @@ Every error is sent by `errorHandler` (`middleware/errorHandler.ts`) with this e
 | `CHECKLIST_INCOMPLETE`   | 403            | `ChecklistIncompleteError`                                                | `"Complete all required tasks before submitting the day."`, `details: { completedTasks: number, requiredTasks: number }`.                                                                                                                                                                                                   |
 | `DOMAIN_NOT_PERMITTED`   | 403 (internal) | `DomainNotPermittedError`                                                 | `"This Google account is not on an approved domain."` Delivered as `?error=DOMAIN_NOT_PERMITTED` on the login redirect.                                                                                                                                                                                                     |
 | `DOMAIN_NOT_PERMITTED`   | 400            | `TraineeDomainError`                                                      | `POST /api/admin/trainees` only: `"Use a company email address ending in @<ALLOWED_EMAIL_DOMAIN>."`                                                                                                                                                                                                                         |
-| `TRAINEE_EXISTS`         | 409            | `ConflictError`                                                           | `POST /api/admin/trainees`: `"A trainee with this email already exists."` (also when two requests race for the same email).                                                                                                                                                                                                 |
-| `EMAIL_BELONGS_TO_ADMIN` | 409            | `ConflictError`                                                           | `POST /api/admin/trainees`: `"This email belongs to a mentor account."`                                                                                                                                                                                                                                                     |
+| `TRAINEE_EXISTS`         | 409            | `ConflictError`                                                           | Trainee creation/update: `"A trainee with this email already exists."` (also when two requests race for the same email).                                                                                                                                                                                                    |
+| `STAFF_EXISTS`           | 409            | `ConflictError`                                                           | Manager staff creation/update: `"A staff account with this email already exists."`                                                                                                                                                                                                                                          |
+| `STAFF_HAS_TRAINEES`     | 409            | `ConflictError`                                                           | A mentor with assigned trainees cannot be deactivated or promoted; reassign those trainees first.                                                                                                                                                                                                                           |
+| `EMAIL_BELONGS_TO_ADMIN` | 409            | `ConflictError`                                                           | Trainee creation/update: `"This email belongs to a staff account."`                                                                                                                                                                                                                                                         |
+| `INVALID_MENTOR`         | 400            | `InvalidMentorError`                                                      | Assignment or trainee creation chose a manager, an inactive mentor or a missing assignment target: `"Choose an active mentor account."`                                                                                                                                                                                     |
+| `ALREADY_ASSIGNED`       | 409            | `ConflictError`                                                           | The trainee already has that mentor; reassigning to a different mentor is allowed.                                                                                                                                                                                                                                          |
 | `NOT_PROVISIONED`        | 403 (internal) | `NotProvisionedError`                                                     | `"Your account has not been provisioned yet. Contact your administrator."` Only delivered as `?error=NOT_PROVISIONED` on the login redirect.                                                                                                                                                                                |
 | `INTERNAL_ERROR`         | 500            | errorHandler fallback                                                     | Any unexpected error.                                                                                                                                                                                                                                                                                                       |
 
@@ -131,48 +138,58 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 
 ## Endpoint summary
 
-| Method | Path                                                   | Auth    | Purpose                                                                             |
-| ------ | ------------------------------------------------------ | ------- | ----------------------------------------------------------------------------------- |
-| GET    | `/api/health`                                          | No      | Liveness check                                                                      |
-| GET    | `/api/auth/google`                                     | No      | Start Google OAuth (redirect)                                                       |
-| GET    | `/api/auth/google/callback`                            | No      | OAuth callback; sets `auth_token` cookie and redirects                              |
-| POST   | `/api/auth/logout`                                     | Any     | Clear the auth cookie                                                               |
-| GET    | `/api/auth/me`                                         | Any     | Current user (trainee or mentor) and role from the token                            |
-| GET    | `/api/dashboard`                                       | Trainee | Dashboard: next day, progress counts, time totals, typing summary, finished courses |
-| GET    | `/api/courses/:courseId/days`                          | Trainee | Days of one course with this trainee's status                                       |
-| GET    | `/api/courses/:courseId/certificate`                   | Trainee | Certificate for a finished course                                                   |
-| GET    | `/api/days/:dayId`                                     | Trainee | Day lesson content (readable even when locked)                                      |
-| GET    | `/api/days/:dayId/status`                              | Trainee | Lock/completion state of a day                                                      |
-| PATCH  | `/api/days/:dayId/complete`                            | Trainee | Complete a day; returns status and next day id                                      |
-| PATCH  | `/api/days/:dayId/status`                              | Trainee | Legacy alias of complete; returns status only                                       |
-| GET    | `/api/days/:dayId/journal`                             | Trainee | Trainee's journal response for a day                                                |
-| PUT    | `/api/days/:dayId/journal`                             | Trainee | Create/replace journal response                                                     |
-| GET    | `/api/days/:dayId/tasks`                               | Trainee | Task list of a day with per-trainee status                                          |
-| GET    | `/api/days/:dayId/integrity`                           | Trainee | The day's integrity score (0–100) from its focus events                             |
-| GET    | `/api/tasks/:taskId`                                   | Trainee | Task details                                                                        |
-| GET    | `/api/tasks/:taskId/code`                              | Trainee | Saved files, or starter files                                                       |
-| PUT    | `/api/tasks/:taskId/code`                              | Trainee | Replace the saved file set                                                          |
-| POST   | `/api/tasks/:taskId/submit`                            | Trainee | Mark task completed and queue it for review                                         |
-| GET    | `/api/tasks/:taskId/review`                            | Trainee | Own review state and latest review feedback                                         |
-| GET    | `/api/tasks/:taskId/reviews`                           | Trainee | Own review history, newest first                                                    |
-| POST   | `/api/activity/time`                                   | Trainee | Add active/coding seconds to a day                                                  |
-| GET    | `/api/activity/time`                                   | Trainee | Per-day activity for the last N days                                                |
-| POST   | `/api/activity/:taskId/events`                         | Trainee | Log an integrity flag event for a task                                              |
-| POST   | `/api/typing-test/results`                             | Trainee | Save a typing test result                                                           |
-| GET    | `/api/typing-test/results`                             | Trainee | All typing results, newest first                                                    |
-| GET    | `/api/profile`                                         | Trainee | Profile page data                                                                   |
-| GET    | `/api/journal`                                         | Trainee | Accessible journal entries, newest curriculum day first                             |
-| GET    | `/api/admin/trainees`                                  | Admin   | Every trainee with progress, time, typing, flags and integrity                      |
-| POST   | `/api/admin/trainees`                                  | Admin   | Add a trainee                                                                       |
-| GET    | `/api/admin/trainees/:traineeId`                       | Admin   | One trainee: profile, course progress, worked-on tasks, journal                     |
-| GET    | `/api/admin/trainees/:traineeId/flags`                 | Admin   | The trainee's flag events, newest first                                             |
-| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Admin   | The trainee's saved files for a task (read-only)                                    |
-| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Admin   | Approve the current submission                                                      |
-| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Admin   | Send the current submission back for rework                                         |
-| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Admin   | Review history for one task                                                         |
-| GET    | `/api/admin/trainees/:traineeId/feedback`              | Admin   | Every feedback-bearing review for a trainee, newest first                           |
+| Method | Path                                                   | Auth    | Purpose                                                                                |
+| ------ | ------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                                          | No      | Liveness check                                                                         |
+| GET    | `/api/auth/google`                                     | No      | Start Google OAuth (redirect)                                                          |
+| GET    | `/api/auth/google/callback`                            | No      | OAuth callback; sets `auth_token` cookie and redirects                                 |
+| POST   | `/api/auth/logout`                                     | Any     | Clear the auth cookie                                                                  |
+| GET    | `/api/auth/me`                                         | Any     | Current user (trainee, mentor or manager) and role from the token                      |
+| GET    | `/api/dashboard`                                       | Trainee | Dashboard: next day, progress counts, time totals, typing summary, finished courses    |
+| GET    | `/api/courses/:courseId/days`                          | Trainee | Days of one course with this trainee's status                                          |
+| GET    | `/api/courses/:courseId/certificate`                   | Trainee | Certificate for a finished course                                                      |
+| GET    | `/api/days/:dayId`                                     | Trainee | Day lesson content (readable even when locked)                                         |
+| GET    | `/api/days/:dayId/status`                              | Trainee | Lock/completion state of a day                                                         |
+| PATCH  | `/api/days/:dayId/complete`                            | Trainee | Complete a day; returns status and next day id                                         |
+| PATCH  | `/api/days/:dayId/status`                              | Trainee | Legacy alias of complete; returns status only                                          |
+| GET    | `/api/days/:dayId/journal`                             | Trainee | Trainee's journal response for a day                                                   |
+| PUT    | `/api/days/:dayId/journal`                             | Trainee | Create/replace journal response                                                        |
+| GET    | `/api/days/:dayId/tasks`                               | Trainee | Task list of a day with per-trainee status                                             |
+| GET    | `/api/days/:dayId/integrity`                           | Trainee | The day's integrity score (0–100) from its focus events                                |
+| GET    | `/api/tasks/:taskId`                                   | Trainee | Task details                                                                           |
+| GET    | `/api/tasks/:taskId/code`                              | Trainee | Saved files, or starter files                                                          |
+| PUT    | `/api/tasks/:taskId/code`                              | Trainee | Replace the saved file set                                                             |
+| POST   | `/api/tasks/:taskId/submit`                            | Trainee | Mark task completed and queue it for review                                            |
+| GET    | `/api/tasks/:taskId/review`                            | Trainee | Own review state and latest review feedback                                            |
+| GET    | `/api/tasks/:taskId/reviews`                           | Trainee | Own review history, newest first                                                       |
+| POST   | `/api/activity/time`                                   | Trainee | Add active/coding seconds to a day                                                     |
+| GET    | `/api/activity/time`                                   | Trainee | Per-day activity for the last N days                                                   |
+| POST   | `/api/activity/:taskId/events`                         | Trainee | Log an integrity flag event for a task                                                 |
+| POST   | `/api/typing-test/results`                             | Trainee | Save a typing test result                                                              |
+| GET    | `/api/typing-test/results`                             | Trainee | All typing results, newest first                                                       |
+| GET    | `/api/profile`                                         | Trainee | Profile page data                                                                      |
+| GET    | `/api/journal`                                         | Trainee | Accessible journal entries, newest curriculum day first                                |
+| GET    | `/api/admin/trainees`                                  | Mentor  | Only this mentor's assigned trainees, with progress, time, typing, flags and integrity |
+| POST   | `/api/admin/trainees`                                  | Mentor  | Add a trainee, assigned to the creating mentor                                         |
+| GET    | `/api/admin/trainees/:traineeId`                       | Mentor  | One assigned trainee: profile, course progress, worked-on tasks, journal               |
+| GET    | `/api/admin/trainees/:traineeId/flags`                 | Mentor  | An assigned trainee's flag events, newest first                                        |
+| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Mentor  | An assigned trainee's saved files for a task (read-only)                               |
+| GET    | `/api/admin/analytics`                                 | Mentor  | Team analytics for a period: progress, comparison, task status, typing, integrity      |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Mentor  | Approve an assigned trainee's current submission                                       |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Mentor  | Send an assigned trainee's submission back for rework                                  |
+| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Mentor  | Review history for an assigned trainee's task                                          |
+| GET    | `/api/admin/trainees/:traineeId/feedback`              | Mentor  | Every feedback-bearing review for an assigned trainee, newest first                    |
+| GET    | `/api/manager/staff`                                   | Manager | List mentors and managers with role, status and assignment counts                      |
+| POST   | `/api/manager/staff`                                   | Manager | Create a mentor or manager account                                                     |
+| PATCH  | `/api/manager/staff/:staffId`                          | Manager | Update a staff account's name, email or role                                           |
+| PATCH  | `/api/manager/staff/:staffId/status`                   | Manager | Activate or deactivate a staff account                                                 |
+| GET    | `/api/manager/trainees`                                | Manager | List every trainee with their current mentor                                           |
+| POST   | `/api/manager/trainees`                                | Manager | Create a trainee, optionally assigning an active mentor                                |
+| PATCH  | `/api/manager/trainees/:traineeId`                     | Manager | Update a trainee's name or email                                                       |
+| PATCH  | `/api/manager/trainees/:traineeId/status`              | Manager | Activate or deactivate a trainee                                                       |
+| PATCH  | `/api/manager/trainees/:traineeId/mentor`              | Manager | Assign, reassign or unassign (`mentorId: null`) a trainee                              |
 
-38 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Admin" = `requireAdmin`.
+48 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Mentor" = `requireMentor` plus the assignment guard on trainee routes; "Manager" = `requireManager`.
 
 Task review rules, schema and UI are documented in [task-review-workflow.md](./task-review-workflow.md).
 
@@ -206,9 +223,9 @@ Google OAuth 2.0 via `passport-google-oauth20`, `session: false`, scope `['profi
 - **Verification** (`auth.service.ts`, `passport.ts`):
   1. Email = first Google profile email. None → `UNAUTHENTICATED` (`"Google did not return an email address."`).
   2. Email must end with `@${ALLOWED_EMAIL_DOMAIN}` (case-sensitive string match) → else `DOMAIN_NOT_PERMITTED`.
-  3. An **active** `admin` row with that email (lower-cased) → signs in as `role: 'admin'` and sets `admin.last_login_at`. Mentors are checked first, so an email in both lists signs in as a mentor.
-  4. Otherwise a `trainee` row with exactly that email must exist (no self-registration) → `role: 'trainee'`; else `NOT_PROVISIONED`.
-- **Success:** sets cookie `auth_token` (options above, `maxAge` 7 days) and **302 redirects to `${FRONTEND_URL}/admin`** for a mentor or **`${FRONTEND_URL}`** (no path) for a trainee.
+  3. An **active** `admin` row with that email (lower-cased) → signs in as `role: 'mentor'` or `'manager'` from `admin.role`, and sets `admin.last_login_at`. Staff are checked first, so an email in both lists signs in as staff.
+  4. Otherwise an **active** `trainee` row with exactly that email must exist (no self-registration) → `role: 'trainee'`; else `NOT_PROVISIONED`.
+- **Success:** sets cookie `auth_token` (options above, `maxAge` 7 days) and **302 redirects to `${FRONTEND_URL}/manager`** for a manager, **`${FRONTEND_URL}/admin`** for a mentor, or **`${FRONTEND_URL}`** (no path) for a trainee.
 - **Rejected login:** **302 redirect to `${FRONTEND_URL}/login?error=<CODE>&email=<email>`** where `<CODE>` is the `AppError` code (`DOMAIN_NOT_PERMITTED`, `NOT_PROVISIONED`, or `UNAUTHENTICATED`), or `LOGIN_FAILED` when passport fails without a message; `email` is the Google email or `""`. If the user cancels on Google's screen, passport fails with Google's `error_description` as the message (check: the value placed in `error` is then not one of the codes above).
 - **Unexpected errors** (e.g. database down, token exchange failure): passed to `errorHandler` → `500 INTERNAL_ERROR` JSON, not a redirect (check for token-exchange failures).
 
@@ -228,7 +245,7 @@ Google OAuth 2.0 via `passport-google-oauth20`, `session: false`, scope `['profi
 ### GET /api/auth/me
 
 - **Auth:** required.
-- **Response 200** (`MeResponse`), taken from the JWT claims, not the database. `role` is `"trainee"` or `"admin"`; the frontend routes on it.
+- **Response 200** (`MeResponse`), taken from the JWT claims, not the database. `role` is `"trainee"`, `"mentor"` or `"manager"`; the frontend routes on it.
 
 ```json
 {
@@ -1046,6 +1063,64 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 ```
 
 - **Errors:** 400; 401; 403; 404 `"Trainee not found."`.
+
+### GET /api/admin/analytics
+
+- **Auth:** mentor. Like `GET /api/admin/trainees`, analytics only covers the signed-in mentor's assigned trainees.
+- **Query** (validated in the controller with `analyticsQuerySchema`):
+  - `from`, `to`: IST calendar days `YYYY-MM-DD`, both included. `from` ≤ `to`, `to` not in the future, at most 366 days.
+  - `traineeId` (optional): a trainee's UUID, which must be assigned to this mentor. Left out = the whole assigned team.
+- **Response 200** (`AdminAnalytics`). Every number comes from stored records; nothing is estimated.
+  - `totals`: days completed, tasks first submitted, active and coding seconds, and typing tests **in the period**.
+  - `progressTrend`: one point per day from `from` to `to`: average curriculum days completed per trainee by the end of that day (completions before `from` count).
+  - `traineeComparison`: **every** assigned trainee (even when `traineeId` is sent), sorted by name: all-time `daysCompleted`/`totalDays`, and coding/active seconds in the period. Only ids and names, no emails.
+  - `taskStatus`: current task counts, split by mentor review (`task_progress.status` + `review_status`). Only the current status is stored, so the period does not change them. The five counts add up to tasks in the curriculum × assigned trainees.
+    - `approved`: `completed` + `approved`.
+    - `waitingForReview`: `completed` + `pending`, **and** `completed` + `NULL` (submitted before reviews existed; mentors can still review these exactly like `pending`).
+    - `sentBack`: `completed` + `rework` (stays here while the trainee edits, until they resubmit).
+    - `inProgress`: `in_progress` rows (saved, never submitted).
+    - `notStarted`: tasks × trainees minus the four groups above, never below 0 (tasks with no progress row).
+    - There are no due dates, so there is no "overdue".
+  - `typingTrend`: on each day someone took a test, the average of each trainee's **latest** WPM so far (like the WPM column). `traineesIncluded` says how many trainees had a result.
+  - `integrityTrend`: on each day a curriculum day was completed, the average score of **every completed day so far**, scored like the trainee list. Days still in progress have no date and are left out.
+
+```json
+{
+  "from": "2026-11-07",
+  "to": "2026-11-13",
+  "traineeId": null,
+  "traineeCount": 5,
+  "totals": {
+    "daysCompleted": 12,
+    "tasksSubmitted": 31,
+    "activeSeconds": 95040,
+    "codingSeconds": 52272,
+    "typingTests": 10
+  },
+  "progressTrend": [{ "date": "2026-11-07", "averageDaysCompleted": 17.4 }],
+  "traineeComparison": [
+    {
+      "traineeId": "8f2c1d4e-6a3b-4c1e-9f7a-2b5d8e0c1a33",
+      "name": "Asha K",
+      "daysCompleted": 12,
+      "totalDays": 54,
+      "codingSeconds": 9000,
+      "activeSeconds": 16200
+    }
+  ],
+  "taskStatus": {
+    "approved": 548,
+    "waitingForReview": 30,
+    "sentBack": 8,
+    "inProgress": 3,
+    "notStarted": 711
+  },
+  "typingTrend": [{ "date": "2026-11-08", "averageWpm": 72, "traineesIncluded": 4 }],
+  "integrityTrend": [{ "date": "2026-11-09", "averageScore": 76, "daysScored": 89 }]
+}
+```
+
+- **Errors:** 400 `VALIDATION_FAILED` (bad dates, period too long, bad `traineeId`); 401; 403; 404 `"Trainee not found."`.
 
 ### GET /api/admin/trainees/:traineeId/tasks/:taskId/code
 

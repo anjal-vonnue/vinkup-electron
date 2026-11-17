@@ -1,14 +1,7 @@
-import type { AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
-import {
-  FLAG_PRIORITY_LABELS,
-  FLAG_TYPE_LABELS,
-  TASK_STATUS_LABELS,
-  formatFlagDuration,
-} from '../../lib/adminLabels';
+import type { AdminFeedbackEntry, AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
+import { FLAG_PRIORITY_LABELS, FLAG_TYPE_LABELS, formatFlagDuration } from '../../lib/adminLabels';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import type { PrintReportOptions } from '../../lib/printReport';
-import AdminDayGrid from '../AdminDayGrid';
-import DailyActivityTable from '../DailyActivityTable';
 import StatsSummary from '../StatsSummary';
 import styles from './PrintReport.module.css';
 
@@ -16,6 +9,8 @@ type PrintReportProps = {
   detail: AdminTraineeDetail;
   /** null = the flags didn't load; the report says so instead of leaving the section out. */
   flags: AdminFlagEvent[] | null;
+  /** null = the feedback didn't load; the report says so instead of leaving the section out. */
+  feedback?: AdminFeedbackEntry[] | null;
   /** dayId → "HTML · Day 2" */
   dayLabels: ReadonlyMap<string, string>;
   options: PrintReportOptions;
@@ -23,15 +18,13 @@ type PrintReportProps = {
   generatedAt: Date;
 };
 
+/** Caps keep the report a summary. Each section says when it is showing a subset. */
+const MAX_FLAGS = 8;
+
 function dayLabel(dayLabels: ReadonlyMap<string, string>, dayId: string): string {
   return dayLabels.get(dayId) ?? dayId;
 }
 
-/**
- * One trainee on paper: profile, stats, course grid, submitted tasks, and optionally the journal
- * and the important flagged events. Rendered only while printing (see usePrintMode); hidden on
- * screen by its CSS, so it never flashes behind the print dialog.
- */
 export default function PrintReport({
   detail,
   flags,
@@ -40,108 +33,114 @@ export default function PrintReport({
   mentorName,
   generatedAt,
 }: PrintReportProps) {
-  const { profile, courses, tasks, journal } = detail;
+  const { profile, typingStats, tasks } = detail;
   const { trainee } = profile;
 
-  // Curriculum order, so tasks read course by course, day by day.
-  const dayOrder = new Map<string, number>();
-  for (const course of courses) {
-    for (const day of course.days) dayOrder.set(day.id, dayOrder.size);
-  }
-  const orderedTasks = [...tasks].sort(
-    (a, b) => (dayOrder.get(a.dayId) ?? 0) - (dayOrder.get(b.dayId) ?? 0)
-  );
+  const progressPct =
+    trainee.totalDays > 0
+      ? Math.min(100, Math.round((trainee.currentDay / trainee.totalDays) * 100))
+      : 0;
 
-  // Same default as the Flags tab: low priority is brief, routine behaviour.
+  /* Tasks */
+  const stretchCount = tasks.filter((task) => task.isStretchGoal).length;
+
+  /* Flags */
   const importantFlags = (flags ?? [])
     .filter((flag) => flag.reviewPriority !== 'LOW')
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+  const shownFlags = importantFlags.slice(0, MAX_FLAGS);
 
   return (
     <article className={styles.report} aria-label="Printable trainee report">
+      {/* Cover / header */}
       <header className={styles.header}>
-        <p className={styles.kicker}>Vinkup · Trainee progress report</p>
-        <h1 className={styles.name}>{trainee.name}</h1>
-        <p className={styles.meta}>{trainee.email}</p>
-        <p className={styles.meta}>
-          Currently on {trainee.track} · Day {trainee.currentDay} of {trainee.totalDays}
-        </p>
-        <p className={styles.meta}>
-          Generated {formatIstDateTime(generatedAt.toISOString())} IST
-          {mentorName ? ` · Prepared by ${mentorName}` : ''}
-        </p>
+        <p className={styles.kicker}>Vinkup trainee report</p>
+
+        <div className={styles.headerTop}>
+          <div className={styles.identity}>
+            <h1 className={styles.name}>{trainee.name}</h1>
+            <p className={styles.email}>{trainee.email}</p>
+          </div>
+
+          <div className={styles.dayBadge}>
+            <span className={styles.dayBadgeValue}>
+              Day {trainee.currentDay}
+              <span className={styles.dayBadgeTotal}> of {trainee.totalDays}</span>
+            </span>
+            <span className={styles.dayBadgeLabel}>{trainee.track}</span>
+          </div>
+        </div>
+
+        <div className={styles.meta}>
+          <div className={styles.metaItem}>
+            <span className={styles.metaLabel}>Generated</span>
+            <span className={styles.metaValue}>
+              {formatIstDateTime(generatedAt.toISOString())} IST
+            </span>
+          </div>
+
+          {mentorName && (
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>Prepared by</span>
+              <span className={styles.metaValue}>{mentorName}</span>
+            </div>
+          )}
+        </div>
       </header>
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Summary</h2>
-        <div className={styles.block}>
-          <StatsSummary total={profile.total} typing={profile.typing} />
-        </div>
-        <div className={styles.block}>
-          <DailyActivityTable days={profile.dailyActivity} />
-        </div>
-      </section>
+      {/* Key numbers */}
+      <section className={styles.section} aria-label="Summary">
+        <div className={styles.tiles}>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>{progressPct}%</span>
+            <span className={styles.tileLabel}>Current Course Progress</span>
+            <span className={styles.bar} aria-hidden="true">
+              <span className={styles.barFill} style={{ width: `${progressPct}%` }} />
+            </span>
+          </div>
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Progress by course</h2>
-        <AdminDayGrid courses={courses} />
-      </section>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>{tasks.length}</span>
+            <span className={styles.tileLabel}>
+              Tasks{stretchCount > 0 ? ` (${stretchCount} stretch)` : ''}
+            </span>
+          </div>
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Submitted tasks ({orderedTasks.length})</h2>
-        {orderedTasks.length === 0 ? (
-          <p className={styles.empty}>No submitted tasks yet.</p>
-        ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th scope="col">Task</th>
-                <th scope="col">Day</th>
-                <th scope="col">Status</th>
-                <th scope="col">Last submitted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orderedTasks.map((task) => (
-                <tr key={task.taskId}>
-                  <td>
-                    {task.title}
-                    {task.isStretchGoal && <span className={styles.tag}>Stretch</span>}
-                  </td>
-                  <td>{dayLabel(dayLabels, task.dayId)}</td>
-                  <td>{TASK_STATUS_LABELS[task.status]}</td>
-                  <td>{task.lastSubmittedAt ? formatIstDateTime(task.lastSubmittedAt) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {options.includeJournal && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Journal ({journal.length})</h2>
-          {journal.length === 0 ? (
-            <p className={styles.empty}>No journal entries yet.</p>
-          ) : (
-            <ol className={styles.journal}>
-              {journal.map((entry) => (
-                <li key={entry.dayId} className={styles.journalEntry}>
-                  <h3 className={styles.journalTitle}>
-                    {entry.courseTitle} · Day {entry.dayNumber} — {entry.dayTitle}
-                  </h3>
-                  <p className={styles.journalDate}>{formatIstDateTime(entry.updatedAt)}</p>
-                  <p className={styles.journalText}>{entry.responseText}</p>
-                </li>
-              ))}
-            </ol>
+          {options.includeFlags && (
+            <div className={styles.tile}>
+              <span className={styles.tileValue}>
+                {flags === null ? '—' : importantFlags.length}
+              </span>
+              <span className={styles.tileLabel}>Important flags</span>
+            </div>
           )}
-        </section>
-      )}
+        </div>
+      </section>
 
+      {/* Performance */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <h2 className={styles.sectionTitle}>Performance</h2>
+          <p className={styles.sectionHint}>Totals and typing results</p>
+        </div>
+
+        <div className={styles.panel}>
+          <StatsSummary total={profile.total} typingStats={typingStats} />
+        </div>
+      </section>
+
+      {/* Focus monitoring */}
       {options.includeFlags && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Flagged events</h2>
+          <div className={styles.sectionHeading}>
+            <h2 className={styles.sectionTitle}>Focus events</h2>
+            {flags !== null && importantFlags.length > 0 && (
+              <span className={styles.count}>
+                {shownFlags.length} of {importantFlags.length} important
+              </span>
+            )}
+          </div>
+
           {flags === null ? (
             <p className={styles.empty}>Flagged events unavailable.</p>
           ) : importantFlags.length === 0 ? (
@@ -149,39 +148,49 @@ export default function PrintReport({
           ) : (
             <>
               <p className={styles.note}>
-                {importantFlags.length} important of {flags.length} recorded. Focus events are a
-                guide for review, not proof.
+                {importantFlags.length} important events out of {flags.length} recorded. Focus
+                events are a guide for review, not proof.
               </p>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th scope="col">Event</th>
-                    <th scope="col">Task</th>
-                    <th scope="col">Day</th>
-                    <th scope="col">Away</th>
-                    <th scope="col">Priority</th>
-                    <th scope="col">When</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {importantFlags.map((flag) => (
-                    <tr key={flag.id}>
-                      <td>{FLAG_TYPE_LABELS[flag.type]}</td>
-                      <td>{flag.taskTitle}</td>
-                      <td>{dayLabel(dayLabels, flag.dayId)}</td>
-                      <td>{formatFlagDuration(flag.durationMs)}</td>
-                      <td>{FLAG_PRIORITY_LABELS[flag.reviewPriority]}</td>
-                      <td>{formatIstDateTime(flag.timestamp)}</td>
+
+              <div className={styles.tableCard}>
+                <table className={`${styles.table} ${styles.flagsTable}`}>
+                  <thead>
+                    <tr>
+                      <th scope="col">Event</th>
+                      <th scope="col">Task</th>
+                      <th scope="col">Day</th>
+                      <th scope="col">Away</th>
+                      <th scope="col">Priority</th>
+                      <th scope="col">When</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {shownFlags.map((flag) => (
+                      <tr key={flag.id}>
+                        <td>{FLAG_TYPE_LABELS[flag.type]}</td>
+                        <td>{flag.taskTitle}</td>
+                        <td>{dayLabel(dayLabels, flag.dayId)}</td>
+                        <td>{formatFlagDuration(flag.durationMs)}</td>
+                        <td>
+                          <span className={styles.priority}>
+                            {FLAG_PRIORITY_LABELS[flag.reviewPriority]}
+                          </span>
+                        </td>
+                        <td>{formatIstDateTime(flag.timestamp)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </section>
       )}
 
-      <footer className={styles.footer}>Confidential — for mentor use only</footer>
+      <footer className={styles.footer}>
+        <span>Vinkup trainee progress report</span>
+        <span>Confidential, for mentor use only</span>
+      </footer>
     </article>
   );
 }

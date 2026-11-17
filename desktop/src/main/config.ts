@@ -39,6 +39,21 @@ export function getDesktopPort(): number {
 }
 
 /**
+ * Centrally hosted copy of the Resources allowlist. The app keeps its bundled
+ * copy as a fallback, so an unreachable or invalid file is harmless.
+ * Override with VINKUP_RESOURCES_ALLOWLIST_URL; set it to an empty string to
+ * disable remote updates entirely.
+ */
+export function getResourcesAllowlistUrl(): string | null {
+  const configured = process.env.VINKUP_RESOURCES_ALLOWLIST_URL;
+  if (configured !== undefined) {
+    const trimmed = configured.trim();
+    return trimmed === '' ? null : trimmed;
+  }
+  return `${getApiUrl().replace(/\/+$/, '')}/api/resources/allowlist`;
+}
+
+/**
  * Unpackaged: `desktop/dist/main` -> repository root -> `frontend/dist`.
  * Packaged: electron-builder copies `frontend/dist` to `resources/frontend`.
  */

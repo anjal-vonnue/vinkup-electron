@@ -11,7 +11,7 @@ vi.mock('../../context/Useauth', () => ({
       id: 'admin-1',
       name: 'Mentor One',
       email: 'mentor@vonnue.com',
-      role: 'admin',
+      role: 'mentor',
     },
     isLoading: false,
     logout: mockLogout,
@@ -39,20 +39,20 @@ describe('AdminHeader', () => {
     expect(screen.getByText('Mentor One')).toBeInTheDocument();
   });
 
-  it('links to the trainee list and nowhere a mentor cannot go', () => {
+  it('links to the assigned trainee list and nowhere a mentor cannot go', () => {
     renderHeader();
 
-    expect(screen.getByRole('link', { name: 'Trainees' })).toHaveAttribute('href', '/admin');
+    expect(screen.getByRole('link', { name: 'My trainees' })).toHaveAttribute('href', '/admin');
 
     expect(screen.queryByRole('link', { name: 'Home' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Typing Test' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Mentor One' })).not.toBeInTheDocument();
   });
 
-  it('does not keep Trainees active on a trainee detail page', () => {
+  it('does not keep My trainees active on a trainee detail page', () => {
     renderHeader(<AdminHeader />, '/admin/trainees/abc');
 
-    expect(screen.getByRole('link', { name: 'Trainees' })).not.toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'My trainees' })).not.toHaveAttribute(
       'aria-current',
       'page'
     );
@@ -63,6 +63,30 @@ describe('AdminHeader', () => {
 
     expect(screen.getByText('Custom crumb')).toBeInTheDocument();
     expect(screen.queryByText('Vink')).not.toBeInTheDocument();
+  });
+
+  it('supports the manager badge and navigation', () => {
+    render(
+      <MemoryRouter initialEntries={['/manager']}>
+        <AdminHeader
+          homePath="/manager"
+          badge="Manager view"
+          navItems={[{ to: '/manager', label: 'Users & assignments', end: true }]}
+          navLabel="Manager navigation"
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Manager view')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Users & assignments' })).toHaveAttribute(
+      'href',
+      '/manager'
+    );
+    expect(screen.getByRole('link', { name: 'Users & assignments' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.queryByRole('link', { name: 'My trainees' })).not.toBeInTheDocument();
   });
 
   it('has a log out button', () => {

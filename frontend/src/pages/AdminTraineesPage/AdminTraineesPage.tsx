@@ -7,6 +7,7 @@ import { ErrorState } from '../../components/Common/ErrorState';
 import TraineeTable from './TraineeTable';
 import styles from './AdminTraineesPage.module.css';
 import CohortSummary from '../../components/CohortSummary';
+import TeamAnalytics from '../../components/TeamAnalytics';
 import { filterTrainees, sortTrainees } from '../../lib/traineeListState';
 import TraineeListToolbar from './TraineeListToolbar';
 import { useTraineeListParams } from './useTraineeListParams';
@@ -18,9 +19,6 @@ import {
 } from '../../lib/adminTrainees';
 import { csvFilename, downloadCsv } from '../../lib/downloadCsv';
 import { todayKey } from '../../lib/platformDate';
-import { UserPlus } from 'lucide-react';
-import { useToast } from '../../components/Toast';
-import AddTraineeDialog from './AddTraineeDialog';
 
 function UsersIcon() {
   return (
@@ -42,22 +40,22 @@ function UsersIcon() {
   );
 }
 
-/** /admin: read-only overview of every trainee, one row each, sorted by name. */
+/** The two views of /admin: the trainee list, or the team analytics. */
+type PageView = 'dashboard' | 'performance';
+
+const PAGE_VIEWS: { id: PageView; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard view' },
+  { id: 'performance', label: 'Team performance' },
+];
+
+/** /admin: read-only overview of the trainees currently assigned to this mentor. */
 export default function AdminTraineesPage() {
   const [trainees, setTrainees] = useState<AdminTraineeSummary[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
   const { query, sort, attentionOnly, setQuery, setSort, setAttentionOnly } =
     useTraineeListParams();
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const toast = useToast();
-
-  const handleCreated = (created: AdminTraineeSummary) => {
-    // Insert without reloading: the response is already a full list row.
-    setTrainees((current) => sortTraineesByName([...(current ?? []), created]));
-    setIsAddOpen(false);
-    toast.show({ message: `${created.name} was added and can sign in now.`, variant: 'success' });
-  };
+  const [view, setView] = useState<PageView>('dashboard');
 
   useEffect(() => {
     // Ignore a response that arrives after the mentor left the page or retried.
@@ -128,52 +126,87 @@ export default function AdminTraineesPage() {
   return (
     <>
       <AdminHeader />
-      {isAddOpen && (
-        <AddTraineeDialog onClose={() => setIsAddOpen(false)} onCreated={handleCreated} />
-      )}
       <main className={styles.page}>
         <div className={styles.titleBlock}>
-          <h1 className={styles.title}>Trainees</h1>
-          <p className={styles.subtitle}>{/* unchanged */}</p>
+          <h1 className={styles.title}>My trainees</h1>
+          <p className={styles.subtitle}>Only trainees assigned to you by a manager appear here.</p>
         </div>
-        <button type="button" className={styles.addButton} onClick={() => setIsAddOpen(true)}>
-          <UserPlus size={16} strokeWidth={2} aria-hidden="true" />
-          Add trainee
-        </button>
 
-        {trainees.length > 0 && <CohortSummary trainees={trainees} />}
+        <div
+          className={styles.viewTabs}
+          role="tablist"
+          aria-label="Trainees page view"
+          data-active={view}
+        >
+          {/* The purple pill that slides behind the chosen tab. */}
+          <span className={styles.viewIndicator} aria-hidden="true" />
+          {PAGE_VIEWS.map((item) => (
+            <button
+              key={item.id}
+              id={`view-tab-${item.id}`}
+              type="button"
+              role="tab"
+              aria-selected={view === item.id}
+              aria-controls="trainees-view-panel"
+              className={styles.viewTab}
+              onClick={() => setView(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
-        <section className={styles.card} aria-label="Trainee overview">
-          {trainees.length === 0 ? (
-            <div className={styles.empty} role="status">
-              <div className={styles.emptyIcon} aria-hidden="true">
-                <UsersIcon />
-              </div>
-              <h2 className={styles.emptyTitle}>No trainees yet</h2>
-              <p className={styles.emptyText}>Add a trainee to get started.</p>
-            </div>
+        {/* key={view}: a new panel on each switch, so its fade-in plays again. */}
+        <div
+          key={view}
+          className={styles.viewPanel}
+          role="tabpanel"
+          id="trainees-view-panel"
+          aria-labelledby={`view-tab-${view}`}
+        >
+          {view === 'performance' ? (
+            <TeamAnalytics trainees={trainees} attentionReasons={attentionReasons} />
           ) : (
             <>
-              <TraineeListToolbar
-                query={query}
-                onQueryChange={setQuery}
-                sort={sort}
-                onSortChange={setSort}
-                attentionOnly={attentionOnly}
-                attentionCount={attentionCount}
-                onAttentionChange={setAttentionOnly}
-                onExport={handleExport}
-              />
-              {visibleTrainees.length === 0 ? (
-                <p className={styles.noMatches} role="status">
-                  No trainees match your filters.
-                </p>
-              ) : (
-                <TraineeTable trainees={visibleTrainees} attentionReasons={attentionReasons} />
-              )}
+              {trainees.length > 0 && <CohortSummary trainees={trainees} />}
+
+              <section className={styles.card} aria-label="Trainee overview">
+                {trainees.length === 0 ? (
+                  <div className={styles.empty} role="status">
+                    <div className={styles.emptyIcon} aria-hidden="true">
+                      <UsersIcon />
+                    </div>
+                    <h2 className={styles.emptyTitle}>No trainees assigned yet</h2>
+                    <p className={styles.emptyText}>Ask your manager to assign trainees to you.</p>
+                  </div>
+                ) : (
+                  <>
+                    <TraineeListToolbar
+                      query={query}
+                      onQueryChange={setQuery}
+                      sort={sort}
+                      onSortChange={setSort}
+                      attentionOnly={attentionOnly}
+                      attentionCount={attentionCount}
+                      onAttentionChange={setAttentionOnly}
+                      onExport={handleExport}
+                    />
+                    {visibleTrainees.length === 0 ? (
+                      <p className={styles.noMatches} role="status">
+                        No trainees match your filters.
+                      </p>
+                    ) : (
+                      <TraineeTable
+                        trainees={visibleTrainees}
+                        attentionReasons={attentionReasons}
+                      />
+                    )}
+                  </>
+                )}
+              </section>
             </>
           )}
-        </section>
+        </div>
       </main>
     </>
   );

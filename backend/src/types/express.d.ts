@@ -8,7 +8,7 @@ declare global {
       id: string;
       email: string;
       name: string;
-      role: 'trainee' | 'admin';
+      role: 'trainee' | 'mentor' | 'manager';
     }
   }
 }

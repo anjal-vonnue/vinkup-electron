@@ -1,6 +1,8 @@
 import type {
-  AdminFeedbackEntry,
-  AdminFlagEvent,
+ AdminFeedbackEntry,
+  AdminAnalytics,
+  AdminAnalyticsQuery,
+ AdminFlagEvent,
   AdminTaskCode,
   AdminTraineeDetail,
   AdminTraineeSummary,
@@ -35,6 +37,7 @@ export async function createAdminTrainee(body: CreateTraineeRequest): Promise<Ad
   const res = await apiClient.post<AdminTraineeSummary>('/admin/trainees', body);
   return res.data;
 }
+
 
 export async function approveTask(
   traineeId: string,
@@ -72,5 +75,10 @@ export async function getAdminTaskReviews(
 
 export async function getAdminTraineeFeedback(traineeId: string): Promise<AdminFeedbackEntry[]> {
   const res = await apiClient.get<AdminFeedbackEntry[]>(`/admin/trainees/${traineeId}/feedback`);
-  return res.data;
+  return res.data;}
+
+/** GET /admin/analytics. Leave traineeId out for the whole team. */
+export async function getAdminAnalytics(query: AdminAnalyticsQuery): Promise<AdminAnalytics> {
+  const res = await apiClient.get<AdminAnalytics>('/admin/analytics', { params: query });
+ return res.data;
 }

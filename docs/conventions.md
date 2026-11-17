@@ -553,9 +553,10 @@ npx prisma migrate dev --config prisma7.config.ts --name add_checklist_items
 
 ### 9.4 Seed data and the curriculum
 
-- `npm run db:seed -w backend` runs `src/lib/seed.ts`: it upserts the trainee list and the whole
-  curriculum, and never deletes trainee data, so it's safe to run again. `SEED_DEMO=true` adds demo
-  progress (local only).
+- `npm run db:seed -w backend` runs `src/lib/seed.ts`: it upserts staff, the trainee list and the
+  whole curriculum, assigns unassigned demo trainees to their mentor, and never deletes trainee
+  data, so it's safe to run again. `SEED_DEMO=true` adds progress, journals, activity, typing
+  results and review history for every assigned trainee (local only).
 - The curriculum is **edited in the frontend** (`frontend/src/api/dayOverview/` for day content,
   `frontend/src/api/mockTasks/` for tasks and starter files). After changing it, run
   `npx tsx scripts/export-curriculum.ts` from the root to rebuild

@@ -66,4 +66,60 @@ export class DashboardRepository {
       select: { wpm: true, taken_at: true },
     });
   };
+
+  /** Tasks where a mentor requested rework for this trainee. */
+  findReworkTasks = (traineeId: string) => {
+    return prisma.task_progress.findMany({
+      where: {
+        trainee_id: traineeId,
+        review_status: 'rework',
+      },
+      orderBy: { created_at: 'desc' },
+      select: {
+        task_id: true,
+        submission_count: true,
+        task: {
+          select: {
+            id: true,
+            title: true,
+            sequence_order: true,
+            curriculum_day_id: true,
+            curriculum_day: {
+              select: {
+                id: true,
+                day_number: true,
+                course_id: true,
+                course: {
+                  select: {
+                    title: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  };
+
+  /** The latest review row for a given task and trainee with rework decision. */
+  findLatestTaskReview = (traineeId: string, taskId: string) => {
+    return prisma.task_review.findFirst({
+      where: {
+        trainee_id: traineeId,
+        task_id: taskId,
+        decision: 'rework',
+      },
+      orderBy: [{ reviewed_at: 'desc' }, { created_at: 'desc' }],
+      select: {
+        id: true,
+        admin_id: true,
+        submission_no: true,
+        decision: true,
+        feedback: true,
+        reviewed_at: true,
+        admin: { select: { name: true } },
+      },
+    });
+  };
 }

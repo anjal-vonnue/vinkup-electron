@@ -13,6 +13,7 @@ import TaskPageSkeleton from './components/TaskPageSkeleton';
 import NotFoundPage from './pages/NotFoundPage';
 import TypingTestPage from './pages/TypingTestPage/TypingTestPage';
 import JournalPage from './pages/JournalPage';
+import ResourcesPage from './pages/ResourcesPage/ResourcesPage';
 import HelpPage from './pages/HelpPage';
 import ReferencePage from './pages/ReferencePage';
 import { useParams } from 'react-router';
@@ -23,6 +24,7 @@ import CertificatePage from './pages/CertificatePage';
 const TaskPage = lazy(() => import('./pages/TaskPage'));
 const AdminTraineesPage = lazy(() => import('./pages/AdminTraineesPage'));
 const AdminTraineePage = lazy(() => import('./pages/AdminTraineePage'));
+const ManagerPage = lazy(() => import('./pages/ManagerPage'));
 
 function ReferenceRoute() {
   const { dayId } = useParams();
@@ -47,6 +49,7 @@ export default function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/typing-test" element={<TypingTestPage />} />
               <Route path="/journal" element={<JournalPage />} />
+              <Route path="/resources" element={<ResourcesPage />} />
               <Route path="/certificates/:courseId" element={<CertificatePage />} />
               <Route
                 path="/tasks/:taskId"
@@ -60,7 +63,7 @@ export default function App() {
               <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
             </Route>
 
-            <Route element={<RoleRoute role="admin" />}>
+            <Route element={<RoleRoute role="mentor" />}>
               <Route
                 path="/admin"
                 element={
@@ -78,6 +81,17 @@ export default function App() {
                   </Suspense>
                 }
               ></Route>
+            </Route>
+
+            <Route element={<RoleRoute role="manager" />}>
+              <Route
+                path="/manager"
+                element={
+                  <Suspense fallback={<LoaderOverlay fullPage />}>
+                    <ManagerPage />
+                  </Suspense>
+                }
+              />
             </Route>
           </Route>
           <Route element={<PublicOnlyRoute />}>

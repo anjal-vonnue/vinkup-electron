@@ -1,6 +1,6 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, Printer } from 'lucide-react';
-import { useState } from 'react';
 import Header from '../../components/Header';
 import CertificateSheet from '../../components/CertificateSheet';
 import StateMessage from '../../components/StateMessage';
@@ -16,7 +16,8 @@ import styles from './CertificatePage.module.css';
 export default function CertificatePage() {
   const { courseId = '' } = useParams();
   const { isLoading, certificate, error, retry } = useCertificate(courseId);
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  // One message for both paths: the browser print dialog and the desktop "save as PDF".
+  const [printError, setPrintError] = useState<string | null>(null);
 
   useLandscapePageStyle();
   // Light theme + "Vinkup certificate – CSS – Asha Rao" as the PDF file name while printing.
@@ -25,23 +26,32 @@ export default function CertificatePage() {
     documentTitle: certificate
       ? certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
       : 'Vinkup certificate',
+    desktopPrintException: true,
   });
 
-  const handlePrint = async () => {
+  const handlePrint = async (): Promise<void> => {
+    setPrintError(null);
+
+    // Browser (or no certificate yet): open the normal print dialog.
     const desktopCertificate = window.desktop?.certificate;
     if (!desktopCertificate || !certificate) {
-      print(null);
+      try {
+        await print(null);
+      } catch (printFailure: unknown) {
+        console.error('[certificate] Failed to open the print dialog', printFailure);
+        setPrintError('Unable to open certificate printing. Please try again.');
+      }
       return;
     }
 
-    setPdfError(null);
+    // Desktop shell: render the print view, then save it as a PDF through the main process.
     prepare(null);
     try {
       await desktopCertificate.savePdf(
         certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
       );
     } catch (saveError: unknown) {
-      setPdfError(
+      setPrintError(
         saveError instanceof Error
           ? `Unable to save certificate PDF: ${saveError.message}`
           : 'Unable to save certificate PDF. Please try again.'
@@ -101,14 +111,16 @@ export default function CertificatePage() {
             <ArrowLeft size={16} aria-hidden="true" />
             Back to Dashboard
           </Link>
-          <div>
-            <button type="button" className={styles.printButton} onClick={() => void handlePrint()}>
-              <Printer size={16} aria-hidden="true" />
-              Print / Save as PDF
-            </button>
-            {pdfError && <p role="alert">{pdfError}</p>}
-          </div>
+          <button type="button" className={styles.printButton} onClick={() => void handlePrint()}>
+            <Printer size={16} aria-hidden="true" />
+            Print / Save as PDF
+          </button>
         </div>
+        {printError && (
+          <p className={`${styles.printError} ${styles.screenOnly}`} role="alert">
+            {printError}
+          </p>
+        )}
 
         <CertificateSheet certificate={certificate} />
       </main>

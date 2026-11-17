@@ -4,6 +4,7 @@ import type {
   DayStatus,
   DaySummary,
   NextDay,
+  ReworkTaskSummary,
 } from '@itp/types';
 import { NotFoundError } from '../../errors/AppError';
 import { istDateString, istDateValue, istDayStart } from '../../utils/istDate';
@@ -87,5 +88,39 @@ export class DashboardService {
     if (!day) throw new NotFoundError('Day not found.');
 
     return { ...toDaySummary(day, 'UNLOCKED'), courseTotalDays: day.course._count.days };
+  }
+
+  /** Rework tasks requested by mentors for this trainee across all days. */
+  async getReworkTasks(traineeId: string): Promise<ReworkTaskSummary[]> {
+    const progressRows = await dashboardRepository.findReworkTasks(traineeId);
+    if (progressRows.length === 0) return [];
+
+    const reviews = await Promise.all(
+      progressRows.map((row) => dashboardRepository.findLatestTaskReview(traineeId, row.task_id))
+    );
+
+    return progressRows.map((row, index) => {
+      const review = reviews[index];
+      return {
+        taskId: row.task.id,
+        taskTitle: row.task.title,
+        sequenceOrder: row.task.sequence_order,
+        dayId: row.task.curriculum_day.id,
+        dayNumber: row.task.curriculum_day.day_number,
+        courseId: row.task.curriculum_day.course_id,
+        courseTitle: row.task.curriculum_day.course.title,
+        submissionCount: row.submission_count,
+        latestReview: review
+          ? {
+              id: review.id,
+              adminId: review.admin_id,
+              adminName: review.admin.name,
+              decision: 'rework' as const,
+              feedback: review.feedback,
+              reviewedAt: review.reviewed_at.toISOString(),
+            }
+          : null,
+      };
+    });
   }
 }

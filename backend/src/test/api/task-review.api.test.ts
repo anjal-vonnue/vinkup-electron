@@ -5,6 +5,7 @@ import { db } from './helpers/db';
 import {
   DAY,
   TASK,
+  assignTrainees,
   createAdmin,
   freshTrainees,
   markTaskCompleted,
@@ -25,6 +26,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   ({ a, b } = await freshTrainees());
   admin = await createAdmin('Review Mentor');
+  await assignTrainees(admin, a, b);
 });
 
 const submit = (taskId: string, trainee: TestTrainee = a) =>

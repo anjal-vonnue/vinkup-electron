@@ -70,6 +70,25 @@ function JournalIcon() {
   );
 }
 
+function ResourcesIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="9" r="7" />
+      <path d="m12 6-1.9 4.1L6 12l1.9-4.1L12 6Z" />
+    </svg>
+  );
+}
+
 function getInitials(name?: string) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -178,6 +197,14 @@ export default function Header({ leading, status }: HeaderProps) {
           >
             <JournalIcon />
             <NavLabel text="Journal" />
+          </NavLink>
+          <NavLink
+            to="/resources"
+            end
+            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+          >
+            <ResourcesIcon />
+            <NavLabel text="Resources" />
           </NavLink>
         </nav>
 

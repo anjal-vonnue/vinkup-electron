@@ -1,5 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { CourseDaysResponse, DashboardResponse, CourseCertificate } from '@itp/types';
+import type {
+  CourseDaysResponse,
+  DashboardResponse,
+  CourseCertificate,
+  ReworkTaskSummary,
+} from '@itp/types';
 import type { AuthenticatedRequest } from '../../types/auth.types';
 import type { CourseIdParams } from './dashboard.schema';
 import { DashboardService } from './dashboard.service';
@@ -39,6 +44,20 @@ class DashboardController {
       const traineeId = (req as AuthenticatedRequest).user.id;
       const { courseId } = req.params as CourseIdParams;
       res.status(200).json(await certificateService.getCourseCertificate(traineeId, courseId));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getReworkTasks = async (
+    req: Request,
+    res: Response<ReworkTaskSummary[]>,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const traineeId = (req as AuthenticatedRequest).user.id;
+      const reworkTasks = await dashboardService.getReworkTasks(traineeId);
+      res.status(200).json(reworkTasks);
     } catch (error) {
       next(error);
     }
