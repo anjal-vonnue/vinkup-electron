@@ -15,7 +15,7 @@ export const typescriptDays: CatalogDay[] = [
         isStretchGoal: false,
         estimatedMinutes: 30,
         instructionsMarkdown:
-          "**TypeScript · Day 1: TypeScript Setup, Basic Types & Type Inference** · Task 1 of 8 · about 30 min\n\n## Today's goal\nBy the end of the day you will have built a TypeScript project with strict mode, all Week 3 utility functions converted with zero implicit any.\n\n## What to do\n\n1. Install TypeScript: npm install -g typescript. Verify: tsc --version\n2. Create tsconfig.json: strict: true, target: ES2022, module: ES2022, outDir: dist, rootDir: src\n3. Create src/hello.ts with greet(name: string): string. Compile with tsc. Run the output.\n4. Add a build script and a watch script (tsc --watch) to package.json\n5. Introduce a deliberate type error - understand the error message, then fix it\n",
+          "**TypeScript · Day 1: TypeScript Setup, Basic Types & Type Inference** · Task 1 of 8 · about 30 min\n\n## Today's goal\nBy the end of the day you will have built a TypeScript project with strict mode, all Week 3 utility functions converted with zero implicit any.\n\n## What to do\n\n1. Install TypeScript: npm install -g typescript. Verify: tsc --version\n2. Create tsconfig.json: strict: true, target: ES2022, module: commonjs, outDir: dist, rootDir: src\n3. Create src/hello.ts with greet(name: string): string. Compile with tsc. Run the output.\n4. Add a build script and a watch script (tsc --watch) to package.json\n5. Introduce a deliberate type error - understand the error message, then fix it\n",
       },
       {
         id: 'ts-day-01-t-2',

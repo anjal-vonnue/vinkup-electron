@@ -147,12 +147,16 @@ const TSCONFIG = json({
 const TSCONFIG_DOM = json({
   compilerOptions: {
     target: 'ES2022',
-    module: 'ESNext',
-    moduleResolution: 'Bundler',
+    // CommonJS so a plain `tsc` write can be run with `node dist/index.js`, which is what the
+    // TypeScript lessons do. `npm run check` still type-checks only, with `tsc --noEmit`.
+    module: 'commonjs',
     lib: ['ES2022', 'DOM', 'DOM.Iterable'],
     strict: true,
-    noEmit: true,
+    esModuleInterop: true,
     skipLibCheck: true,
+    // Emitted files land in dist/, which the workspace ignores (never shown, never saved).
+    rootDir: './src',
+    outDir: './dist',
   },
   include: ['src'],
 });
