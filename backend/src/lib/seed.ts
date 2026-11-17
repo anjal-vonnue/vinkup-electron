@@ -25,7 +25,7 @@ const prisma = new PrismaClient({ adapter });
 // be on ALLOWED_EMAIL_DOMAIN and belong to real Google accounts, otherwise nobody can sign in as
 // them. Override the manager with SEED_MANAGER_EMAIL / SEED_MANAGER_NAME to use your own account.
 const manager = {
-  email: (process.env.SEED_MANAGER_EMAIL ?? 'akshay.antony@vonnue.com').toLowerCase(),
+  email: (process.env.SEED_MANAGER_EMAIL ?? 'akshay.dev.ac.in@gmail.com').toLowerCase(),
   name: process.env.SEED_MANAGER_NAME ?? 'Akshay Antony',
   role: 'MANAGER' as const,
 };
@@ -33,6 +33,7 @@ const manager = {
 const mentors = [
   { email: 'hawas.backer@vonnue.com', name: 'Hawas Backer', role: 'MENTOR' as const },
   { email: 'ameesha.t@vonnue.com', name: 'Ameesha T', role: 'MENTOR' as const },
+  { email: 'akshayantony2004@gmail.com', name: 'Akshaya', role: 'MENTOR' as const },
 ];
 
 const staff = [manager, ...mentors];
@@ -48,6 +49,11 @@ type SeedTrainee = {
 // dashboard has work to show. Staff emails are also trainee rows so you can preview the trainee
 // side by deactivating the staff row (staff rows win at sign-in); they stay unassigned.
 const trainees: SeedTrainee[] = [
+  {
+    email: 'developer.hornbill@gmail.com',
+    name: 'akshai',
+    mentorEmail: 'akshayantony2004@gmail.com',
+  },
   {
     email: 'aswin.vijayan@vonnue.com',
     name: 'Aswin Vijayan',
