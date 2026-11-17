@@ -94,7 +94,8 @@ export class AdminRepository {
    */
   listStartedTasks = (traineeId: string) =>
     prisma.task_progress.findMany({
-      where: { trainee_id: traineeId, status: 'completed' },
+      // In-progress tasks are included, so the mentor can follow work that is not submitted yet.
+      where: { trainee_id: traineeId, status: { in: ['in_progress', 'completed'] } },
       orderBy: [
         { task: { curriculum_day: { course: { sort_order: 'asc' } } } },
         { task: { curriculum_day: { day_number: 'asc' } } },

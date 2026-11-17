@@ -113,6 +113,7 @@ export default function AdminTaskList({
                 <ul className={styles.tasks}>
                   {dayTasks.map((task) => {
                     const state = getTaskReviewState(task);
+                    const viewLabel = state === 'in_progress' ? 'View draft' : 'View code';
 
                     return (
                       <li key={task.taskId} className={styles.task}>
@@ -127,14 +128,15 @@ export default function AdminTaskList({
 
                         <span className={styles.progress}>{describeProgress(task)}</span>
 
+                        {/* Not submitted yet: the mentor can still look, but it is only a draft. */}
                         <button
                           type="button"
                           className={styles.view}
-                          aria-label={`View code for ${task.title}`}
+                          aria-label={`${viewLabel} for ${task.title}`}
                           aria-pressed={task.taskId === selectedTaskId}
                           onClick={() => onViewCode(task.taskId)}
                         >
-                          View code
+                          {viewLabel}
                         </button>
                       </li>
                     );

@@ -124,6 +124,21 @@ describe('AdminTaskList', () => {
     expect(screen.getByText('Not submitted yet')).toBeInTheDocument();
   });
 
+  it('offers View draft, not View code, for an in-progress task', async () => {
+    const user = userEvent.setup();
+    const onViewCode = vi.fn();
+    renderList({ taskList: mixedTasks, filter: 'in_progress', onViewCode });
+
+    expect(screen.getByText('Not submitted yet')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'View code for Unfinished task' })
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'View draft for Unfinished task' }));
+
+    expect(onViewCode).toHaveBeenCalledWith('i');
+  });
+
   it('shows a filter button with a count for each review state', () => {
     renderList({ taskList: mixedTasks });
 

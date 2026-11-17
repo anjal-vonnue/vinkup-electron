@@ -148,13 +148,15 @@ describe('AdminTraineePage', () => {
     expect(screen.getByRole('tab', { name: /^Journal/ })).toBeInTheDocument();
   });
 
-  it('opens on the task list, with every submitted task shown', async () => {
+  it('opens on the task list, with View code for every submitted task', async () => {
     renderPage();
 
     const panel = await screen.findByRole('tabpanel');
     expect(screen.getByRole('tab', { name: /^Tasks/ })).toHaveAttribute('aria-selected', 'true');
+    // In-progress tasks are listed, but their unfinished code cannot be opened.
+    const submitted = detail.tasks.filter((task) => task.status === 'completed');
     expect(within(panel).getAllByRole('button', { name: /^View code for/ }).length).toBe(
-      detail.tasks.length
+      submitted.length
     );
   });
 
@@ -244,7 +246,7 @@ describe('AdminTraineePage', () => {
 
   it('says when an opened task still has only starter code', async () => {
     const user = userEvent.setup();
-    const task = detail.tasks[0];
+    const task = detail.tasks.find((row) => row.status === 'completed') ?? detail.tasks[0];
     vi.mocked(getAdminTaskCode).mockResolvedValue({
       taskId: task.taskId,
       title: task.title,
@@ -266,7 +268,7 @@ describe('AdminTraineePage', () => {
   it('closes the code viewer', async () => {
     const user = userEvent.setup();
     renderPage();
-    const task = detail.tasks[0];
+    const task = detail.tasks.find((row) => row.status === 'completed') ?? detail.tasks[0];
 
     await user.click(
       await screen.findByRole('button', {
