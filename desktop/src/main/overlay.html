@@ -22,11 +22,38 @@
       body {
         display: grid;
         place-items: center;
-        user-select: none;
+      }
+
+      main {
+        max-width: 420px;
+        padding: 32px;
+        text-align: center;
       }
 
       p {
         color: #9aa4d6;
+      }
+
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 16px;
+        padding: 12px 16px;
+        border: 1px solid #394365;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      input {
+        width: 18px;
+        height: 18px;
+        accent-color: #7d93ff;
+      }
+
+      #confirmation {
+        min-height: 1.5em;
+        color: #a7efc0;
       }
     </style>
   </head>
@@ -34,6 +61,19 @@
     <main>
       <h1>Vinkup</h1>
       <p>This display is reserved while your session is active.</p>
+      <label>
+        <input id="interaction-test" type="checkbox" />
+        Test that this screen is interactive
+      </label>
+      <p id="confirmation" aria-live="polite"></p>
     </main>
+    <script>
+      const checkbox = document.getElementById('interaction-test');
+      const confirmation = document.getElementById('confirmation');
+
+      checkbox.addEventListener('change', () => {
+        confirmation.textContent = checkbox.checked ? 'Interaction confirmed.' : '';
+      });
+    </script>
   </body>
 </html>

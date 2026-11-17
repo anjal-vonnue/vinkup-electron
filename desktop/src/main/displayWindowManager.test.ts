@@ -13,7 +13,12 @@ const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
     getCursorScreenPoint: vi.fn(),
     getDisplayNearestPoint: vi.fn(),
   },
-  createdWindows: [] as Array<{ destroyed: boolean; options: Record<string, unknown> }>,
+  createdWindows: [] as Array<{
+    destroyed: boolean;
+    options: Record<string, unknown>;
+    setFocused: (focused: boolean) => void;
+    isFocusable: () => boolean;
+  }>,
 }));
 
 vi.mock('electron', () => ({
@@ -31,6 +36,7 @@ class FakeWindow extends EventEmitter {
   focused = false;
   visible = false;
   fullscreen = true;
+  focusable = true;
   bounds: Electron.Rectangle = { x: 0, y: 0, width: 1280, height: 720 };
 
   constructor(readonly options: Record<string, unknown> = {}) {
@@ -64,7 +70,9 @@ class FakeWindow extends EventEmitter {
 
   setAlwaysOnTop(): void {}
 
-  setFocusable(): void {}
+  setFocusable(value: boolean): void {
+    this.focusable = value;
+  }
 
   show(): void {
     this.visible = true;
@@ -122,7 +130,14 @@ describe('DisplayWindowManager focus alerts', () => {
     createdWindows.length = 0;
     browserWindowMock.mockImplementation(function (options: Record<string, unknown>) {
       const window = new FakeWindow(options);
-      createdWindows.push({ destroyed: false, options });
+      createdWindows.push({
+        destroyed: false,
+        options,
+        setFocused: (focused) => {
+          window.focused = focused;
+        },
+        isFocusable: () => window.focusable,
+      });
       window.on('closed', () => {
         const record = createdWindows.find((item) => item.options === options);
         if (record) record.destroyed = true;
@@ -178,6 +193,66 @@ describe('DisplayWindowManager focus alerts', () => {
     mainWindow.emit('focus');
 
     expect(alertWindow?.destroyed).toBe(true);
+    manager.dispose();
+  });
+
+  it('treats the interactive cover as Vinkup but alerts after focus leaves it', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+    expect(overlay).toBeDefined();
+    expect(overlay?.isFocusable()).toBe(true);
+
+    overlay?.setFocused(true);
+    await vi.advanceTimersByTimeAsync(900);
+
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(false);
+
+    mainWindow.focused = false;
+    overlay?.setFocused(false);
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(true);
+    manager.dispose();
+  });
+
+  it('preserves focus loss after the main window is dragged to another display', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    await vi.advanceTimersByTimeAsync(800);
+
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    mainWindow.emit('will-move');
+    mainWindow.setBounds({ x: 1280, y: 0, width: 1280, height: 720 });
+    mainWindow.emit('move');
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(mainWindow.isFocused()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(true);
     manager.dispose();
   });
 

@@ -294,6 +294,7 @@ export class DisplayWindowManager {
       return;
     }
     this.isMoving = true;
+    this.focusLostAt = null;
     this.scheduleAppDisplaySync();
   };
 
@@ -320,11 +321,11 @@ export class DisplayWindowManager {
 
   private readonly onMainWindowFocus = (): void => {
     this.isReadyForFocusTracking = true;
+    this.focusLostAt = null;
     if (this.areAlertsOpen) {
       this.dismissAlerts();
       return;
     }
-    this.focusLostAt = null;
     this.raiseOverlays();
   };
 
@@ -631,7 +632,6 @@ export class DisplayWindowManager {
           return;
         }
       }
-      if (!this.isAuthenticationInProgress) this.mainWindow.focus();
     } finally {
       this.isMoving = false;
       this.reconcile();
@@ -685,13 +685,11 @@ export class DisplayWindowManager {
     });
 
     this.overlays.set(display.id, window);
-    this.configureWindow(window, false);
+    this.configureWindow(window, true);
     window.on('will-move', (event) => event.preventDefault());
     window.on('move', () => this.placeWindow(window, display.bounds));
     window.on('focus', () => {
-      if (isAlive(this.mainWindow) && !this.isQuitting) {
-        this.mainWindow.focus();
-      }
+      this.focusLostAt = null;
     });
     window.on('close', (event) => {
       if (!this.closeAuthorized.has(window) && !this.isQuitting) event.preventDefault();
