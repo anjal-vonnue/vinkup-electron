@@ -23,6 +23,8 @@ import { startLocalServer, type LocalServer } from './server';
 import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager';
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
+import { DisplayWindowManager } from './displayWindowManager';
+import { getScreenProtectionDisabled } from './screenProtectionConfig';
 import { BUNDLED_ALLOWLIST } from './resources/allowlist';
 import { loadResourcesAllowlist } from './resources/allowlist-source';
 import { ResourcesBrowser } from './resources/browser';
@@ -35,11 +37,13 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const AUTH_COOKIE_NAME = 'auth_token';
+const DISABLE_SCREEN_PROTECTION = getScreenProtectionDisabled();
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
+let displayWindowManager: DisplayWindowManager | null = null;
 let resourcesBrowser: ResourcesBrowser | null = null;
 
 // Set the name before `ready` so userData, cache and config use the product name.
@@ -86,8 +90,29 @@ async function bootstrap(): Promise<void> {
     console.error('[auth] Failed to restore the session', error);
   });
 
-  mainWindow = createMainWindow();
-  resourcesBrowser = new ResourcesBrowser(mainWindow, BUNDLED_ALLOWLIST, {
+  const window = createMainWindow();
+  mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
+  );
+  updateProtectionContext(authManager.getState());
+  await displayWindowManager.start();
+
+  resourcesBrowser = createResourcesBrowser(window);
+
+  // The shared allowlist can be updated without shipping a release. This never
+  // blocks startup: the bundled copy is already in use.
+  void refreshResourcesAllowlist();
+
+  await loadRenderer(window);
+}
+
+function createResourcesBrowser(window: BrowserWindow): ResourcesBrowser {
+  return new ResourcesBrowser(window, BUNDLED_ALLOWLIST, {
     onState: (state) => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       mainWindow.webContents.send('resources:state-changed', state);
@@ -109,12 +134,6 @@ async function bootstrap(): Promise<void> {
       mainWindow.webContents.send('resources:escape');
     },
   });
-
-  // The shared allowlist can be updated without shipping a release. This never
-  // blocks startup: the bundled copy is already in use.
-  void refreshResourcesAllowlist();
-
-  await loadRenderer(mainWindow);
 }
 
 async function refreshResourcesAllowlist(): Promise<void> {
@@ -179,8 +198,16 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
+  updateProtectionContext(state);
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
+}
+
+function updateProtectionContext(state: DesktopAuthState): void {
+  displayWindowManager?.setProtectionContext(
+    state.status === 'loading' || state.status === 'pending',
+    state.status === 'authenticated' ? (state.user?.role ?? null) : null
+  );
 }
 
 function createMainWindow(): BrowserWindow {
@@ -191,7 +218,7 @@ function createMainWindow(): BrowserWindow {
     y,
     width,
     height,
-    fullscreen: true,
+    fullscreen: false,
     useContentSize: true,
     frame: false,
     title: APP_NAME,
@@ -206,15 +233,21 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  window.on('minimize', () => window.restore());
-  window.on('leave-full-screen', () => window.setFullScreen(true));
+  window.on('minimize', () => {
+    if (displayWindowManager?.shouldPreventMinimize() ?? !DISABLE_SCREEN_PROTECTION) {
+      window.restore();
+    }
+  });
 
   window.once('ready-to-show', () => {
     window.show();
   });
 
   window.on('closed', () => {
+    displayWindowManager?.dispose();
+    displayWindowManager = null;
     mainWindow = null;
+    app.quit();
   });
 
   window.on('close', () => {
@@ -246,6 +279,22 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.webContents.on('before-input-event', (event, input) => {
+    const key = input.key.toLowerCase();
+    const moveToNextDisplay =
+      (displayWindowManager?.isProtectionEnabledForCurrentUser() ?? !DISABLE_SCREEN_PROTECTION) &&
+      input.type === 'keyDown' &&
+      input.control &&
+      input.shift &&
+      input.alt &&
+      key === 'm';
+    if (moveToNextDisplay) {
+      event.preventDefault();
+      void displayWindowManager?.moveToNextDisplay().catch((error: unknown) => {
+        console.error('[desktop] Failed to move to the next display', error);
+      });
+      return;
+    }
+
     if (!isDevToolsShortcut(input)) return;
     event.preventDefault();
     // The custom menu below replaces Electron's default menu, so the built-in
@@ -300,15 +349,36 @@ function registerIpcHandlers(): void {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
 
-  ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
+  ipcMain.handle('window:begin-certificate-print', (event) => {
     assertTrustedSender(event);
-    return savePdf(event, fileName, {
-      label: 'certificate',
-      fallbackFileName: 'certificate',
-      landscape: true,
-    });
+    assertMainWindowSender(event);
+    const frameUrl = event.senderFrame?.url;
+    if (!frameUrl || !isCertificatePageUrl(frameUrl)) {
+      throw new Error('Certificate printing can only start from the certificate page.');
+    }
+    displayWindowManager?.beginCertificatePrint();
   });
 
+  ipcMain.handle('window:end-certificate-print', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    displayWindowManager?.endCertificatePrint();
+  });
+
+  ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
+    assertTrustedSender(event);
+
+    displayWindowManager?.beginCertificatePrint();
+    try {
+      return await savePdf(event, fileName, {
+        label: 'certificate',
+        fallbackFileName: 'certificate',
+        landscape: true,
+      });
+    } finally {
+      displayWindowManager?.endCertificatePrint();
+    }
+  });
   ipcMain.handle('report:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
     return savePdf(event, fileName, {
@@ -341,6 +411,12 @@ function registerIpcHandlers(): void {
   ipcMain.handle('auth:logout', async (event) => {
     assertTrustedSender(event);
     await getAuthManager().logout();
+  });
+
+  ipcMain.on('display-alert:choice', (event, choice: unknown) => {
+    const manager = displayWindowManager;
+    if (!manager?.ownsAlertSender(event.sender)) return;
+    manager.handleAlertChoice(choice);
   });
 
   ipcMain.handle('resources:get-allowlist', (event) => {
@@ -468,6 +544,25 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
   assertTrustedSenderForOrigin(event, trustedOrigin);
 }
 
+function assertMainWindowSender(event: IpcMainInvokeEvent): void {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    BrowserWindow.fromWebContents(event.sender) !== mainWindow ||
+    event.senderFrame !== event.sender.mainFrame
+  ) {
+    throw new Error('IPC request is not from the main application window.');
+  }
+}
+
+function isCertificatePageUrl(url: string): boolean {
+  try {
+    return /^\/certificates\/[^/]+\/?$/.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
 function getAppInfo(): DesktopAppInfo {
   return {
     version: app.getVersion(),
@@ -542,6 +637,11 @@ function openExternal(url: string): void {
   void shell.openExternal(url);
 }
 
+function handleExitChoice(): void {
+  // TODO: report the student's exit choice when the backend supports it.
+  app.quit();
+}
+
 function isDevToolsShortcut(input: Electron.Input): boolean {
   const key = input.key.toLowerCase();
   const isF12 = key === 'f12';
@@ -610,12 +710,28 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length > 0) return;
-  mainWindow = createMainWindow();
-  void loadRenderer(mainWindow);
+  const window = createMainWindow();
+  mainWindow = window;
+  const primaryDisplay = screen.getPrimaryDisplay();
+  displayWindowManager = new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION,
+    primaryDisplay.id
+  );
+  updateProtectionContext(getAuthManager().getState());
+  resourcesBrowser = createResourcesBrowser(window);
+  void refreshResourcesAllowlist();
+  void displayWindowManager
+    .start()
+    .then(() => loadRenderer(window))
+    .catch(handleStartupError);
 });
 
 app.on('before-quit', () => {
   // TODO: ask the renderer to flush activity time before the app exits.
+  displayWindowManager?.dispose();
+  displayWindowManager = null;
   authManager?.dispose();
   authManager = null;
   if (!localServer) return;

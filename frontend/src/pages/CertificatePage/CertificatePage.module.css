@@ -35,6 +35,10 @@
   font-weight: 700;
 }
 
+.printError {
+  color: var(--color-danger, #b42318);
+}
+
 @media print {
   .screenOnly {
     display: none !important;
