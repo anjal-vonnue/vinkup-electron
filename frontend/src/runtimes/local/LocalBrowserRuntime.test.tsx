@@ -135,7 +135,12 @@ describe('LocalBrowserRuntime', () => {
     vi.mocked(workspaceApi.sync).mockClear();
     await user.click(screen.getByRole('button', { name: 'probe run' }));
 
-    await waitFor(() => expect(workspaceApi.sync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(workspaceApi.sync).toHaveBeenCalled());
+    // Run's flush must carry the editor files. A debounced editor sync may land too,
+    // so check the contents rather than an exact call count.
+    const synced = vi.mocked(workspaceApi.sync).mock.calls.at(-1)?.[0];
+    expect(synced?.taskId).toBe('t1');
+    expect(typeof synced?.files['services.html']).toBe('string');
     await waitFor(() => {
       const src = screen.getByTitle('Preview of services.html').getAttribute('src');
       expect(src).not.toBe(firstSrc);

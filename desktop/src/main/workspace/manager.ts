@@ -97,6 +97,8 @@ function delay(ms: number): Promise<void> {
 export class WorkspaceManager {
   private readonly callbacks: WorkspaceManagerCallbacks;
   private readonly sessions = new Map<string, WorkspaceSession>();
+  /** Closes still removing their folder, so a second close waits instead of skipping it. */
+  private readonly closing = new Map<string, Promise<void>>();
   /** Serializes lifecycle work per task so open/close races cannot leak folders. */
   private readonly chains = new Map<string, Promise<unknown>>();
 
@@ -205,18 +207,26 @@ export class WorkspaceManager {
 
   async close(taskIdValue: unknown): Promise<void> {
     const taskId = assertTaskId(taskIdValue);
-    return this.exclusive(taskId, async () => {
-      const session = this.sessions.get(taskId);
-      if (!session) return;
-      this.sessions.delete(taskId);
+    const inFlight = this.closing.get(taskId);
+    if (inFlight) return inFlight;
+
+    const session = this.sessions.get(taskId);
+    if (!session) return;
+
+    // Drop the session first so nothing can use it while the folder is removed.
+    this.sessions.delete(taskId);
+    const work = this.exclusive(taskId, async () => {
       await this.disposeSession(session);
       await cleanupWorkspace(session.root, PRESERVED_WORKSPACE_PATHS).catch(() => undefined);
-    });
+    }).finally(() => this.closing.delete(taskId));
+    this.closing.set(taskId, work);
+    return work;
   }
 
   async closeAll(): Promise<void> {
-    const ids = [...this.sessions.keys()];
-    await Promise.allSettled(ids.map((taskId) => this.close(taskId)));
+    // Include closes already running: quitting must wait for those folders too.
+    const ids = new Set([...this.sessions.keys(), ...this.closing.keys()]);
+    await Promise.allSettled([...ids].map((taskId) => this.close(taskId)));
   }
 
   async install(taskIdValue: unknown): Promise<void> {

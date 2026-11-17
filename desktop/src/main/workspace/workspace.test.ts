@@ -1,5 +1,5 @@
 import { request as httpRequest } from 'node:http';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -279,6 +279,40 @@ describe('WorkspaceManager', () => {
     expect(await readFile(path.join(root, 'index.js'), 'utf8')).toBe('new');
     expect(await readFile(path.join(root, '.vinkup', 'db', 'data'), 'utf8')).toBe('rows');
     await manager.close('task_2');
+  });
+
+  it('waits for a close already running before closing the same task again', async () => {
+    const baseDir = await temporaryRoot();
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: () => undefined,
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    await manager.open({ taskId: 'task_close', files: { 'index.js': 'hello' } });
+    const root = path.join(baseDir, 'task_close');
+
+    // The second close must join the first, not return before the folder is gone.
+    await Promise.all([manager.close('task_close'), manager.close('task_close')]);
+    await expect(stat(root)).rejects.toThrow();
+  });
+
+  it('closeAll waits for closes that are already in flight', async () => {
+    const baseDir = await temporaryRoot();
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: () => undefined,
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    await manager.open({ taskId: 'task_closeall', files: { 'index.js': 'hello' } });
+    const root = path.join(baseDir, 'task_closeall');
+
+    const closing = manager.close('task_closeall');
+    await manager.closeAll();
+
+    await expect(stat(root)).rejects.toThrow();
+    await closing;
   });
 
   it('writes terminal input to a real shell and streams its output back', async () => {
