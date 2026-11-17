@@ -71,6 +71,7 @@ const trainees: SeedTrainee[] = [
   { email: 'akshay.antony@vonnue.com', name: 'Akshay Antony', mentorEmail: null },
   { email: 'hawas.backer@vonnue.com', name: 'Hawas Backer', mentorEmail: null },
   { email: 'ameesha.t@vonnue.com', name: 'Ameesha T', mentorEmail: null },
+  { email: 'akshay.kumar@vonnue.com', name: 'Akshay Kumar P', mentorEmail: null },
 ];
 
 type SeedTaskFile = { path: string; content: string };
