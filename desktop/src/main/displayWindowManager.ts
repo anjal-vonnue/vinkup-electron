@@ -54,6 +54,7 @@ export class DisplayWindowManager {
   private isStarted = false;
   private areAlertsOpen = false;
   private isReadyForFocusTracking = false;
+  private alertReturnDisplayId: number | null = null;
 
   constructor(
     mainWindow: BrowserWindow,
@@ -506,7 +507,13 @@ export class DisplayWindowManager {
     const target =
       screen.getAllDisplays().find((display) => display.id === requestedDisplay.id) ??
       screen.getPrimaryDisplay();
-    if (target.id === this.appDisplayId && this.mainWindow.isFullScreen()) return;
+    if (
+      screen.getDisplayMatching(this.mainWindow.getBounds()).id === target.id &&
+      this.mainWindow.isFullScreen()
+    ) {
+      this.appDisplayId = target.id;
+      return;
+    }
 
     this.isMoving = true;
     this.isRelocatingByManager = true;
@@ -729,6 +736,7 @@ export class DisplayWindowManager {
       return;
     }
     this.areAlertsOpen = true;
+    this.alertReturnDisplayId = this.appDisplayId;
     this.reconcileAlerts(screen.getAllDisplays());
     for (const alert of this.alerts.values()) {
       if (isAlive(alert)) {
@@ -804,12 +812,25 @@ export class DisplayWindowManager {
   }
 
   private dismissAlerts(): void {
+    const returnDisplay = screen
+      .getAllDisplays()
+      .find((display) => display.id === this.alertReturnDisplayId);
     this.clearAlerts();
     this.alertDismissedAt = Date.now();
     this.focusLostAt = null;
     if (!isAlive(this.mainWindow) || this.isQuitting) return;
     this.mainWindow.show();
     this.keepOnAllWorkspaces(this.mainWindow);
+    if (
+      returnDisplay &&
+      screen.getDisplayMatching(this.mainWindow.getBounds()).id !== returnDisplay.id
+    ) {
+      void this.moveToDisplay(returnDisplay).catch((error: unknown) => {
+        console.error('[desktop] Failed to return to the app display', error);
+      });
+      return;
+    }
+    if (returnDisplay) this.appDisplayId = returnDisplay.id;
     this.mainWindow.focus();
     this.raiseOverlays();
   }
@@ -827,6 +848,7 @@ export class DisplayWindowManager {
 
   private clearAlerts(): void {
     this.areAlertsOpen = false;
+    this.alertReturnDisplayId = null;
     for (const [id, window] of this.alerts) this.destroyAlert(id, window);
   }
 
