@@ -1066,17 +1066,17 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 
 ### GET /api/admin/analytics
 
-- **Auth:** admin. Like `GET /api/admin/trainees`, every active mentor sees every trainee (there are no mentor teams yet).
+- **Auth:** mentor. Like `GET /api/admin/trainees`, analytics only covers the signed-in mentor's assigned trainees.
 - **Query** (validated in the controller with `analyticsQuerySchema`):
   - `from`, `to`: IST calendar days `YYYY-MM-DD`, both included. `from` ≤ `to`, `to` not in the future, at most 366 days.
-  - `traineeId` (optional): a trainee's UUID. Left out = the whole team.
+  - `traineeId` (optional): a trainee's UUID, which must be assigned to this mentor. Left out = the whole assigned team.
 - **Response 200** (`AdminAnalytics`). Every number comes from stored records; nothing is estimated.
   - `totals`: days completed, tasks first submitted, active and coding seconds, and typing tests **in the period**.
   - `progressTrend`: one point per day from `from` to `to`: average curriculum days completed per trainee by the end of that day (completions before `from` count).
-  - `traineeComparison`: **every** trainee (even when `traineeId` is sent), sorted by name: all-time `daysCompleted`/`totalDays`, and coding/active seconds in the period. Only ids and names, no emails.
-  - `taskStatus`: current task counts, split by mentor review (`task_progress.status` + `review_status`). Only the current status is stored, so the period does not change them. The five counts add up to tasks in the curriculum × trainees.
+  - `traineeComparison`: **every** assigned trainee (even when `traineeId` is sent), sorted by name: all-time `daysCompleted`/`totalDays`, and coding/active seconds in the period. Only ids and names, no emails.
+  - `taskStatus`: current task counts, split by mentor review (`task_progress.status` + `review_status`). Only the current status is stored, so the period does not change them. The five counts add up to tasks in the curriculum × assigned trainees.
     - `approved`: `completed` + `approved`.
-    - `waitingForReview`: `completed` + `pending`, **and** `completed` + `NULL` (submitted before reviews existed; admins can still review these exactly like `pending`).
+    - `waitingForReview`: `completed` + `pending`, **and** `completed` + `NULL` (submitted before reviews existed; mentors can still review these exactly like `pending`).
     - `sentBack`: `completed` + `rework` (stays here while the trainee edits, until they resubmit).
     - `inProgress`: `in_progress` rows (saved, never submitted).
     - `notStarted`: tasks × trainees minus the four groups above, never below 0 (tasks with no progress row).

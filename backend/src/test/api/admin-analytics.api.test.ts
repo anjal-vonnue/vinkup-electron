@@ -4,6 +4,7 @@ import { db } from './helpers/db';
 import {
   DAY,
   TASK,
+  assignTrainees,
   createAdmin,
   freshTrainees,
   istDate,
@@ -35,6 +36,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   ({ a, b } = await freshTrainees());
   admin = await createAdmin('Test Mentor');
+  await assignTrainees(admin, a, b);
 });
 
 async function getAnalytics(extra = ''): Promise<AdminAnalytics> {

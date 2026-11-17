@@ -261,10 +261,13 @@ export class AdminService {
 
   /**
    * GET /api/admin/analytics. `query` is already validated by analyticsQuerySchema.
-   * Like the trainee list, every active admin may see every trainee.
+   * Like the trainee list, analytics only covers the signed-in mentor's assigned trainees.
    */
-  getAnalytics = async ({ from, to, traineeId }: AnalyticsQuery): Promise<AdminAnalytics> => {
-    const trainees = await repo.listTrainees();
+  getAnalytics = async (
+    { from, to, traineeId }: AnalyticsQuery,
+    mentorId: string
+  ): Promise<AdminAnalytics> => {
+    const trainees = await repo.listTrainees(mentorId);
     if (traineeId && !trainees.some((trainee) => trainee.id === traineeId)) {
       throw new NotFoundError('Trainee not found.');
     }
@@ -292,9 +295,9 @@ export class AdminService {
       startedTasks,
       flagEvents,
     ] = await Promise.all([
-      repo.listCompletions(),
+      repo.listCompletions(scopeIds),
       repo.listCompletionsBefore(scopeIds, end),
-      repo.activityTotalsBetween(fromDate, toDate),
+      repo.activityTotalsBetween(fromDate, toDate, scopeIds),
       repo.taskStatusCounts(scopeIds),
       repo.getTotalTasks(),
       repo.countDays(),

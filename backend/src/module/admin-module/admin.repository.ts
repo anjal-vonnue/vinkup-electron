@@ -224,10 +224,10 @@ export class AdminRepository {
     });
 
   /** Active and coding seconds per trainee, for the days from `fromDate` to `toDate` (both included). */
-  activityTotalsBetween = (fromDate: Date, toDate: Date) =>
+  activityTotalsBetween = (fromDate: Date, toDate: Date, traineeIds: string[]) =>
     prisma.activity_log.groupBy({
       by: ['trainee_id'],
-      where: { date: { gte: fromDate, lte: toDate } },
+      where: { trainee_id: { in: traineeIds }, date: { gte: fromDate, lte: toDate } },
       _sum: { active_seconds: true, coding_seconds: true },
     });
 

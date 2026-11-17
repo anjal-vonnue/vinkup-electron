@@ -62,10 +62,11 @@ class AdminController {
 
   getAnalytics = async (req: Request, res: Response<AdminAnalytics>, next: NextFunction) => {
     try {
+      const mentorId = (req as AuthenticatedRequest).user.id;
       // Never trust the query string: check dates, period length and traineeId first.
       const query = analyticsQuerySchema.safeParse(req.query);
       if (!query.success) throw new ValidationError(query.error.issues);
-      res.status(200).json(await adminService.getAnalytics(query.data));
+      res.status(200).json(await adminService.getAnalytics(query.data, mentorId));
     } catch (error) {
       next(error);
     }
