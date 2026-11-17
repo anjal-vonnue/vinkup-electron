@@ -18,6 +18,7 @@ import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager'
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
 import { DisplayWindowManager } from './displayWindowManager';
+import { getScreenProtectionDisabled } from './screenProtectionConfig';
 import {
   assertTrustedSender as assertTrustedSenderForOrigin,
   isAllowedExternalUrl,
@@ -27,7 +28,7 @@ import {
 
 const isDev = process.env.NODE_ENV === 'development';
 const AUTH_COOKIE_NAME = 'auth_token';
-const DISABLE_SCREEN_PROTECTION: boolean = false;
+const DISABLE_SCREEN_PROTECTION = getScreenProtectionDisabled();
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;

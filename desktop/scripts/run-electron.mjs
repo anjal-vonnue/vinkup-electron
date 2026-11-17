@@ -1,5 +1,13 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { loadEnvFile } from 'node:process';
+import { fileURLToPath } from 'node:url';
 import electronPath from 'electron';
+
+if (process.env.NODE_ENV === 'development') {
+  const localEnvPath = fileURLToPath(new URL('../.env.local', import.meta.url));
+  if (existsSync(localEnvPath)) loadEnvFile(localEnvPath);
+}
 
 // Electron 38+ defaults to Wayland on Wayland sessions. On GNOME the resulting
 // window can be missing its close/minimize/maximize controls, so use XWayland

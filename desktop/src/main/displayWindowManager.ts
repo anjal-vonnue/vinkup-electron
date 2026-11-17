@@ -319,6 +319,10 @@ export class DisplayWindowManager {
 
   private readonly onMainWindowFocus = (): void => {
     this.isReadyForFocusTracking = true;
+    if (this.areAlertsOpen) {
+      this.dismissAlerts();
+      return;
+    }
     this.focusLostAt = null;
     this.raiseOverlays();
   };
