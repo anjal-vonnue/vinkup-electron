@@ -16,4 +16,23 @@ export class CertificateRepository {
       where: { trainee_id: traineeId },
       select: { curriculum_day_id: true, completed_at: true },
     });
+
+  findRequiredTaskProgress = (traineeId: string) =>
+    prisma.task.findMany({
+      where: { is_stretch_goal: false },
+      select: {
+        id: true,
+        curriculum_day: {
+          select: {
+            course_id: true,
+          },
+        },
+        progress: {
+          where: { trainee_id: traineeId },
+          select: {
+            review_status: true,
+          },
+        },
+      },
+    });
 }
