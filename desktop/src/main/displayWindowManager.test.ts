@@ -227,7 +227,7 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
-  it('preserves focus loss after the main window is dragged to another display', async () => {
+  it('refocuses after dragging and alerts when focus is later lost', async () => {
     const mainWindow = new FakeWindow();
     const manager = new DisplayWindowManager(
       mainWindow as unknown as BrowserWindow,
@@ -241,16 +241,20 @@ describe('DisplayWindowManager focus alerts', () => {
     mainWindow.emit('focus');
     await vi.advanceTimersByTimeAsync(800);
 
-    mainWindow.focused = false;
-    mainWindow.emit('blur');
     mainWindow.emit('will-move');
     mainWindow.setBounds({ x: 1280, y: 0, width: 1280, height: 720 });
     mainWindow.emit('move');
     await vi.advanceTimersByTimeAsync(200);
 
-    expect(mainWindow.isFocused()).toBe(false);
+    expect(mainWindow.isFocused()).toBe(true);
 
     await vi.advanceTimersByTimeAsync(1_000);
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(false);
+
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+
+    await vi.advanceTimersByTimeAsync(800);
 
     expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(true);
     manager.dispose();

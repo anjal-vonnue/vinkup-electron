@@ -635,6 +635,14 @@ export class DisplayWindowManager {
     } finally {
       this.isMoving = false;
       this.reconcile();
+      if (
+        isAlive(this.mainWindow) &&
+        !this.isQuitting &&
+        !this.isAuthenticationInProgress &&
+        !this.isAdminSession
+      ) {
+        this.mainWindow.focus();
+      }
       this.moveToPendingDisplay();
     }
   }
