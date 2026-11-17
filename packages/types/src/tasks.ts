@@ -1,5 +1,34 @@
 import type { DayTask } from './dayOverview';
 
+/** Current admin review state of a submitted task. null (absent) = no review yet. */
+export type ReviewStatus = 'pending' | 'approved' | 'rework';
+
+/** The decision in one review history entry. */
+export type ReviewDecision = 'approved' | 'rework';
+
+/** One review of one submission attempt. feedback may be empty for a plain approval. */
+export type TaskReview = {
+  id: string;
+  taskId: string;
+  adminId: string;
+  adminName: string;
+  /** The submission attempt this review judged (1 = first submission). */
+  submissionNo: number;
+  decision: ReviewDecision;
+  feedback: string;
+  reviewedAt: string;
+};
+
+/** GET /api/tasks/:taskId/review — the trainee's own current review state. */
+export type TaskReviewSummary = {
+  reviewStatus: ReviewStatus | null; // null = no review yet
+  submissionCount: number; // 0 = never submitted
+  latestReview: TaskReview | null;
+};
+
+/** GET /api/tasks/:taskId/reviews — the trainee's own review history, newest first. */
+export type TaskReviewListResponse = TaskReview[];
+
 /** Same values the day page uses: 'not_started' | 'in_progress' | 'completed' */
 export type TaskStatus = DayTask['status'];
 
@@ -20,6 +49,10 @@ export type TaskResponse = {
   sequenceOrder: number;
   estimatedMinutes: number | null;
   status: TaskStatus;
+  /** Current admin review state: pending = submitted and waiting, approved, rework. null = no review yet. */
+  reviewStatus: ReviewStatus | null;
+  /** How many times this trainee has submitted the task. */
+  submissionCount: number;
   day: {
     id: string;
     dayNumber: number;
@@ -43,8 +76,12 @@ export type SaveCodeRequest = {
   files: TaskFile[];
 };
 
-/** POST /api/tasks/:taskId/submit — can be called more than once; does not lock editing */
+/** POST /api/tasks/:taskId/submit — can be called more than once; does not lock editing.
+ *  Blocked with ALREADY_APPROVED once an admin has approved the task. */
 export type SubmitTaskResponse = {
   status: 'completed';
   submittedAt: string;
+  /** Always 'pending' after a submit: the new submission is waiting for review again. */
+  reviewStatus: ReviewStatus;
+  submissionCount: number;
 };

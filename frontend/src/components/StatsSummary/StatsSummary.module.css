@@ -1,7 +1,7 @@
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 48px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
 
   padding: 36px 32px 34px;
 
@@ -10,6 +10,7 @@
 
 .item {
   min-width: 0;
+  text-align: center;
 }
 
 .label {

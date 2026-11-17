@@ -29,6 +29,7 @@ beforeEach(() => {
 
 afterEach(() => {
   printSpy.mockRestore();
+  vi.useRealTimers();
   window.localStorage.clear();
   delete document.documentElement.dataset.theme;
   delete window.desktop;
@@ -85,7 +86,7 @@ describe('usePrintMode', () => {
     expect(result.current.printJob).toBeNull();
   });
 
-  it('print() renders the job, switches to the light theme and report title, then prints', async () => {
+  it('print() renders the job, preserves the theme and sets the report title, then prints', async () => {
     const { result } = renderPrintMode();
 
     await act(async () => {
@@ -94,7 +95,7 @@ describe('usePrintMode', () => {
 
     expect(result.current.printJob?.options).toEqual({ includeJournal: false });
     expect(result.current.printJob?.startedAt).toBeInstanceOf(Date);
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('dark');
     expect(document.title).toBe(TITLE);
     expect(printSpy).toHaveBeenCalledTimes(1);
   });
@@ -175,7 +176,28 @@ describe('usePrintMode', () => {
     expect(document.title).toBe('Mentor view');
   });
 
-  it('puts the theme and title back after printing and removes the job', async () => {
+  it('prepare() renders the job for a PDF export without opening the print dialog', () => {
+    const { result } = renderPrintMode();
+
+    act(() => {
+      result.current.prepare({ includeJournal: false });
+    });
+
+    expect(result.current.printJob?.options).toEqual({ includeJournal: false });
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.title).toBe(TITLE);
+    expect(printSpy).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.restore();
+    });
+
+    expect(result.current.printJob).toBeNull();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.title).toBe('Mentor view');
+  });
+
+  it('puts the title back after printing but keeps the report mounted', async () => {
     const { result } = renderPrintMode();
     await act(async () => {
       await result.current.print(DEFAULTS);
@@ -183,8 +205,23 @@ describe('usePrintMode', () => {
 
     fire('afterprint');
 
-    expect(result.current.printJob).toBeNull();
+    // Some print pipelines take their snapshot after `afterprint`, so the view must stay.
+    expect(result.current.printJob?.options).toEqual(DEFAULTS);
     expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.title).toBe('Mentor view');
+  });
+
+  it('removes the view once a desktop PDF export has finished', () => {
+    const { result } = renderPrintMode();
+    act(() => {
+      result.current.prepare(DEFAULTS);
+    });
+
+    act(() => {
+      result.current.restore();
+    });
+
+    expect(result.current.printJob).toBeNull();
     expect(document.title).toBe('Mentor view');
   });
 
@@ -204,12 +241,44 @@ describe('usePrintMode', () => {
     fire('beforeprint');
 
     expect(result.current.printJob?.options).toEqual(DEFAULTS);
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('dark');
     expect(printSpy).not.toHaveBeenCalled();
 
     fire('afterprint');
-    expect(result.current.printJob).toBeNull();
+    expect(result.current.printJob?.options).toEqual(DEFAULTS);
     expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('refreshes the report with the defaults for a later browser-menu print', () => {
+    vi.useFakeTimers();
+    const { result } = renderPrintMode();
+
+    vi.setSystemTime(new Date('2026-10-08T06:00:00.000Z'));
+    // Without a desktop exception print() never awaits, so it finishes inside this act.
+    act(() => {
+      void result.current.print({ includeJournal: false });
+    });
+    fire('afterprint');
+
+    vi.setSystemTime(new Date('2026-10-08T07:00:00.000Z'));
+    fire('beforeprint');
+
+    expect(result.current.printJob?.options).toEqual(DEFAULTS);
+    expect(result.current.printJob?.startedAt).toEqual(new Date('2026-10-08T07:00:00.000Z'));
+  });
+
+  it('restores the page when the print dialog cannot be opened', async () => {
+    printSpy.mockImplementation(() => {
+      throw new Error('no printer');
+    });
+    const { result } = renderPrintMode();
+
+    await act(async () => {
+      await expect(result.current.print(DEFAULTS)).rejects.toThrow('no printer');
+    });
+
+    expect(result.current.printJob).toBeNull();
+    expect(document.title).toBe('Mentor view');
   });
 
   it('keeps the chosen options when the browser fires beforeprint after print()', async () => {

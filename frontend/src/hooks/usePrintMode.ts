@@ -16,22 +16,24 @@ type UsePrintModeOptions<T> = {
   desktopPrintException?: boolean;
 };
 
-type SavedPage = { theme: string | undefined; title: string };
+type SavedPage = { title: string };
 
 function restorePage(saved: SavedPage): void {
-  if (saved.theme === undefined) delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = saved.theme;
   document.title = saved.title;
 }
 
 /**
- * Lets a page render a print-only view that exists only while printing:
+ * Lets a page render a print-only view, hidden on screen and shown only when printing:
  *
  * - `print(options)` renders the view synchronously, then opens the browser's print dialog.
  * - Printing from the browser menu (`beforeprint`) renders it with `defaults`.
- * - While printing, the page uses the light theme and the report's title. The saved theme
- *   preference is not touched (this sets `data-theme` directly, not through useTheme).
- * - `afterprint` puts the theme and title back and removes the view.
+ * - `prepare(options)` / `restore()` render and remove the view for a PDF export that does not
+ *   use the browser's print dialog (the desktop shell).
+ * - The document title is set to the report's title while printing (browsers suggest it as
+ *   the "Save as PDF" filename). The user's theme is never changed.
+ * - `afterprint` puts the title back. The view stays mounted (hidden on screen) because a
+ *   print pipeline can take its snapshot after `afterprint`; unmounting there prints a blank
+ *   page. The next print replaces it, and `restore()` removes it once a PDF capture is done.
  */
 export function usePrintMode<T>({
   defaults,
@@ -54,9 +56,8 @@ export function usePrintMode<T>({
 
   const enter = useCallback((options: T) => {
     if (!savedRef.current) {
-      savedRef.current = { theme: document.documentElement.dataset.theme, title: document.title };
+      savedRef.current = { title: document.title };
     }
-    document.documentElement.dataset.theme = 'light';
     document.title = titleRef.current;
 
     const next: PrintJob<T> = { options, startedAt: new Date() };
@@ -65,23 +66,35 @@ export function usePrintMode<T>({
     flushSync(() => setJob(next));
   }, []);
 
+  /** Turn the desktop shell's screen protection back on if a print exception is active. */
+  const endDesktopPrintException = useCallback((failureMessage: string) => {
+    if (!desktopPrintExceptionActiveRef.current) return;
+    desktopPrintExceptionActiveRef.current = false;
+    const desktop = window.desktop;
+    if (!desktop) return;
+    void desktop.window.endCertificatePrint().catch((error: unknown) => {
+      console.error(failureMessage, error);
+    });
+  }, []);
+
+  /** Put the title back and forget the job; the rendered view stays for a late snapshot. */
   const leave = useCallback(() => {
+    // Not our print (e.g. another page printed): nothing to restore.
+    if (!savedRef.current && !jobRef.current) return;
+
     if (savedRef.current) {
       restorePage(savedRef.current);
       savedRef.current = null;
     }
     jobRef.current = null;
+    endDesktopPrintException('[certificate] Failed to restore screen protection after printing');
+  }, [endDesktopPrintException]);
+
+  /** Put the title back and remove the view; safe once the PDF capture has finished. */
+  const clear = useCallback(() => {
+    leave();
     setJob(null);
-    if (desktopPrintExceptionActiveRef.current) {
-      desktopPrintExceptionActiveRef.current = false;
-      const desktop = window.desktop;
-      if (desktop) {
-        void desktop.window.endCertificatePrint().catch((error: unknown) => {
-          console.error('[certificate] Failed to restore screen protection after printing', error);
-        });
-      }
-    }
-  }, []);
+  }, [leave]);
 
   useEffect(() => {
     const handleBeforePrint = () => {
@@ -94,26 +107,18 @@ export function usePrintMode<T>({
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', leave);
+      // Cancels a print() still waiting on the desktop shell.
       printAttemptRef.current += 1;
-      if (desktopPrintExceptionActiveRef.current) {
-        desktopPrintExceptionActiveRef.current = false;
-        const desktop = window.desktop;
-        if (desktop) {
-          void desktop.window.endCertificatePrint().catch((error: unknown) => {
-            console.error(
-              '[certificate] Failed to restore screen protection after leaving the page',
-              error
-            );
-          });
-        }
-      }
-      // Leaving the page mid-print must not leave the app stuck in the light theme.
+      endDesktopPrintException(
+        '[certificate] Failed to restore screen protection after leaving the page'
+      );
+      // Leaving the page mid-print must not leave the title stuck on the PDF name.
       if (savedRef.current) {
         restorePage(savedRef.current);
         savedRef.current = null;
       }
     };
-  }, [enter, leave]);
+  }, [enter, leave, endDesktopPrintException]);
 
   const print = useCallback(
     async (options: T): Promise<void> => {
@@ -124,6 +129,7 @@ export function usePrintMode<T>({
         if (desktop) {
           await desktop.window.beginCertificatePrint();
           if (attempt !== printAttemptRef.current) {
+            // The page was left (or printed again) while waiting; undo the exception.
             await desktop.window.endCertificatePrint();
             return;
           }
@@ -131,12 +137,13 @@ export function usePrintMode<T>({
         }
         window.print();
       } catch (error) {
-        if (attempt === printAttemptRef.current) leave();
+        // A window that refuses to open the dialog must not leave the page in print mode.
+        if (attempt === printAttemptRef.current) clear();
         throw error;
       }
     },
-    [desktopPrintException, enter, leave]
+    [desktopPrintException, enter, clear]
   );
 
-  return { printJob: job, print };
+  return { printJob: job, print, prepare: enter, restore: clear };
 }

@@ -1,4 +1,5 @@
 import type { CourseCertificate } from '@itp/types';
+import Logo from '../../assets/logo-mark-currentColor.svg?react';
 import { formatCertificateDate, formatDayCount } from '../../lib/certificate';
 import styles from './CertificateSheet.module.css';
 
@@ -6,7 +7,7 @@ export default function CertificateSheet({ certificate }: { certificate: CourseC
   return (
     <section className={styles.sheet} aria-label="Certificate of completion">
       <div className={styles.frame}>
-        <div className={styles.logo} role="img" aria-label="Vinkup" />
+        <Logo className={styles.logo} role="img" aria-label="Vinkup" />
         <p className={styles.kicker}>Vinkup</p>
         <h1 className={styles.title}>Certificate of completion</h1>
 

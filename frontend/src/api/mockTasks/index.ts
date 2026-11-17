@@ -42,6 +42,8 @@ export function catalogTaskResponse(taskId: string, status: TaskStatus): TaskRes
   return {
     ...task,
     status,
+    reviewStatus: null,
+    submissionCount: 0,
     day: { id: day.dayId, dayNumber: day.dayNumber, courseTitle: day.courseTitle },
     runtime: workspace.runtime,
     runCommand: workspace.runCommand,

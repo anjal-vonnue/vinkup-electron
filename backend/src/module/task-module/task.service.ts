@@ -1,5 +1,5 @@
 import type { SubmitTaskResponse, TaskCodeResponse, TaskFile, TaskResponse } from '@itp/types';
-import { NotFoundError } from '../../errors/AppError';
+import { ConflictError, NotFoundError } from '../../errors/AppError';
 import { ProgressService } from '../progress-module/progress.service';
 import { toTaskFiles } from './task.files';
 import { TaskRepository } from './task.repository';
@@ -27,6 +27,8 @@ export class TaskService {
       sequenceOrder: task.sequence_order,
       estimatedMinutes: task.estimated_minutes,
       status: progressService.taskStatus(progress),
+      reviewStatus: progress?.review_status ?? null,
+      submissionCount: progress?.submission_count ?? 0,
       day: {
         id: task.curriculum_day.id,
         dayNumber: task.curriculum_day.day_number,
@@ -61,13 +63,28 @@ export class TaskService {
     await taskRepository.saveFiles(traineeId, taskId, files, new Date());
   }
 
-  /** Can be repeated ("Resubmit"); it never locks editing and never completes the day. */
+  /**
+   * Can be repeated ("Resubmit"); it never locks editing and never completes the day.
+   * Every submit becomes a new attempt: review_status returns to pending so the new
+   * code waits for review again. An approved task cannot be resubmitted (409).
+   */
   async submit(traineeId: string, taskId: string): Promise<SubmitTaskResponse> {
     await progressService.assertTaskUnlocked(traineeId, taskId);
 
     const now = new Date();
     const row = await taskRepository.markSubmitted(traineeId, taskId, now);
+    if (!row) {
+      throw new ConflictError(
+        'ALREADY_APPROVED',
+        'This task was approved, so it cannot be resubmitted.'
+      );
+    }
 
-    return { status: 'completed', submittedAt: (row.last_submitted_at ?? now).toISOString() };
+    return {
+      status: 'completed',
+      submittedAt: (row.last_submitted_at ?? now).toISOString(),
+      reviewStatus: 'pending',
+      submissionCount: row.submission_count,
+    };
   }
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, CheckCircle2, Timer, Play } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Timer, Play, AlertCircle } from 'lucide-react';
+import type { ReviewStatus } from '@itp/types';
 import type { PaneId } from '../../types/workspaceTypes';
 import type { Runner } from '../../runtimes/runnerContext';
 import ViewToggleGroup from '../ViewToggleGroup';
@@ -19,6 +20,10 @@ export type TaskToolbarProps = {
   hasSubmitted?: boolean;
   /** When it was submitted in this visit; null when only the task's status says so */
   submittedAt?: Date | null;
+  /** Admin review status */
+  reviewStatus?: ReviewStatus | null;
+  /** Triggered when the rework indicator is clicked to view feedback */
+  onViewFeedback?: () => void;
 };
 
 /** 14:32 */
@@ -37,6 +42,8 @@ export default function TaskToolbar({
   submitSlot,
   hasSubmitted = false,
   submittedAt = null,
+  reviewStatus = null,
+  onViewFeedback,
 }: TaskToolbarProps) {
   return (
     <div className={styles.toolbar}>
@@ -52,7 +59,26 @@ export default function TaskToolbar({
         </span>
       )}
 
-      {hasSubmitted && (
+      {reviewStatus === 'rework' && (
+        <button
+          type="button"
+          className={`${styles.estimatePill} ${styles.reworkPill}`}
+          onClick={onViewFeedback}
+          title="Modifications requested. Click to view feedback."
+        >
+          <AlertCircle size={14} aria-hidden="true" className={styles.reworkIcon} />
+          Rework requested
+        </button>
+      )}
+
+      {reviewStatus === 'approved' && (
+        <span className={`${styles.estimatePill} ${styles.approvedPill}`}>
+          <CheckCircle2 size={14} aria-hidden="true" className={styles.approvedIcon} />
+          Approved
+        </span>
+      )}
+
+      {reviewStatus !== 'rework' && reviewStatus !== 'approved' && hasSubmitted && (
         <span className={styles.estimatePill}>
           <CheckCircle2 size={14} aria-hidden="true" className={styles.submittedIcon} />
           {submittedAt ? `Submitted ${formatClock(submittedAt)}` : 'Submitted'}

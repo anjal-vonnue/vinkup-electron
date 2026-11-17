@@ -3,6 +3,8 @@ import type {
   TaskCodeResponse,
   SaveCodeRequest,
   SubmitTaskResponse,
+  TaskReviewSummary,
+  TaskReviewListResponse,
 } from '@itp/types';
 import { apiClient } from './client';
 
@@ -24,6 +26,18 @@ export async function saveTaskCode(taskId: string, body: SaveCodeRequest): Promi
 
 export async function submitTask(taskId: string): Promise<SubmitTaskResponse> {
   const res = await apiClient.post<SubmitTaskResponse>(`/tasks/${taskId}/submit`);
+
+  return res.data;
+}
+
+export async function getTaskReview(taskId: string): Promise<TaskReviewSummary> {
+  const res = await apiClient.get<TaskReviewSummary>(`/tasks/${taskId}/review`);
+
+  return res.data;
+}
+
+export async function getTaskReviews(taskId: string): Promise<TaskReviewListResponse> {
+  const res = await apiClient.get<TaskReviewListResponse>(`/tasks/${taskId}/reviews`);
 
   return res.data;
 }

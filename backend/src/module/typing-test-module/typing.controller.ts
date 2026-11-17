@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { TypingResultRecord } from '@itp/types';
+import type { TypingResultRecord, TypingStats } from '@itp/types';
 import type { AuthenticatedRequest } from '../../types/auth.types';
 import type { SaveTypingResultBody } from './typing.schema';
 import { TypingService } from './typing.service';
@@ -21,6 +21,15 @@ class TypingController {
     try {
       const traineeId = (req as AuthenticatedRequest).user.id;
       res.status(200).json(await typingService.getResults(traineeId));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getStats = async (req: Request, res: Response<TypingStats>, next: NextFunction) => {
+    try {
+      const traineeId = (req as AuthenticatedRequest).user.id;
+      res.status(200).json(await typingService.getStats(traineeId));
     } catch (error) {
       next(error);
     }

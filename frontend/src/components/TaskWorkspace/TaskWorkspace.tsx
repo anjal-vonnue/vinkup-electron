@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useToast } from '../Toast';
 import { useFlagTracking } from '../../hooks/Useflagtracking';
-import type { TaskResponse } from '@itp/types';
+import type { ReviewStatus, TaskResponse } from '@itp/types';
 import { getTaskCode, saveTaskCode, submitTask } from '../../api/tasks';
 import { applyRuntimeSettings } from '../../lib/monacoSetup';
 import {
@@ -28,6 +28,7 @@ import FilesPanel from '../FilesPanel';
 import InstructionsPanel from '../InstructionsPanel';
 import SaveIndicator from '../SaveIndicator';
 import SubmitTaskButton from '../SubmitTaskButton';
+import TaskFeedbackModal from '../TaskFeedbackModal';
 import TaskToolbar from '../TaskToolbar';
 import WorkspaceSidebar from '../WorkspaceSidebar';
 import styles from './TaskWorkspace.module.css';
@@ -57,6 +58,8 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(task.reviewStatus ?? null);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   // Submitting can be repeated and doesn't lock editing; this only drives the pill and the label.
   const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
   const hasSubmitted = submittedAt !== null || task.status === 'completed';
@@ -148,8 +151,12 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   const handleSubmit = useCallback(async () => {
     const result = await submitTask(task.id);
     setSubmittedAt(new Date(result.submittedAt));
-    toast.show({ message: 'Task submitted', variant: 'success' });
-  }, [task.id, toast]);
+    setReviewStatus(result.reviewStatus);
+    toast.show({
+      message: reviewStatus === 'rework' ? 'Task resubmitted' : 'Task submitted',
+      variant: 'success',
+    });
+  }, [task.id, toast, reviewStatus]);
 
   const handleTogglePane = useCallback(
     (pane: PaneId) => dispatch({ type: 'paneToggled', pane }),
@@ -178,6 +185,8 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
           saveIndicator={<SaveIndicator state={autosave.state} onRetry={autosave.retry} />}
           hasSubmitted={hasSubmitted}
           submittedAt={submittedAt}
+          reviewStatus={reviewStatus}
+          onViewFeedback={() => setIsFeedbackModalOpen(true)}
           submitSlot={
             <SubmitTaskButton
               taskTitle={task.title}
@@ -185,6 +194,7 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
               saveState={autosave.state}
               flush={autosave.flush}
               onSubmit={handleSubmit}
+              reviewStatus={reviewStatus}
             />
           }
         />
@@ -248,6 +258,15 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
         >
           Unsaved changes will be lost.
         </ConfirmDialog>
+
+        {isFeedbackModalOpen && (
+          <TaskFeedbackModal
+            isOpen={isFeedbackModalOpen}
+            onClose={() => setIsFeedbackModalOpen(false)}
+            taskId={task.id}
+            taskTitle={task.title}
+          />
+        )}
       </div>
     </WorkActivityContext.Provider>
   );

@@ -1,3 +1,5 @@
+import type { ReviewStatus } from './tasks';
+
 export interface LearningObjective {
   id: string;
   code: string;
@@ -19,6 +21,8 @@ export interface DayTask {
   title: string;
   status: 'not_started' | 'in_progress' | 'completed';
   isStretchGoal: boolean;
+  /** Current admin review state of a submitted task. null/absent = no review yet. */
+  reviewStatus?: ReviewStatus | null;
 }
 export interface DayContent {
   dayId: string;
@@ -33,6 +37,7 @@ export interface DayContent {
   selfCheckItems: SelfCheckItem[];
   journalPrompt: string;
 }
+
 export interface DailyJournalProps {
   prompt: string;
   initialResponse: string | null;

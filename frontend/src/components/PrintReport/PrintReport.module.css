@@ -1,4 +1,6 @@
-/* The report exists only while printing; on screen it stays hidden behind the print dialog. */
+/*
+ * The report is mounted for printing but should never occupy screen space.
+ */
 @media screen {
   .report {
     display: none;
@@ -6,164 +8,591 @@
 }
 
 @media print {
-  /* Margin boxes repeat on every page in Chrome and Edge (131+); other browsers ignore them. */
   @page {
     size: A4;
-    margin: 14mm 12mm 18mm;
+    margin: 18mm 16mm 22mm;
+    background: #ffffff;
 
     @bottom-left {
-      content: 'Vinkup · Confidential — for mentor use only';
+      content: 'Vinkup · Confidential, for mentor use only';
+      font-family: Arial, Helvetica, sans-serif;
       font-size: 8pt;
-      color: #6b6b7b;
+      color: #716c82;
     }
 
     @bottom-right {
       content: 'Page ' counter(page) ' of ' counter(pages);
+      font-family: Arial, Helvetica, sans-serif;
       font-size: 8pt;
-      color: #6b6b7b;
+      color: #716c82;
     }
   }
 
+  /*
+   * The page margin area is painted with the root element's background.
+   * The app's dark theme sets that on html/body (often via a class or
+   * attribute selector with higher specificity), which is what showed up as
+   * black margins. Every likely source is overridden here.
+   */
+  :global(:root),
   :global(html),
-  :global(body) {
+  :global(html[class]),
+  :global(html[data-theme]),
+  :global(html[style]),
+  :global(body),
+  :global(body[class]),
+  :global(body[style]),
+  :global(#root),
+  :global(#__next) {
     background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color-scheme: light !important;
+  }
+
+  :global(body) {
+    color: #14162a;
   }
 
   .report {
-    font-size: 11pt;
-    line-height: 1.45;
+    --color-text-primary: #14162a;
+    --color-text-secondary: #5b5d6e;
+    --color-text-tertiary: #716c82;
+    --color-text-muted: #78748a;
+    --color-text-green: #069669;
+    --color-text-green-40: #06966966;
+    --color-accent-purple: #7c41e4;
+    --color-accent-purple-soft: #8e51e6;
+    --color-accent-text: #6941c6;
+    --color-accent-tint: #7c41e414;
+    --color-accent-border: #7c41e433;
+    --color-bg-card: #ffffff;
+    --color-bg-panel: #f0f1f5;
+    --color-bg-lavender: #f8f5ff;
+    --color-bg-surface-2: #f5f6fa;
+    --color-bg-green-fill: #10b98114;
+    --color-border-card: #e4e5ec;
+    --color-border-default: #e4e5ec;
+    --color-border-divider: #e2e8f0;
+    --color-border-lavender: #e6dcfa;
+
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4mm 6mm 0;
+    background: #ffffff;
     color: var(--color-text-primary);
+    font-family: var(--font-sans), Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    orphans: 3;
+    widows: 3;
   }
 }
 
+/* Header */
+
 .header {
-  padding-bottom: 12px;
-  margin-bottom: 16px;
-  border-bottom: 2px solid var(--color-accent-purple);
+  padding: 30px 32px 26px;
+  margin-bottom: 32px;
+  background: var(--color-bg-lavender);
+  border: 1px solid var(--color-border-lavender);
+  border-top: 4px solid var(--color-accent-purple);
+  border-radius: 14px;
+  break-inside: avoid;
 }
 
 .kicker {
-  margin: 0 0 4px;
+  margin: 0 0 14px;
+  color: var(--color-accent-text);
   font-size: 9pt;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-accent-text);
+  letter-spacing: 0.02em;
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.identity {
+  min-width: 0;
 }
 
 .name {
   margin: 0 0 4px;
-  font-family: var(--font-sans);
-  font-size: 20pt;
-  font-weight: 800;
   color: var(--color-text-primary);
+  font-size: 28pt;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.email {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 10pt;
+}
+
+.dayBadge {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 12px 18px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-accent-border);
+  border-radius: 12px;
+}
+
+.dayBadgeValue {
+  color: var(--color-accent-text);
+  font-size: 17pt;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.dayBadgeTotal {
+  color: var(--color-text-tertiary);
+  font-size: 10pt;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.dayBadgeLabel {
+  color: var(--color-text-secondary);
+  font-size: 9pt;
+  font-weight: 600;
 }
 
 .meta {
-  margin: 0;
-  font-size: 10pt;
-  color: var(--color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 36px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-lavender);
 }
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metaLabel {
+  color: var(--color-text-muted);
+  font-size: 8pt;
+  font-weight: 600;
+}
+
+.metaValue {
+  color: var(--color-text-primary);
+  font-size: 9.5pt;
+  font-weight: 700;
+}
+
+/* Sections */
 
 .section {
-  margin-bottom: 18px;
+  margin-bottom: 36px;
 }
 
-.sectionTitle {
-  margin: 0 0 8px;
-  font-size: 13pt;
-  font-weight: 800;
-  color: var(--color-text-primary);
+.sectionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border-card);
   break-after: avoid;
 }
 
-.block {
-  margin-bottom: 10px;
+.sectionTitle {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 18pt;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.sectionHint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 9pt;
+}
+
+.count {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  color: var(--color-accent-text);
+  background: var(--color-accent-tint);
+  border: 1px solid var(--color-accent-border);
+  border-radius: 999px;
+  font-size: 8.5pt;
+  font-weight: 700;
+}
+
+/* Key number tiles */
+
+.tiles {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-card);
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 12px;
   break-inside: avoid;
+}
+
+.tileValue {
+  color: var(--color-accent-text);
+  font-size: 24pt;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.tileLabel {
+  color: var(--color-text-secondary);
+  font-size: 9pt;
+  font-weight: 600;
+}
+
+.bar {
+  display: block;
+  height: 6px;
+  margin-top: 6px;
+  overflow: hidden;
+  background: var(--color-accent-tint);
+  border-radius: 999px;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent-purple);
+  border-radius: 999px;
+}
+
+/* Chips (status / decision breakdowns) */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 6px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-lavender);
+  border: 1px solid var(--color-border-lavender);
+  border-radius: 999px;
+  font-size: 8.5pt;
+  font-weight: 600;
+}
+
+.chipCount {
+  min-width: 20px;
+  padding: 1px 6px;
+  color: #ffffff;
+  background: var(--color-accent-purple);
+  border-radius: 999px;
+  font-size: 8pt;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Panels and cards */
+
+.panel,
+.card,
+.tableCard {
+  border-radius: 12px;
+}
+
+.panel {
+  padding: 24px;
+  background: var(--color-bg-lavender);
+  border: 1px solid var(--color-border-lavender);
+  break-inside: avoid;
+}
+
+.card {
+  padding: 24px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-card);
+  break-inside: auto;
+}
+
+/* Tables */
+
+.tableCard {
+  padding: 6px 8px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-card);
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 9.5pt;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 9pt;
+}
+
+.table th:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.table th:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 
 .table th,
 .table td {
-  padding: 5px 6px;
+  padding: 12px 16px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--color-border-card);
 }
 
 .table th {
+  border-bottom: 0;
+  color: var(--color-accent-text);
+  background: var(--color-bg-lavender);
+  font-size: 8pt;
   font-weight: 700;
-  color: var(--color-text-secondary);
+}
+
+.table td {
+  color: var(--color-text-primary);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .table tr {
   break-inside: avoid;
 }
 
-/* Repeat the column names when a table runs over a page. */
 .table thead {
   display: table-header-group;
 }
 
-.tag {
-  margin-left: 6px;
-  padding: 0 6px;
-  font-size: 8pt;
-  font-weight: 700;
-  border: 1px solid var(--color-border-default);
-  border-radius: 999px;
+.taskTitle {
+  font-weight: 650;
 }
 
-.journal {
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 9px;
+  color: var(--color-accent-text);
+  background: var(--color-accent-tint);
+  border: 1px solid var(--color-accent-border);
+  border-radius: 999px;
+  font-size: 7.5pt;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status {
+  display: inline-block;
+  padding: 2px 9px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-surface-2);
+  border: 1px solid var(--color-border-card);
+  border-radius: 6px;
+  font-size: 8pt;
+  font-weight: 700;
+}
+
+.priority {
+  display: inline-block;
+  color: var(--color-accent-text);
+  font-size: 8.5pt;
+  font-weight: 700;
+}
+
+/* Feedback */
+
+.entryList {
+  display: grid;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.journalEntry {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--color-border-card);
+.feedbackCard {
+  padding: 18px 22px;
+  background: var(--color-bg-lavender);
+  border: 1px solid var(--color-border-lavender);
+  border-left: 4px solid var(--color-accent-purple);
+  border-radius: 12px;
   break-inside: avoid;
 }
 
-.journalTitle {
+.entryHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.entryTitle {
   margin: 0;
+  color: var(--color-text-primary);
   font-size: 10.5pt;
-  font-weight: 700;
+  font-weight: 750;
 }
 
-.journalDate {
-  margin: 0 0 4px;
-  font-size: 9pt;
+.entryMeta {
+  margin: 0 0 10px;
   color: var(--color-text-secondary);
+  font-size: 8pt;
 }
 
-.journalText {
+/* Long feedback is trimmed so the report stays a summary. */
+.entryText {
+  display: -webkit-box;
   margin: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 9.5pt;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
 }
+
+/* Focus Events */
+.flagsTable {
+  table-layout: fixed;
+}
+
+.flagsTable th,
+.flagsTable td {
+  padding: 12px 10px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.flagsTable th:nth-child(1),
+.flagsTable td:nth-child(1) {
+  width: 16%;
+}
+.flagsTable th:nth-child(2),
+.flagsTable td:nth-child(2) {
+  width: 24%;
+}
+.flagsTable th:nth-child(3),
+.flagsTable td:nth-child(3) {
+  width: 15%;
+}
+.flagsTable th:nth-child(4),
+.flagsTable td:nth-child(4) {
+  width: 9%;
+}
+.flagsTable th:nth-child(5),
+.flagsTable td:nth-child(5) {
+  width: 12%;
+}
+.flagsTable th:nth-child(6),
+.flagsTable td:nth-child(6) {
+  width: 24%;
+}
+
+/* Away and Priority never wrap */
+.flagsTable th:nth-child(4),
+.flagsTable td:nth-child(4),
+.flagsTable th:nth-child(5),
+.flagsTable td:nth-child(5) {
+  white-space: nowrap;
+}
+
+/* Supporting text */
 
 .note,
 .empty {
-  margin: 0 0 8px;
-  font-size: 10pt;
+  margin: 0 0 12px;
   color: var(--color-text-secondary);
+  font-size: 9pt;
 }
 
-/* Also at the end of the report, for browsers without @page margin boxes. */
+.empty {
+  padding: 20px 24px;
+  background: var(--color-bg-lavender);
+  border: 1px dashed var(--color-border-lavender);
+  border-radius: 12px;
+}
+
+/* Footer */
+
 .footer {
-  margin-top: 16px;
-  padding-top: 8px;
-  font-size: 8pt;
-  text-align: center;
-  color: var(--color-text-secondary);
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 36px;
+  padding-top: 12px;
+  color: var(--color-text-muted);
   border-top: 1px solid var(--color-border-card);
+  font-size: 8pt;
+}
+
+/* Print-specific layout adjustments */
+
+@media print {
+  .header,
+  .tile,
+  .panel,
+  .feedbackCard,
+  .footer {
+    break-inside: avoid;
+  }
+
+  .sectionHeading,
+  .sectionTitle {
+    break-after: avoid;
+  }
+
+  .card {
+    break-inside: auto;
+  }
+
+  .tableCard {
+    break-inside: auto;
+  }
+
+  .table tr {
+    break-inside: avoid;
+  }
 }

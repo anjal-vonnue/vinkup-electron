@@ -2,11 +2,18 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
-import type { AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
+import type { AdminFeedbackEntry, AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
 
 import AdminTraineePage from './AdminTraineePage';
-import { getAdminFlags, getAdminTaskCode, getAdminTrainee } from '../../api/admin';
+import {
+  getAdminFlags,
+  getAdminTaskCode,
+  getAdminTaskReviews,
+  getAdminTrainee,
+  getAdminTraineeFeedback,
+} from '../../api/admin';
 import { ApiError } from '../../api/errors';
+import { reportDocumentTitle } from '../../lib/printReport';
 import {
   buildAdminFlags,
   buildAdminTaskCode,
@@ -31,6 +38,10 @@ vi.mock('../../api/admin', () => ({
   getAdminTrainee: vi.fn(),
   getAdminFlags: vi.fn(),
   getAdminTaskCode: vi.fn(),
+  getAdminTaskReviews: vi.fn(),
+  getAdminTraineeFeedback: vi.fn(),
+  approveTask: vi.fn(),
+  requestRework: vi.fn(),
 }));
 
 const traineeId = mockAdminTraineeIds[0];
@@ -38,6 +49,20 @@ const detail = buildAdminTraineeDetail(traineeId) as AdminTraineeDetail;
 // Arjun's mock flags mix High, Normal and Low events.
 const flags = buildAdminFlags(mockAdminTraineeIds[2]) as AdminFlagEvent[];
 const importantFlags = flags.filter((flag) => flag.reviewPriority !== 'LOW');
+const feedbackEntries: AdminFeedbackEntry[] = [
+  {
+    id: 'fb-1',
+    taskId: 'task-1',
+    taskTitle: 'Semantic HTML',
+    dayId: 'html-1',
+    adminId: 'admin-1',
+    adminName: 'Mentor Alice',
+    submissionNo: 1,
+    decision: 'rework',
+    feedback: 'Add the meta viewport tag.',
+    reviewedAt: '2026-10-10T10:00:00.000Z',
+  },
+];
 
 function Jump({ to }: { to: string }) {
   const navigate = useNavigate();
@@ -68,8 +93,12 @@ function renderPage(path = `/admin/trainees/${traineeId}`) {
 }
 
 beforeEach(() => {
+  document.title = 'Vinkup';
+  delete document.documentElement.dataset.theme;
   vi.mocked(getAdminTrainee).mockResolvedValue(detail);
   vi.mocked(getAdminFlags).mockResolvedValue(flags);
+  vi.mocked(getAdminTraineeFeedback).mockResolvedValue([]);
+  vi.mocked(getAdminTaskReviews).mockResolvedValue([]);
   vi.mocked(getAdminTaskCode).mockImplementation((id, taskId) => {
     const result = buildAdminTaskCode(id, taskId);
     return result.kind === 'ok'
@@ -80,7 +109,11 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
+  delete window.desktop;
+  document.title = '';
+  delete document.documentElement.dataset.theme;
 });
 
 describe('AdminTraineePage', () => {
@@ -159,6 +192,30 @@ describe('AdminTraineePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows review feedback on the Feedbacks tab, newest feedback first', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getAdminTraineeFeedback).mockResolvedValue(feedbackEntries);
+    renderPage();
+
+    await user.click(await screen.findByRole('tab', { name: /^Feedbacks/ }));
+
+    const panel = screen.getByRole('tabpanel');
+    expect(await within(panel).findByText('Semantic HTML')).toBeInTheDocument();
+    expect(within(panel).getByText('Add the meta viewport tag.')).toBeInTheDocument();
+    expect(within(panel).getByText('Mentor Alice')).toBeInTheDocument();
+    expect(getAdminTraineeFeedback).toHaveBeenCalledWith(traineeId);
+  });
+
+  it('shows the empty state on the Feedbacks tab when nothing has been reviewed', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('tab', { name: /^Feedbacks/ }));
+
+    expect(await screen.findByText('No review feedback yet')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Feedbacks (0)' })).toBeInTheDocument();
+  });
+
   it('opens submitted code read-only, and offers no editing, running or saving', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -186,6 +243,8 @@ describe('AdminTraineePage', () => {
       taskId: task.taskId,
       title: task.title,
       status: 'in_progress',
+      reviewStatus: null,
+      submissionCount: 0,
       isStarterCode: true,
       files: [{ path: 'index.html', content: '<!-- starter -->' }],
       codeUpdatedAt: null,
@@ -295,9 +354,10 @@ describe('AdminTraineePage', () => {
     expect(getAdminTrainee).toHaveBeenLastCalledWith('other-trainee');
   });
 
-  it('prints a report of the trainee from the Print report button', async () => {
+  it('prints a report in the browser when the desktop app is unavailable', async () => {
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     const user = userEvent.setup();
+    document.documentElement.dataset.theme = 'dark';
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: 'Print report' }));
@@ -306,20 +366,147 @@ describe('AdminTraineePage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Print' }));
 
     expect(printSpy).toHaveBeenCalledTimes(1);
+    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+    expect(document.documentElement.dataset.theme).toBe('dark');
     const report = screen.getByRole('article', { name: 'Printable trainee report' });
     expect(
       within(report).getByRole('heading', { level: 1, name: detail.profile.trainee.name })
     ).toBeInTheDocument();
-    expect(report).toHaveTextContent('Prepared by Mock Mentor');
+    expect(report).toHaveTextContent(/Prepared by\s*Mock Mentor/);
     expect(within(report).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
 
     act(() => {
       window.dispatchEvent(new Event('afterprint'));
     });
 
+    // Kept mounted (hidden on screen) so a print snapshot taken after `afterprint` is not blank.
+    // The next print replaces it.
+    const retained = screen.getByRole('article', { name: 'Printable trainee report' });
+    expect(
+      within(retained).getByRole('heading', { level: 1, name: detail.profile.trainee.name })
+    ).toBeInTheDocument();
+    expect(within(retained).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
+    expect(document.title).toBe('Vinkup');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('renders the default report when printing starts from the browser menu', async () => {
+    renderPage();
+    await screen.findByRole('heading', { level: 1, name: detail.profile.trainee.name });
+    document.documentElement.dataset.theme = 'dark';
+
+    act(() => {
+      window.dispatchEvent(new Event('beforeprint'));
+    });
+
+    const report = screen.getByRole('article', {
+      name: 'Printable trainee report',
+    });
+
+    expect(within(report).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
+
+    expect(within(report).getByRole('heading', { name: 'Focus events' })).toBeInTheDocument();
+
+    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'));
+    });
+
+    expect(document.title).toBe('Vinkup');
+    expect(screen.getByRole('article', { name: 'Printable trainee report' })).toBeInTheDocument();
+  });
+
+  it('saves the selected trainee report as a PDF through the desktop app', async () => {
+    const user = userEvent.setup();
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    let resolveSave: (saved: boolean) => void = () => undefined;
+    const savePdf = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveSave = resolve;
+        })
+    );
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: { report: { savePdf } },
+    });
+    document.documentElement.dataset.theme = 'dark';
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Print report' }));
+    const dialog = screen.getByRole('dialog', { name: 'Print report' });
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Journal entries' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Print' }));
+
+    await waitFor(() => expect(savePdf).toHaveBeenCalledTimes(1));
+    expect(savePdf).toHaveBeenCalledWith(reportDocumentTitle(detail.profile.trainee.name));
+    expect(printSpy).not.toHaveBeenCalled();
+    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+
+    const report = screen.getByRole('article', { name: 'Printable trainee report' });
+    expect(
+      within(report).getByRole('heading', { level: 1, name: detail.profile.trainee.name })
+    ).toBeInTheDocument();
+    expect(within(report).queryByRole('heading', { name: /^Journal/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSave(true);
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('article', { name: 'Printable trainee report' })
+      ).not.toBeInTheDocument()
+    );
+    expect(document.title).toBe('Vinkup');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('restores the page quietly when the PDF save dialog is cancelled', async () => {
+    const user = userEvent.setup();
+    const savePdf = vi.fn().mockResolvedValue(false);
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: { report: { savePdf } },
+    });
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Print report' }));
+    await user.click(screen.getByRole('button', { name: 'Print' }));
+
+    await waitFor(() => expect(savePdf).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('article', { name: 'Printable trainee report' })
+      ).not.toBeInTheDocument()
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(document.title).toBe('Vinkup');
+  });
+
+  it('explains a failed PDF export and restores the page', async () => {
+    const user = userEvent.setup();
+    const savePdf = vi.fn().mockRejectedValue(new Error('Disk is full'));
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: { report: { savePdf } },
+    });
+    document.documentElement.dataset.theme = 'dark';
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Print report' }));
+    await user.click(screen.getByRole('button', { name: 'Print' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to save report PDF: Disk is full'
+    );
     expect(
       screen.queryByRole('article', { name: 'Printable trainee report' })
     ).not.toBeInTheDocument();
-    printSpy.mockRestore();
+    expect(document.title).toBe('Vinkup');
+    expect(document.documentElement.dataset.theme).toBe('dark');
   });
 });

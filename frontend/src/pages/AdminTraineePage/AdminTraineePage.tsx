@@ -1,10 +1,16 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, UserX } from 'lucide-react';
-import { getAdminFlags, getAdminTaskCode, getAdminTrainee } from '../../api/admin';
+import {
+  getAdminFlags,
+  getAdminTaskCode,
+  getAdminTrainee,
+  getAdminTraineeFeedback,
+} from '../../api/admin';
 import AdminHeader from '../../components/AdminHeader';
 import AdminCodePanel from '../../components/AdminCodePanel';
 import AdminDayGrid from '../../components/AdminDayGrid';
+import AdminFeedbackList from '../../components/AdminFeedbackList';
 import AdminFlagTable from '../../components/AdminFlagTable';
 import AdminJournalList from '../../components/AdminJournalList';
 import AdminTaskList from '../../components/AdminTaskList';
@@ -18,16 +24,19 @@ import PrintReport from '../../components/PrintReport';
 import PrintReportButton from '../../components/PrintReportButton';
 import { useAuth } from '../../context/Useauth';
 import { usePrintMode } from '../../hooks/usePrintMode';
-import { DEFAULT_PRINT_OPTIONS, reportDocumentTitle } from '../../lib/printReport';
+import {
+  DEFAULT_PRINT_OPTIONS,
+  reportDocumentTitle,
+  type PrintReportOptions,
+} from '../../lib/printReport';
 import { useAdminResource } from './hooks/useAdminResource';
 import styles from './AdminTraineePage.module.css';
 
-type TabId = 'tasks' | 'journal' | 'flags';
+type TabId = 'tasks' | 'journal' | 'flags' | 'feedbacks';
 
 export default function AdminTraineePage() {
   const { traineeId = '' } = useParams();
 
-  // Keyed by trainee, so opening another trainee starts with a clean page.
   return <TraineeDetail key={traineeId} traineeId={traineeId} />;
 }
 
@@ -43,37 +52,55 @@ function BackLink() {
 function TraineeDetail({ traineeId }: { traineeId: string }) {
   const [activeTab, setActiveTab] = useState<TabId>('tasks');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
 
   const loadDetail = useMemo(
     () => (traineeId ? () => getAdminTrainee(traineeId) : null),
     [traineeId]
   );
+
   const loadFlags = useMemo(() => (traineeId ? () => getAdminFlags(traineeId) : null), [traineeId]);
+
   const loadCode = useMemo(
     () => (traineeId && selectedTaskId ? () => getAdminTaskCode(traineeId, selectedTaskId) : null),
     [traineeId, selectedTaskId]
   );
+  const loadFeedback = useMemo(
+    () => (traineeId ? () => getAdminTraineeFeedback(traineeId) : null),
+    [traineeId]
+  );
 
-  // The flags load beside the detail, so a failure there doesn't hide the rest of the page.
+  // The flags and feedback load beside the detail, so a failure there doesn't hide the rest of the page.
   const detail = useAdminResource(loadDetail);
   const flags = useAdminResource(loadFlags);
   const code = useAdminResource(loadCode);
+  const feedback = useAdminResource(loadFeedback);
 
   const handleCloseCode = useCallback(() => setSelectedTaskId(null), []);
 
+  const handleReviewSuccess = useCallback(() => {
+    detail.retry();
+    code.retry();
+    feedback.retry();
+  }, [detail, code, feedback]);
+
   const { user } = useAuth();
-  const { printJob, print } = usePrintMode({
+  const traineeName = detail.data?.profile.trainee.name ?? 'Trainee';
+  const { printJob, print, prepare, restore } = usePrintMode({
     defaults: DEFAULT_PRINT_OPTIONS,
-    documentTitle: reportDocumentTitle(detail.data?.profile.trainee.name ?? 'Trainee'),
+    documentTitle: reportDocumentTitle(traineeName),
   });
 
   const dayLabels = useMemo(() => {
     const labels = new Map<string, string>();
+
     for (const course of detail.data?.courses ?? []) {
       for (const day of course.days) {
         labels.set(day.id, `${course.title} · Day ${day.dayNumber}`);
       }
     }
+
     return labels;
   }, [detail.data]);
 
@@ -90,7 +117,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
 
   if (!detail.data) {
     const error = detail.error;
-    // The id is wrong (400) or nobody has it (404): the same message to the admin.
+
     const isNotFound =
       !traineeId || error?.code === 'NOT_FOUND' || error?.code === 'VALIDATION_FAILED';
 
@@ -123,10 +150,39 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
     );
   }
 
-  const { profile, courses, totalTasks, journal } = detail.data;
-  // Only work the trainee has started matters for review; the day grid already shows the rest.
-  const tasks = detail.data.tasks;
+  /**
+   * In the desktop shell the main process writes the PDF through a native save
+   * dialog; in a browser we fall back to the print dialog's "Save as PDF".
+   */
+  const handlePrint = async (options: PrintReportOptions) => {
+    const desktopReport = window.desktop?.report;
+    if (!desktopReport) {
+      print(options);
+      return;
+    }
+
+    setPdfError(null);
+    setIsSavingPdf(true);
+    // Render the print-only report before the main process captures the page.
+    prepare(options);
+    try {
+      await desktopReport.savePdf(reportDocumentTitle(traineeName));
+    } catch (saveError: unknown) {
+      setPdfError(
+        saveError instanceof Error
+          ? `Unable to save report PDF: ${saveError.message}`
+          : 'Unable to save report PDF. Please try again.'
+      );
+    } finally {
+      setIsSavingPdf(false);
+      restore();
+    }
+  };
+
+  const { profile, typingStats, courses, totalTasks, journal, tasks } = detail.data;
+
   const selectedTask = tasks.find((task) => task.taskId === selectedTaskId);
+
   const tabs: { id: TabId; label: string }[] = [
     { id: 'tasks', label: `Tasks (${tasks.length}/${totalTasks})` },
     { id: 'journal', label: `Journal (${journal.length})` },
@@ -134,23 +190,35 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
       id: 'flags',
       label: `Flags (${flags.data ? flags.data.filter((flag) => flag.reviewPriority !== 'LOW').length : '…'})`,
     },
+    {
+      id: 'feedbacks',
+      label: `Feedbacks (${feedback.data ? feedback.data.length : '…'})`,
+    },
   ];
 
   return (
     <>
-      {/* Everything on screen; hidden when printing, where only the report below is shown. */}
       <div className={styles.screenOnly}>
         <AdminHeader />
+
         <main className={styles.page}>
           <div className={styles.topBar}>
             <BackLink />
-            <PrintReportButton onPrint={print} />
+            <div className={styles.printControls}>
+              <PrintReportButton onPrint={handlePrint} disabled={isSavingPdf} />
+              {pdfError && (
+                <p className={styles.pdfError} role="alert">
+                  {pdfError}
+                </p>
+              )}
+            </div>
           </div>
 
           <ProfileHeader trainee={profile.trainee} />
 
           <section className={styles.card} aria-label="Progress and activity">
-            <StatsSummary total={profile.total} typing={profile.typing} />
+            <StatsSummary total={profile.total} typingStats={typingStats} />
+
             <DailyActivityTable days={profile.dailyActivity} />
           </section>
 
@@ -183,6 +251,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
               <>
                 {selectedTaskId && (
                   <AdminCodePanel
+                    key={selectedTaskId}
                     traineeId={traineeId}
                     taskTitle={selectedTask?.title ?? 'Task code'}
                     code={code.data}
@@ -190,8 +259,10 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                     error={code.error}
                     onRetry={code.retry}
                     onClose={handleCloseCode}
+                    onReviewSuccess={handleReviewSuccess}
                   />
                 )}
+
                 <AdminTaskList
                   tasks={tasks}
                   courses={courses}
@@ -210,6 +281,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                     <LoaderOverlay label="Loading flags…" />
                   </div>
                 )}
+
                 {flags.error && (
                   <ErrorState
                     title="Unable to load flags"
@@ -217,7 +289,26 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                     onRetry={flags.retry}
                   />
                 )}
+
                 {flags.data && <AdminFlagTable flags={flags.data} dayLabels={dayLabels} />}
+              </>
+            )}
+
+            {activeTab === 'feedbacks' && (
+              <>
+                {feedback.isLoading && (
+                  <div className={styles.state}>
+                    <LoaderOverlay label="Loading feedback…" />
+                  </div>
+                )}
+                {feedback.error && (
+                  <ErrorState
+                    title="Unable to load feedback"
+                    message={feedback.error.message}
+                    onRetry={feedback.retry}
+                  />
+                )}
+                {feedback.data && <AdminFeedbackList feedback={feedback.data} />}
               </>
             )}
           </div>
@@ -228,6 +319,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
         <PrintReport
           detail={detail.data}
           flags={flags.data}
+          feedback={feedback.data ?? null}
           dayLabels={dayLabels}
           options={printJob.options}
           mentorName={user?.name ?? null}

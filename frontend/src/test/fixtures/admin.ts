@@ -1,4 +1,6 @@
 import type {
+  AdminAnalytics,
+  AdminAnalyticsQuery,
   AdminDay,
   AdminFlagEvent,
   AdminJournalEntry,
@@ -13,6 +15,7 @@ import type {
 } from '@itp/types';
 import { mockDayContents } from '../../api/dayOverview';
 import { catalogDays, catalogTaskCode, findCatalogTask } from '../../api/mockTasks';
+import { todayKey } from '../../lib/platformDate';
 import type { CreateTraineeRequest } from '@itp/types';
 
 // Mock data for the mentor pages (GET /admin/...). Built from the same catalog as the trainee
@@ -241,6 +244,8 @@ function buildTaskRows(t: MockTrainee): AdminTaskRow[] {
           dayId: day.dayId,
           isStretchGoal: task.isStretchGoal,
           status: 'in_progress',
+          reviewStatus: null,
+          submissionCount: 0,
           codeUpdatedAt: isoDaysAgo(0, 11),
           lastSubmittedAt: null,
         });
@@ -254,6 +259,8 @@ function buildTaskRows(t: MockTrainee): AdminTaskRow[] {
         dayId: day.dayId,
         isStretchGoal: false,
         status: 'completed',
+        reviewStatus: null,
+        submissionCount: 1,
         codeUpdatedAt: isoDaysAgo(daysBack, 14),
         lastSubmittedAt: isoDaysAgo(daysBack, 15),
       });
@@ -325,6 +332,12 @@ export function buildAdminTraineeDetail(traineeId: string): AdminTraineeDetail |
       typing: { latestWpm: t.latestWpm, latestAccuracy: t.latestAccuracy },
       dailyActivity: buildProfileDays(t),
     },
+    typingStats: {
+      averageWpm: t.latestWpm ?? 0,
+      averageAccuracy: t.latestAccuracy ?? 0,
+      highestWpm: t.latestWpm,
+      highestWpmAccuracy: t.latestAccuracy,
+    },
     courses: buildCourses(t),
     tasks: buildTaskRows(t),
     totalTasks: 7,
@@ -389,6 +402,8 @@ export function buildAdminTaskCode(traineeId: string, taskId: string): AdminTask
         taskId,
         title: found.task.title,
         status: 'not_started',
+        reviewStatus: null,
+        submissionCount: 0,
         isStarterCode: true,
         files: starter.files,
         codeUpdatedAt: null,
@@ -407,6 +422,8 @@ export function buildAdminTaskCode(traineeId: string, taskId: string): AdminTask
       taskId,
       title: found.task.title,
       status: row.status,
+      reviewStatus: row.reviewStatus,
+      submissionCount: row.submissionCount,
       isStarterCode: false,
       files,
       codeUpdatedAt: row.codeUpdatedAt,
@@ -447,4 +464,166 @@ export function addMockTrainee(body: CreateTraineeRequest): AddMockTraineeResult
   });
   const trainee = buildAdminTrainees().find((t) => t.id === id) as AdminTraineeSummary;
   return { kind: 'created', trainee };
+}
+
+/* ---------- GET /admin/analytics ---------- */
+// Mock mode and tests only. The real numbers always come from the backend.
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 'YYYY-MM-DD' (India time) `n` days before today. */
+function dateDaysAgo(n: number): string {
+  return todayKey(new Date(Date.now() - n * DAY_MS));
+}
+
+/** How many days before today a 'YYYY-MM-DD' date is. */
+function daysAgoOf(date: string): number {
+  return Math.round((Date.parse(todayKey()) - Date.parse(date)) / DAY_MS);
+}
+
+/** When each finished day was completed (days ago): one every 2 days, newest first. */
+function completionDaysAgo(t: MockTrainee): number[] {
+  const last = t.lastActiveDaysAgo ?? 0;
+  return Array.from({ length: t.completed }, (_, i) => last + i * 2);
+}
+
+/** A typing test every 3 days, 1 WPM slower for each older test. */
+function typingTests(t: MockTrainee): { daysAgo: number; wpm: number }[] {
+  const latest = t.latestWpm;
+  if (latest === null) return [];
+  const last = t.lastActiveDaysAgo ?? 0;
+  return Array.from({ length: 10 }, (_, i) => ({ daysAgo: last + i * 3, wpm: latest - i }));
+}
+
+/** Number of tasks in the first `days` curriculum days. */
+function tasksInFirstDays(days: number): number {
+  return catalogDays.slice(0, days).reduce((sum, day) => sum + day.tasks.length, 0);
+}
+
+/** Returns null for an unknown trainee (the adapter answers 404). */
+export function buildAdminAnalytics(query: AdminAnalyticsQuery): AdminAnalytics | null {
+  if (query.traineeId && !requireTrainee(query.traineeId)) return null;
+
+  const scope = query.traineeId ? trainees.filter((t) => t.id === query.traineeId) : trainees;
+  const fromAgo = daysAgoOf(query.from);
+  const toAgo = daysAgoOf(query.to);
+  const inPeriod = (daysAgo: number) => daysAgo <= fromAgo && daysAgo >= toAgo;
+
+  const activeDaysInPeriod = (t: MockTrainee) => completionDaysAgo(t).filter(inPeriod).length;
+  const comparison = trainees.map((t) => {
+    const active = Math.round(activeDaysInPeriod(t) * 2.2 * HOUR);
+    return {
+      traineeId: t.id,
+      name: t.name,
+      daysCompleted: t.completed,
+      totalDays: catalogDays.length,
+      activeSeconds: active,
+      codingSeconds: Math.round(active * 0.55),
+    };
+  });
+  const scopeRows = comparison.filter((row) => scope.some((t) => t.id === row.traineeId));
+
+  const progressTrend: AdminAnalytics['progressTrend'] = [];
+  for (let n = fromAgo; n >= toAgo; n--) {
+    const done = scope.reduce(
+      (sum, t) => sum + completionDaysAgo(t).filter((ago) => ago >= n).length,
+      0
+    );
+    const average = scope.length === 0 ? 0 : Math.round((done / scope.length) * 10) / 10;
+    progressTrend.push({ date: dateDaysAgo(n), averageDaysCompleted: average });
+  }
+
+  // Typing: on each day someone tested, the average of every trainee's latest WPM by then.
+  const typingTrend: AdminAnalytics['typingTrend'] = [];
+  const integrityTrend: AdminAnalytics['integrityTrend'] = [];
+  for (let n = fromAgo; n >= toAgo; n--) {
+    if (scope.some((t) => typingTests(t).some((test) => test.daysAgo === n))) {
+      const latest = scope.flatMap((t) => {
+        const test = typingTests(t).find((item) => item.daysAgo >= n); // newest first
+        return test ? [test.wpm] : [];
+      });
+      typingTrend.push({
+        date: dateDaysAgo(n),
+        averageWpm: Math.round(latest.reduce((sum, wpm) => sum + wpm, 0) / latest.length),
+        traineesIncluded: latest.length,
+      });
+    }
+
+    // Integrity: on each day a curriculum day was completed, the average of all days so far.
+    if (scope.some((t) => completionDaysAgo(t).includes(n))) {
+      const scores = scope.flatMap((t) =>
+        t.averageScore === null
+          ? []
+          : completionDaysAgo(t)
+              .filter((ago) => ago >= n)
+              .map(() => t.averageScore as number)
+      );
+      if (scores.length > 0) {
+        integrityTrend.push({
+          date: dateDaysAgo(n),
+          averageScore: Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
+          daysScored: scores.length,
+        });
+      }
+    }
+  }
+
+  // The newest completion (i = 0) is the trainee's last finished curriculum day, and so on.
+  const tasksSubmitted = scope.reduce(
+    (sum, t) =>
+      sum +
+      completionDaysAgo(t).reduce(
+        (daySum, ago, i) =>
+          inPeriod(ago) ? daySum + catalogDays[t.completed - 1 - i].tasks.length : daySum,
+        0
+      ),
+    0
+  );
+  const completedTasks = scope.reduce((sum, t) => sum + tasksInFirstDays(t.completed), 0);
+  // Review split of the completed tasks: the mentor has reviewed everything before each
+  // trainee's latest finished day. On that latest day, the first task was sent back to fix
+  // (when the day has 2+ tasks) and the rest are waiting for review.
+  let waitingForReview = 0;
+  let sentBack = 0;
+  for (const t of scope) {
+    if (t.completed === 0) continue;
+    const latestDayTasks = catalogDays[t.completed - 1].tasks.length;
+    const sentBackHere = latestDayTasks >= 2 ? 1 : 0;
+    sentBack += sentBackHere;
+    waitingForReview += latestDayTasks - sentBackHere;
+  }
+  const approved = completedTasks - waitingForReview - sentBack;
+  const inProgress = scope.filter(
+    (t) => t.lastActiveDaysAgo !== null && t.completed < catalogDays.length
+  ).length;
+  const allTasks = tasksInFirstDays(catalogDays.length) * scope.length;
+  const daysCompleted = scope.reduce((sum, t) => sum + activeDaysInPeriod(t), 0);
+
+  return {
+    from: query.from,
+    to: query.to,
+    traineeId: query.traineeId ?? null,
+    traineeCount: scope.length,
+    totals: {
+      daysCompleted,
+      tasksSubmitted,
+      activeSeconds: scopeRows.reduce((sum, row) => sum + row.activeSeconds, 0),
+      codingSeconds: scopeRows.reduce((sum, row) => sum + row.codingSeconds, 0),
+      typingTests: scope.reduce(
+        (sum, t) => sum + typingTests(t).filter((test) => inPeriod(test.daysAgo)).length,
+        0
+      ),
+    },
+    progressTrend,
+    traineeComparison: comparison,
+    taskStatus: {
+      approved,
+      waitingForReview,
+      sentBack,
+      inProgress,
+      notStarted: Math.max(allTasks - completedTasks - inProgress, 0),
+    },
+    typingTrend,
+    integrityTrend,
+  };
 }

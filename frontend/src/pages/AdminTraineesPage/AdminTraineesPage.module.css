@@ -115,6 +115,95 @@
   filter: brightness(1.05);
 }
 
+/* "Dashboard view | Team performance": two equal halves, a purple pill slides to the chosen one. */
+.viewTabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 20px;
+  padding: 4px;
+
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+}
+
+/* Half the bar wide: (100% - 8px padding - 4px gap) / 2. */
+.viewIndicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 12px) / 2);
+
+  background: var(--color-accent-purple);
+  border-radius: 8px;
+  transition: transform 250ms ease;
+}
+
+/* Move one pill-width plus the gap to the right. */
+.viewTabs[data-active='performance'] .viewIndicator {
+  transform: translateX(calc(100% + 4px));
+}
+
+.viewTab {
+  position: relative; /* above the pill */
+  height: 40px;
+  padding: 0 12px;
+
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 250ms ease;
+}
+
+.viewTab:hover {
+  color: var(--color-text-primary);
+}
+
+.viewTab[aria-selected='true'] {
+  color: var(--color-text-on-accent);
+}
+
+.viewTab:focus-visible {
+  outline: 2px solid var(--color-accent-purple);
+  outline-offset: 2px;
+}
+
+/* The chosen view fades in instead of appearing at once. */
+.viewPanel {
+  animation: view-fade-in 200ms ease;
+}
+
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* People who turned off animations in their system settings get an instant switch. */
+@media (prefers-reduced-motion: reduce) {
+  .viewIndicator,
+  .viewTab {
+    transition: none;
+  }
+
+  .viewPanel {
+    animation: none;
+  }
+}
 @media (max-width: 640px) {
   .page {
     padding: 0 12px 3rem;

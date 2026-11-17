@@ -16,11 +16,12 @@ import styles from './CertificatePage.module.css';
 export default function CertificatePage() {
   const { courseId = '' } = useParams();
   const { isLoading, certificate, error, retry } = useCertificate(courseId);
+  // One message for both paths: the browser print dialog and the desktop "save as PDF".
   const [printError, setPrintError] = useState<string | null>(null);
 
   useLandscapePageStyle();
   // Light theme + "Vinkup certificate – CSS – Asha Rao" as the PDF file name while printing.
-  const { print } = usePrintMode<null>({
+  const { print, prepare, restore } = usePrintMode<null>({
     defaults: null,
     documentTitle: certificate
       ? certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
@@ -28,12 +29,36 @@ export default function CertificatePage() {
     desktopPrintException: true,
   });
 
-  const handlePrint = (): void => {
+  const handlePrint = async (): Promise<void> => {
     setPrintError(null);
-    void print(null).catch((printFailure: unknown) => {
-      console.error('[certificate] Failed to open the print dialog', printFailure);
-      setPrintError('Unable to open certificate printing. Please try again.');
-    });
+
+    // Browser (or no certificate yet): open the normal print dialog.
+    const desktopCertificate = window.desktop?.certificate;
+    if (!desktopCertificate || !certificate) {
+      try {
+        await print(null);
+      } catch (printFailure: unknown) {
+        console.error('[certificate] Failed to open the print dialog', printFailure);
+        setPrintError('Unable to open certificate printing. Please try again.');
+      }
+      return;
+    }
+
+    // Desktop shell: render the print view, then save it as a PDF through the main process.
+    prepare(null);
+    try {
+      await desktopCertificate.savePdf(
+        certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
+      );
+    } catch (saveError: unknown) {
+      setPrintError(
+        saveError instanceof Error
+          ? `Unable to save certificate PDF: ${saveError.message}`
+          : 'Unable to save certificate PDF. Please try again.'
+      );
+    } finally {
+      restore();
+    }
   };
 
   if (isLoading) return <LoaderOverlay fullPage label="Loading certificate…" />;
@@ -86,7 +111,7 @@ export default function CertificatePage() {
             <ArrowLeft size={16} aria-hidden="true" />
             Back to Dashboard
           </Link>
-          <button type="button" className={styles.printButton} onClick={handlePrint}>
+          <button type="button" className={styles.printButton} onClick={() => void handlePrint()}>
             <Printer size={16} aria-hidden="true" />
             Print / Save as PDF
           </button>

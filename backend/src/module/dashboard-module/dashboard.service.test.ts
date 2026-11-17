@@ -8,6 +8,8 @@ const repo = vi.hoisted(() => ({
   findActivityOn: vi.fn(),
   findLatestTyping: vi.fn(),
   findTypingSince: vi.fn(),
+  findReworkTasks: vi.fn(),
+  findLatestTaskReview: vi.fn(),
 }));
 const { mockGetDayStatuses } = vi.hoisted(() => ({ mockGetDayStatuses: vi.fn() }));
 const { mockCompletedCourseIds } = vi.hoisted(() => ({ mockCompletedCourseIds: vi.fn() }));
@@ -20,6 +22,8 @@ vi.mock('./dashboard.repository', () => ({
     findActivityOn = repo.findActivityOn;
     findLatestTyping = repo.findLatestTyping;
     findTypingSince = repo.findTypingSince;
+    findReworkTasks = repo.findReworkTasks;
+    findLatestTaskReview = repo.findLatestTaskReview;
   },
 }));
 
@@ -209,6 +213,72 @@ describe('DashboardService', () => {
       repo.findCourseWithDays.mockResolvedValue(null);
 
       await expect(service.getCourseDays(traineeId, 'cobol')).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe('getReworkTasks', () => {
+    it('returns an empty array when no rework tasks exist', async () => {
+      repo.findReworkTasks.mockResolvedValue([]);
+
+      const result = await service.getReworkTasks(traineeId);
+
+      expect(result).toEqual([]);
+      expect(repo.findReworkTasks).toHaveBeenCalledWith(traineeId);
+    });
+
+    it('returns formatted rework tasks with latest review details', async () => {
+      const reworkRow = {
+        task_id: 'html-day-01-t-1',
+        submission_count: 2,
+        task: {
+          id: 'html-day-01-t-1',
+          title: 'Semantic HTML Practice',
+          sequence_order: 1,
+          curriculum_day_id: 'html-day-01',
+          curriculum_day: {
+            id: 'html-day-01',
+            day_number: 1,
+            course_id: 'html',
+            course: { title: 'HTML & Semantic Web' },
+          },
+        },
+      };
+
+      const reviewRow = {
+        id: 'rev-1',
+        admin_id: 'admin-1',
+        submission_no: 2,
+        decision: 'rework',
+        feedback: 'Please fix the header hierarchy.',
+        reviewed_at: new Date('2026-10-01T08:00:00.000Z'),
+        admin: { name: 'Mentor Jane' },
+      };
+
+      repo.findReworkTasks.mockResolvedValue([reworkRow]);
+      repo.findLatestTaskReview.mockResolvedValue(reviewRow);
+
+      const result = await service.getReworkTasks(traineeId);
+
+      expect(result).toEqual([
+        {
+          taskId: 'html-day-01-t-1',
+          taskTitle: 'Semantic HTML Practice',
+          sequenceOrder: 1,
+          dayId: 'html-day-01',
+          dayNumber: 1,
+          courseId: 'html',
+          courseTitle: 'HTML & Semantic Web',
+          submissionCount: 2,
+          latestReview: {
+            id: 'rev-1',
+            adminId: 'admin-1',
+            adminName: 'Mentor Jane',
+            decision: 'rework',
+            feedback: 'Please fix the header hierarchy.',
+            reviewedAt: '2026-10-01T08:00:00.000Z',
+          },
+        },
+      ]);
     });
   });
 });
