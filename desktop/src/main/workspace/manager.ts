@@ -143,10 +143,10 @@ export class WorkspaceManager {
         const written = await materializeWorkspace(root, input.files);
         if (input.supportFiles) await writeSupportFiles(root, input.supportFiles);
 
-        // Prisma tasks need a real PostgreSQL database; fail with a clear message
-        // before anything is started when the machine is not ready.
+        // PostgreSQL and Prisma tasks need the machine's server; fail with a clear
+        // message before anything is started when it is not ready.
         const host = await resolveHostEnvironment();
-        const database = requiresPostgres(input.files)
+        const database = requiresPostgres(taskId, input.files)
           ? await resolvePostgresEnvironment(taskId, host.path)
           : null;
 

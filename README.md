@@ -17,8 +17,8 @@ their code and journal, and add new trainees.
   trainee's machine, never on the platform's servers:
   - web pages are served from a loopback preview server with native esbuild;
   - Node.js projects run in a real PTY with a terminal;
-  - Prisma tasks use PostgreSQL installed on the machine;
-  - SQL runs in PGlite (PostgreSQL in WebAssembly).
+  - the PostgreSQL course uses `psql` in that terminal against the server on the machine;
+  - Prisma tasks use the same local PostgreSQL server.
 - **Autosave:** code saves a few seconds after typing stops and survives a dropped connection.
 - **Day page:** lesson summary, learning objectives, task list, end-of-day checklist, optional
   journal, the day's integrity score, Submit Day and a button to the next day.
@@ -39,15 +39,15 @@ their code and journal, and add new trainees.
 
 ## Tech stack
 
-| Part          | Technology                                                                              |
-| ------------- | --------------------------------------------------------------------------------------- |
-| Frontend      | React 19, TypeScript, Vite, React Router, Monaco, Axios                                 |
-| Code runtimes | Loopback preview server + esbuild, PTY + xterm, local PostgreSQL (Prisma), PGlite (SQL) |
-| Backend       | Node.js 22, Express 5, TypeScript, Zod 4, Passport (Google OAuth), JWT in a cookie      |
-| Database      | PostgreSQL (Neon), Prisma 7 with `@prisma/adapter-pg`                                   |
-| Shared types  | `@itp/types` in `packages/types`, used by both frontend and backend                     |
-| Quality       | Vitest, Testing Library, Supertest, ESLint, Prettier, Husky, lint-staged, commitlint    |
-| Hosting       | Netlify (frontend, proxies `/api`), Render (API), Neon (database)                       |
+| Part          | Technology                                                                            |
+| ------------- | ------------------------------------------------------------------------------------- |
+| Frontend      | React 19, TypeScript, Vite, React Router, Monaco, Axios                               |
+| Code runtimes | Loopback preview server + esbuild, PTY + xterm, local PostgreSQL (PostgreSQL, Prisma) |
+| Backend       | Node.js 22, Express 5, TypeScript, Zod 4, Passport (Google OAuth), JWT in a cookie    |
+| Database      | PostgreSQL (Neon), Prisma 7 with `@prisma/adapter-pg`                                 |
+| Shared types  | `@itp/types` in `packages/types`, used by both frontend and backend                   |
+| Quality       | Vitest, Testing Library, Supertest, ESLint, Prettier, Husky, lint-staged, commitlint  |
+| Hosting       | Netlify (frontend, proxies `/api`), Render (API), Neon (database)                     |
 
 ## Quick start
 

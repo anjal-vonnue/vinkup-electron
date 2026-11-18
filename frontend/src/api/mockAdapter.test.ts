@@ -126,11 +126,15 @@ describe('mockAdapter', () => {
       expect(res.data.files.map((f) => f.path)).toContain('src/App.tsx');
     });
 
-    it('gives SQL report days the Support Ticket schema as setupSql', async () => {
+    it('runs PostgreSQL days in the terminal and ships the sample data as a file', async () => {
       const res = await client.get<TaskResponse>('/tasks/postgresql-day-03-t-1');
+      const code = await client.get<TaskCodeResponse>('/tasks/postgresql-day-03-t-1/code');
 
-      expect(res.data.runtime).toBe('sql');
-      expect(res.data.setupSql).toContain('create table tickets');
+      expect(res.data).toMatchObject({ runtime: 'node', runCommand: null, setupSql: null });
+      expect(code.data.files.map((f) => f.path)).toContain('sample-data.sql');
+      expect(code.data.files.find((f) => f.path === 'sample-data.sql')?.content).toContain(
+        'create table tickets'
+      );
     });
 
     it('rejects a task on a locked day with 403 DAY_LOCKED', async () => {

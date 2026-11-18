@@ -379,6 +379,31 @@ describe('WorkspaceManager', () => {
     }
   });
 
+  it('passes DATABASE_URL to a PostgreSQL course task without creating its database', async () => {
+    if (!postgresReachable()) return;
+    const baseDir = await temporaryRoot();
+    const output: string[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: (event) => {
+        if (event.type === 'run-output') output.push(event.data);
+      },
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    const taskId = 'postgresql-day-01-t-1';
+
+    // Day 1's database is created by the trainee with createdb, so opening must not make it.
+    await manager.open({ taskId, files: { 'schema.sql': '-- design the schema' } });
+    await manager.dev(taskId, `node -e "console.log(process.env.DATABASE_URL)"`);
+
+    await vi.waitFor(() => expect(output.join('')).toContain('/support_tickets?'), {
+      timeout: 20_000,
+    });
+
+    await manager.close(taskId);
+  });
+
   it('writes terminal input to a real shell and streams its output back', async () => {
     const baseDir = await temporaryRoot();
     const output: string[] = [];

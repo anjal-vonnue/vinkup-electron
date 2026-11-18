@@ -1,5 +1,7 @@
-// Database state for the PostgreSQL days that start from the Support Ticket schema
-// (reports, transactions and indexes). The design/implement days start empty.
+// Sample data for the PostgreSQL days that start from the Support Ticket schema
+// (reports, transactions and indexes). The design/implement/assessment days start empty.
+// It ships in the task as sample-data.sql instead of being loaded by the app: the trainee
+// creates the database and runs the file with psql.
 
 const TICKET_SCHEMA = `create table users (
   id serial primary key,
@@ -117,7 +119,10 @@ from generate_series(1, 5000) as n;
 analyze;
 `;
 
-export const SQL_SETUP_BY_DAY: Record<string, string | null> = {
+/** The Support Ticket tables, without rows. Day 6's project creates a test database from this. */
+export const POSTGRES_TICKET_SCHEMA = TICKET_SCHEMA;
+
+export const POSTGRES_SAMPLE_DATA_BY_DAY: Record<string, string | null> = {
   'postgresql-day-01': null, // design the schema yourself
   'postgresql-day-02': null, // implement and seed it yourself
   'postgresql-day-03': TICKET_SCHEMA + '\n' + TICKET_SEED, // reports

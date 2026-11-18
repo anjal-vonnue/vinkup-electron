@@ -4,6 +4,7 @@ import {
   PostgresUnavailableError,
   baseUrlFor,
   databaseNameFor,
+  databasePlanFor,
   requiresPostgres,
   resolvePostgresEnvironment,
   urlFor,
@@ -59,10 +60,43 @@ describe('databaseNameFor', () => {
   });
 });
 
+describe('databasePlanFor', () => {
+  it('gives the whole PostgreSQL course one database', () => {
+    expect(databasePlanFor('postgresql-day-01-t-1')).toEqual({
+      database: 'support_tickets',
+      testDatabase: 'support_tickets_test',
+      create: false,
+    });
+    expect(databasePlanFor('postgresql-day-04-t-2').create).toBe(false);
+  });
+
+  it('creates the PostgreSQL databases for day 6, which runs npm test', () => {
+    expect(databasePlanFor('postgresql-day-06-t-1')).toEqual({
+      database: 'support_tickets',
+      testDatabase: 'support_tickets_test',
+      create: true,
+    });
+  });
+
+  it('creates one database per course for Prisma', () => {
+    expect(databasePlanFor('prisma-day-01-t-1')).toEqual({
+      database: 'vinkup_prisma',
+      testDatabase: 'vinkup_prisma_test',
+      create: true,
+    });
+  });
+});
+
 describe('requiresPostgres', () => {
+  it('is true for every PostgreSQL course task', () => {
+    expect(requiresPostgres('postgresql-day-01-t-1', { 'schema.sql': 'create table t ();' })).toBe(
+      true
+    );
+  });
+
   it('is true for the current Prisma starter', () => {
     expect(
-      requiresPostgres({
+      requiresPostgres('prisma-day-01-t-1', {
         'prisma/schema.prisma': 'model Ticket {}',
         'package.json': packageJson({ '@prisma/adapter-pg': '7.10.0' }),
       })
@@ -71,15 +105,15 @@ describe('requiresPostgres', () => {
 
   it('does not steal tasks saved with the old PGlite helpers', () => {
     expect(
-      requiresPostgres({
+      requiresPostgres('prisma-day-01-t-1', {
         'prisma/schema.prisma': 'model Ticket {}',
         'package.json': packageJson({ 'prisma-pglite': '^3.0.2' }),
       })
     ).toBe(false);
   });
 
-  it('is false for tasks without a Prisma schema', () => {
-    expect(requiresPostgres({ 'index.js': 'console.log(1)' })).toBe(false);
+  it('is false for other courses without a Prisma schema', () => {
+    expect(requiresPostgres('node-day-01-t-1', { 'index.js': 'console.log(1)' })).toBe(false);
   });
 });
 

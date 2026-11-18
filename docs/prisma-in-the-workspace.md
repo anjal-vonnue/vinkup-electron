@@ -3,7 +3,8 @@
 The Prisma course (8 days, 16 tasks) runs in the desktop app's Node workspace like every other
 Node.js task, and Prisma Client talks to **PostgreSQL installed on the trainee's machine**. There is
 no WebAssembly database: the normal Prisma workflow (`prisma migrate dev`, `prisma migrate deploy`,
-`prisma migrate reset`) works here.
+`prisma migrate reset`) works here. The PostgreSQL course uses the same server, with its own
+`support_tickets` database ([PostgreSQL in the workspace](postgresql-in-the-workspace.md)).
 
 ## What the trainee gets
 

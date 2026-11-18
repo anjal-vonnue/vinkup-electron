@@ -24,26 +24,66 @@ export type PostgresEnvironment = {
 /** A setup problem the trainee has to fix. The message is shown in the Result pane. */
 export class PostgresUnavailableError extends Error {}
 
+/** The PostgreSQL course always uses the local server, from the workspace terminal. */
+const POSTGRES_COURSE = 'postgresql';
+/** One database for the whole PostgreSQL course; day 1 creates it with `createdb`. */
+const POSTGRES_COURSE_DATABASE = 'support_tickets';
+/** Day 6 runs `npm test`, so its databases must exist before the task opens. */
+const POSTGRES_COURSE_SETUP_DAY = 'postgresql-day-06';
+
+export type PostgresPlan = {
+  database: string;
+  testDatabase: string;
+  /** Create the databases when missing, before the task starts. */
+  create: boolean;
+};
+
 /**
- * True when the task talks to Postgres through Prisma. Tasks saved before the
- * switch still use prisma-pglite and keep their PGlite database.
+ * True when the task needs the machine's PostgreSQL: every PostgreSQL course task, and
+ * Prisma tasks. Tasks saved before the Prisma switch still use prisma-pglite and keep
+ * their PGlite database.
  */
-export function requiresPostgres(files: Record<string, string>): boolean {
+export function requiresPostgres(taskId: string, files: Record<string, string>): boolean {
+  if (courseOf(taskId) === POSTGRES_COURSE) return true;
   if (!('prisma/schema.prisma' in files)) return false;
   return !dependencyNames(files['package.json']).includes('prisma-pglite');
 }
 
 /** `prisma-day-03-t-1` -> `vinkup_prisma`, shared by the whole course. */
 export function databaseNameFor(taskId: string): string {
-  const course = taskId.split('-day-')[0] || taskId;
-  const sanitized = course.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const sanitized = courseOf(taskId)
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_');
   return `${DATABASE_PREFIX}_${sanitized}`.slice(0, MAX_DATABASE_NAME);
 }
 
+export function databasePlanFor(taskId: string): PostgresPlan {
+  if (courseOf(taskId) === POSTGRES_COURSE) {
+    return {
+      database: POSTGRES_COURSE_DATABASE,
+      testDatabase: `${POSTGRES_COURSE_DATABASE}_test`,
+      // Days 1-5 teach createdb: the workspace only sets DATABASE_URL for them.
+      create: taskId.startsWith(POSTGRES_COURSE_SETUP_DAY),
+    };
+  }
+
+  const database = databaseNameFor(taskId);
+  return {
+    database,
+    testDatabase: `${database}_test`.slice(0, MAX_DATABASE_NAME),
+    create: true,
+  };
+}
+
+/** `prisma-day-03-t-1` -> `prisma`; `postgresql-day-01-t-1` -> `postgresql`. */
+function courseOf(taskId: string): string {
+  return taskId.split('-day-')[0] || taskId;
+}
+
 /**
- * The connection URL Prisma uses. Without VINKUP_DATABASE_URL it uses the local
- * server over its Unix socket, where PostgreSQL's peer authentication needs no
- * password; the password in the URL is a placeholder.
+ * The connection URL the task's processes get. Without VINKUP_DATABASE_URL it uses
+ * the local server over its Unix socket, where PostgreSQL's peer authentication
+ * needs no password; the password in the URL is a placeholder.
  */
 export function baseUrlFor(environment: NodeJS.ProcessEnv = process.env): URL {
   const configured = environment.VINKUP_DATABASE_URL?.trim();
@@ -81,16 +121,20 @@ export async function resolvePostgresEnvironment(
   const base = baseUrlFor();
   const configuredName = base.pathname.replace(/^\//, '');
   const useConfiguredName =
-    Boolean(process.env.VINKUP_DATABASE_URL?.trim()) &&
     configuredName !== '' &&
     configuredName !== MAINTENANCE_DATABASE &&
     /^[A-Za-z0-9_]+$/.test(configuredName);
-  const database = useConfiguredName ? configuredName : databaseNameFor(taskId);
-  const testDatabase = `${database}_test`.slice(0, MAX_DATABASE_NAME);
+  const plan = databasePlanFor(taskId);
+  const database = useConfiguredName ? configuredName : plan.database;
+  const testDatabase = useConfiguredName
+    ? `${database}_test`.slice(0, MAX_DATABASE_NAME)
+    : plan.testDatabase;
   const maintenance = urlFor(MAINTENANCE_DATABASE, base);
   const serverVersion = await verifyServer(maintenance, pathValue);
-  await ensureDatabase(maintenance, database, pathValue);
-  await ensureDatabase(maintenance, testDatabase, pathValue);
+  if (plan.create) {
+    await ensureDatabase(maintenance, database, pathValue);
+    await ensureDatabase(maintenance, testDatabase, pathValue);
+  }
 
   return {
     database,
