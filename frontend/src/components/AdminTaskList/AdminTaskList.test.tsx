@@ -1,9 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminTaskRow, AdminTraineeDetail } from '@itp/types';
 import type { TaskReviewFilter } from '../../lib/taskReview';
 import AdminTaskList from './AdminTaskList';
+import { getAdminTaskCode } from '../../api/admin';
+import { createTasksZip, downloadBlob } from '../../lib/adminTaskZip';
+
+vi.mock('../../api/admin', () => ({ getAdminTaskCode: vi.fn() }));
+vi.mock('../../lib/adminTaskZip', () => ({
+  createTasksZip: vi.fn(() => new Blob(['zip'])),
+  downloadBlob: vi.fn(),
+  safeZipName: (value: string) => value,
+}));
 
 const courses: AdminTraineeDetail['courses'] = [
   {
@@ -21,6 +30,7 @@ const tasks: AdminTaskRow[] = [
   {
     taskId: 't1',
     title: 'Profile page',
+    sequenceOrder: 1,
     dayId: 'html-1',
     isStretchGoal: false,
     status: 'completed',
@@ -32,6 +42,7 @@ const tasks: AdminTaskRow[] = [
   {
     taskId: 't2',
     title: 'Semantic article',
+    sequenceOrder: 2,
     dayId: 'html-2',
     isStretchGoal: true,
     status: 'completed',
@@ -48,6 +59,8 @@ type Options = {
   onViewCode?: (taskId: string) => void;
   filter?: TaskReviewFilter;
   onFilterChange?: (filter: TaskReviewFilter) => void;
+  traineeId?: string;
+  traineeName?: string;
 };
 
 /** Renders the list with sensible defaults, so each test only sets what it checks. */
@@ -57,6 +70,8 @@ function renderList({
   onViewCode = vi.fn(),
   filter = 'all',
   onFilterChange = vi.fn(),
+  traineeId = 'trainee-1',
+  traineeName = 'Asha Rao',
 }: Options = {}) {
   render(
     <AdminTaskList
@@ -66,6 +81,8 @@ function renderList({
       onViewCode={onViewCode}
       filter={filter}
       onFilterChange={onFilterChange}
+      traineeId={traineeId}
+      traineeName={traineeName}
     />
   );
 }
@@ -92,6 +109,10 @@ const mixedTasks: AdminTaskRow[] = [
 
 // The filter buttons use the same words, so badge checks look only at <span> elements.
 const badge = { selector: 'span' };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('AdminTaskList', () => {
   it('groups tasks by day and leaves out days that have no tasks', () => {
@@ -169,7 +190,7 @@ describe('AdminTaskList', () => {
       'aria-pressed',
       'true'
     );
-    expect(screen.getByText('Approved task')).toBeInTheDocument();
+    expect(screen.getByText(/Approved task/)).toBeInTheDocument();
     expect(screen.queryByText('Pending task')).not.toBeInTheDocument();
     expect(screen.queryByText('Rework task')).not.toBeInTheDocument();
     // Day 2 has no approved task, so it is left out.
@@ -222,5 +243,163 @@ describe('AdminTaskList', () => {
 
     expect(screen.getByText('No completed tasks yet.')).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Filter tasks by review status' })).toBeNull();
+  });
+
+  it('offers scope and multi-select review statuses in the download dialog', async () => {
+    const user = userEvent.setup();
+    renderList({ taskList: mixedTasks });
+
+    await user.click(screen.getByRole('button', { name: /Download tasks/ }));
+
+    expect(screen.getByRole('dialog', { name: 'Download task code' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Scope')).toHaveValue('all');
+    expect(screen.getByText('Review statuses')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'All statuses' })).toBeChecked();
+
+    await user.click(screen.getByRole('checkbox', { name: 'All statuses' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Pending review' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rework' }));
+
+    expect(screen.getByRole('checkbox', { name: 'Pending review' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Rework' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Download ZIP (2)' })).toBeEnabled();
+  });
+
+  it('limits a single-task download to the selected task and status', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getAdminTaskCode).mockResolvedValue({
+      taskId: 'r',
+      title: 'Rework task',
+      sequenceOrder: 1,
+      instructionsMarkdown: 'Complete the form task.',
+      status: 'completed',
+      isStarterCode: false,
+      reviewStatus: 'rework',
+      submissionCount: 2,
+      files: [{ path: 'src/main.ts', content: 'saved code' }],
+      codeUpdatedAt: '2026-10-02T12:12:00.000Z',
+      lastSubmittedAt: '2026-10-02T12:12:00.000Z',
+    });
+    renderList({ taskList: mixedTasks });
+
+    await user.click(screen.getByRole('button', { name: /Download tasks/ }));
+    await user.selectOptions(screen.getByLabelText('Scope'), 'task');
+    await user.selectOptions(screen.getByLabelText('Course'), 'html');
+    await user.selectOptions(screen.getByLabelText('Day'), 'html-2');
+    await user.click(screen.getByRole('checkbox', { name: 'All statuses' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rework' }));
+    expect(screen.getByRole('option', { name: 'Task 2 · Rework task' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Profile page/ })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Task'), 'r');
+
+    expect(screen.getByRole('button', { name: 'Download ZIP (1)' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Download ZIP (1)' }));
+
+    expect(getAdminTaskCode).toHaveBeenCalledTimes(1);
+    expect(getAdminTaskCode).toHaveBeenCalledWith('trainee-1', 'r');
+    expect(createTasksZip).toHaveBeenCalledWith([
+      expect.objectContaining({ path: 'HTML/Day 2 - Forms/Task 1 - Rework task' }),
+    ]);
+    expect(downloadBlob).toHaveBeenCalledWith(
+      expect.any(Blob),
+      'Asha Rao-Task 1 - Rework task.zip'
+    );
+  });
+
+  it('downloads all eligible tasks in the selected course matching multiple statuses', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getAdminTaskCode).mockImplementation((_traineeId, taskId) =>
+      Promise.resolve({
+        taskId,
+        title: taskId,
+        sequenceOrder: taskId === 'r' || taskId === 'i' ? 2 : 1,
+        instructionsMarkdown: 'Task instructions.',
+        status: 'completed',
+        isStarterCode: false,
+        reviewStatus: null,
+        submissionCount: 1,
+        files: [{ path: 'index.html', content: taskId }],
+        codeUpdatedAt: '2026-10-01T12:12:00.000Z',
+        lastSubmittedAt: '2026-10-01T12:12:00.000Z',
+      })
+    );
+    renderList({ taskList: mixedTasks });
+
+    await user.click(screen.getByRole('button', { name: /Download tasks/ }));
+    await user.selectOptions(screen.getByLabelText('Scope'), 'course');
+    await user.click(screen.getByRole('checkbox', { name: 'All statuses' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Pending review' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rework' }));
+
+    expect(screen.getByRole('button', { name: 'Download ZIP (2)' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Download ZIP (2)' }));
+
+    expect(getAdminTaskCode).toHaveBeenCalledTimes(2);
+    expect(getAdminTaskCode).toHaveBeenCalledWith('trainee-1', 'p');
+    expect(getAdminTaskCode).toHaveBeenCalledWith('trainee-1', 'r');
+  });
+
+  it('includes submitted tasks even if the endpoint labels their files as starter code', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getAdminTaskCode).mockImplementation((_traineeId, taskId) =>
+      Promise.resolve({
+        taskId,
+        title: taskId,
+        sequenceOrder: taskId === 'r' || taskId === 'i' ? 2 : 1,
+        instructionsMarkdown: 'Task instructions.',
+        status: 'completed',
+        isStarterCode: taskId === 'p',
+        reviewStatus: null,
+        submissionCount: 1,
+        files: [{ path: 'index.html', content: taskId }],
+        codeUpdatedAt: '2026-10-01T12:12:00.000Z',
+        lastSubmittedAt: '2026-10-01T12:12:00.000Z',
+      })
+    );
+    renderList({ taskList: mixedTasks });
+
+    await user.click(screen.getByRole('button', { name: /Download tasks/ }));
+    await user.selectOptions(screen.getByLabelText('Scope'), 'day');
+    await user.selectOptions(screen.getByLabelText('Day'), 'html-1');
+    await user.click(screen.getByRole('checkbox', { name: 'All statuses' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Pending review' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Approved' }));
+
+    expect(screen.getByRole('button', { name: 'Download ZIP (2)' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Download ZIP (2)' }));
+
+    expect(getAdminTaskCode).toHaveBeenCalledTimes(2);
+    expect(getAdminTaskCode).toHaveBeenCalledWith('trainee-1', 'p');
+    expect(getAdminTaskCode).toHaveBeenCalledWith('trainee-1', 'a');
+    expect(createTasksZip).toHaveBeenCalledWith([
+      expect.objectContaining({ path: 'HTML/Day 1 - Structure/Task 1 - Approved task' }),
+      expect.objectContaining({ path: 'HTML/Day 1 - Structure/Task 1 - Pending task' }),
+    ]);
+  });
+
+  it('keeps the download disabled if the selected day and statuses have no matching tasks', async () => {
+    const user = userEvent.setup();
+    renderList({ taskList: mixedTasks });
+
+    await user.click(screen.getByRole('button', { name: /Download tasks/ }));
+    await user.selectOptions(screen.getByLabelText('Scope'), 'day');
+    await user.selectOptions(screen.getByLabelText('Day'), 'html-1');
+    await user.click(screen.getByRole('checkbox', { name: 'All statuses' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rework' }));
+
+    expect(screen.getByRole('button', { name: 'Download ZIP (0)' })).toBeDisabled();
+  });
+
+  it('shows an error and leaves the dialog open when fetching code fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getAdminTaskCode).mockRejectedValue(new Error('Code request failed'));
+    renderList({ taskList: [tasks[0]] });
+
+    await user.click(screen.getByRole('button', { name: /Download tasks/ }));
+    await user.click(screen.getByRole('button', { name: 'Download ZIP (1)' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Code request failed');
+    expect(screen.getByRole('dialog', { name: 'Download task code' })).toBeInTheDocument();
+    expect(downloadBlob).not.toHaveBeenCalled();
   });
 });

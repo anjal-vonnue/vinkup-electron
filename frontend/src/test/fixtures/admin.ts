@@ -241,6 +241,7 @@ function buildTaskRows(t: MockTrainee): AdminTaskRow[] {
         rows.push({
           taskId: task.id,
           title: task.title,
+          sequenceOrder: task.sequenceOrder,
           dayId: day.dayId,
           isStretchGoal: task.isStretchGoal,
           status: 'in_progress',
@@ -256,6 +257,7 @@ function buildTaskRows(t: MockTrainee): AdminTaskRow[] {
       rows.push({
         taskId: task.id,
         title: task.title,
+        sequenceOrder: task.sequenceOrder,
         dayId: day.dayId,
         isStretchGoal: false,
         status: 'completed',
@@ -401,6 +403,8 @@ export function buildAdminTaskCode(traineeId: string, taskId: string): AdminTask
       data: {
         taskId,
         title: found.task.title,
+        sequenceOrder: found.task.sequenceOrder,
+        instructionsMarkdown: found.task.instructionsMarkdown,
         status: 'not_started',
         reviewStatus: null,
         submissionCount: 0,
@@ -421,6 +425,8 @@ export function buildAdminTaskCode(traineeId: string, taskId: string): AdminTask
     data: {
       taskId,
       title: found.task.title,
+      sequenceOrder: found.task.sequenceOrder,
+      instructionsMarkdown: found.task.instructionsMarkdown,
       status: row.status,
       reviewStatus: row.reviewStatus,
       submissionCount: row.submissionCount,

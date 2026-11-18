@@ -43,7 +43,13 @@ export class AdminRepository {
   findTask = (taskId: string) =>
     prisma.task.findUnique({
       where: { id: taskId },
-      select: { id: true, title: true, starter_files: true },
+      select: {
+        id: true,
+        title: true,
+        sequence_order: true,
+        instructions_markdown: true,
+        starter_files: true,
+      },
     });
 
   // ---------- roster aggregates (all trainees at once) ----------
@@ -112,7 +118,13 @@ export class AdminRepository {
         code_updated_at: true,
         last_submitted_at: true,
         task: {
-          select: { id: true, title: true, curriculum_day_id: true, is_stretch_goal: true },
+          select: {
+            id: true,
+            title: true,
+            sequence_order: true,
+            curriculum_day_id: true,
+            is_stretch_goal: true,
+          },
         },
       },
     });

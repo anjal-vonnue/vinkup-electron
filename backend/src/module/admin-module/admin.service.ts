@@ -199,6 +199,7 @@ export class AdminService {
       tasks: startedTasks.map((row) => ({
         taskId: row.task.id,
         title: row.task.title,
+        sequenceOrder: row.task.sequence_order,
         dayId: row.task.curriculum_day_id,
         isStretchGoal: row.task.is_stretch_goal,
         status: row.status,
@@ -249,6 +250,8 @@ export class AdminService {
     return {
       taskId: task.id,
       title: task.title,
+      sequenceOrder: task.sequence_order,
+      instructionsMarkdown: task.instructions_markdown,
       status: progress?.status ?? 'not_started',
       isStarterCode: saved === null,
       reviewStatus: progress?.review_status ?? null,
