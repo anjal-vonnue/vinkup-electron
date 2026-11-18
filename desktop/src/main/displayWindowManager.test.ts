@@ -196,7 +196,31 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
-  it('treats the interactive cover as Vinkup but alerts after focus leaves it', async () => {
+  it.each(['mentor', 'manager'] as const)(
+    'disables screen protection for the %s role',
+    async (role) => {
+      const mainWindow = new FakeWindow();
+      const manager = new DisplayWindowManager(
+        mainWindow as unknown as BrowserWindow,
+        vi.fn(),
+        true,
+        1
+      );
+
+      await manager.start();
+      manager.setProtectionContext(false, role);
+
+      expect(manager.isProtectionEnabledForCurrentUser()).toBe(false);
+      expect(manager.shouldPreventMinimize()).toBe(false);
+      expect(mainWindow.isFullScreen()).toBe(false);
+      expect(
+        createdWindows.some(({ options, destroyed }) => options.fullscreen === true && !destroyed)
+      ).toBe(false);
+      manager.dispose();
+    }
+  );
+
+  it('keeps screen protection enabled for the trainee role', async () => {
     const mainWindow = new FakeWindow();
     const manager = new DisplayWindowManager(
       mainWindow as unknown as BrowserWindow,
@@ -206,6 +230,11 @@ describe('DisplayWindowManager focus alerts', () => {
     );
 
     await manager.start();
+    manager.setProtectionContext(false, 'trainee');
+
+    expect(manager.isProtectionEnabledForCurrentUser()).toBe(true);
+    expect(manager.shouldPreventMinimize()).toBe(true);
+    expect(createdWindows.some(({ options }) => options.fullscreen === true)).toBe(true);
     mainWindow.emit('ready-to-show');
     mainWindow.emit('focus');
 
