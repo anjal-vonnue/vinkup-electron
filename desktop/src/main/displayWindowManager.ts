@@ -32,10 +32,13 @@ function sameBounds(left: Electron.Rectangle, right: Electron.Rectangle): boolea
 
 export class DisplayWindowManager {
   private readonly overlays = new Map<number, BrowserWindow>();
+  private readonly overlayReferencesActive = new Map<number, boolean>();
   private readonly alerts = new Map<number, BrowserWindow>();
   private readonly closeAuthorized = new WeakSet<BrowserWindow>();
   private readonly mainWindow: BrowserWindow;
   private readonly onExitChoice: () => void;
+  private readonly overlayUrl: string;
+  private readonly onReferenceFocusChange: (isFocused: boolean) => void;
   private appDisplayId: number;
   private reconcileTimer: NodeJS.Timeout | null = null;
   private focusWatchdog: NodeJS.Timeout | null = null;
@@ -55,16 +58,22 @@ export class DisplayWindowManager {
   private areAlertsOpen = false;
   private isReadyForFocusTracking = false;
   private alertReturnDisplayId: number | null = null;
+  private focusedOverlayId: number | null = null;
+  private referenceScreenFocused = false;
   private displayTheme: 'light' | 'dark' = 'light';
 
   constructor(
     mainWindow: BrowserWindow,
     onExitChoice: () => void,
     private readonly enabled: boolean,
-    initialDisplayId?: number
+    initialDisplayId: number | undefined,
+    overlayUrl: string,
+    onReferenceFocusChange: (isFocused: boolean) => void = () => {}
   ) {
     this.mainWindow = mainWindow;
     this.onExitChoice = onExitChoice;
+    this.overlayUrl = overlayUrl;
+    this.onReferenceFocusChange = onReferenceFocusChange;
     this.appDisplayId = initialDisplayId ?? screen.getPrimaryDisplay().id;
   }
 
@@ -214,6 +223,19 @@ export class DisplayWindowManager {
     return [...this.alerts.values()].some(
       (window) => isAlive(window) && window.webContents === sender
     );
+  }
+
+  setOverlayReferencesActive(sender: WebContents, active: boolean): void {
+    for (const [id, window] of this.overlays) {
+      if (!isAlive(window) || window.webContents !== sender) continue;
+      this.overlayReferencesActive.set(id, active);
+      this.updateReferenceScreenFocus();
+      return;
+    }
+  }
+
+  isReferenceScreenFocused(): boolean {
+    return this.referenceScreenFocused;
   }
 
   handleAlertChoice(choice: unknown): void {
@@ -694,6 +716,7 @@ export class DisplayWindowManager {
       skipTaskbar: true,
       backgroundColor: OVERLAY_COLOR,
       webPreferences: {
+        preload: path.join(__dirname, '../preload/overlay.js'),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -701,17 +724,28 @@ export class DisplayWindowManager {
     });
 
     this.overlays.set(display.id, window);
+    this.overlayReferencesActive.set(display.id, false);
     this.configureWindow(window, true);
     window.on('will-move', (event) => event.preventDefault());
     window.on('move', () => this.placeWindow(window, display.bounds));
     window.on('focus', () => {
+      this.focusedOverlayId = display.id;
+      this.updateReferenceScreenFocus();
       this.focusLostAt = null;
+    });
+    window.on('blur', () => {
+      if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
+      this.updateReferenceScreenFocus();
     });
     window.on('close', (event) => {
       if (!this.closeAuthorized.has(window) && !this.isQuitting) event.preventDefault();
     });
     window.on('closed', () => {
-      if (this.overlays.get(display.id) === window) this.overlays.delete(display.id);
+      if (this.overlays.get(display.id) !== window) return;
+      this.overlays.delete(display.id);
+      this.overlayReferencesActive.delete(display.id);
+      if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
+      this.updateReferenceScreenFocus();
     });
     window.once('ready-to-show', () => {
       if (!isAlive(window) || this.isQuitting) return;
@@ -722,10 +756,19 @@ export class DisplayWindowManager {
       window.moveTop();
     });
     void window
-      .loadFile(path.join(__dirname, 'overlay.html'))
+      .loadURL(new URL('overlay.html', `${this.overlayUrl.replace(/\/$/, '')}/`).toString())
       .then(() => this.applyDisplayTheme(window))
       .catch((error: unknown) => console.error('[desktop] Failed to load display overlay', error));
     return window;
+  }
+
+  private updateReferenceScreenFocus(): void {
+    const isFocused =
+      this.focusedOverlayId !== null &&
+      this.overlayReferencesActive.get(this.focusedOverlayId) === true;
+    if (this.referenceScreenFocused === isFocused) return;
+    this.referenceScreenFocused = isFocused;
+    this.onReferenceFocusChange(isFocused);
   }
 
   private applyDisplayTheme(window: BrowserWindow): Promise<void> {
@@ -739,6 +782,9 @@ export class DisplayWindowManager {
     const window = this.overlays.get(id);
     if (!window || (expectedWindow && expectedWindow !== window)) return;
     this.overlays.delete(id);
+    this.overlayReferencesActive.delete(id);
+    if (this.focusedOverlayId === id) this.focusedOverlayId = null;
+    this.updateReferenceScreenFocus();
     this.closeOwnedWindow(window);
   }
 

@@ -19,6 +19,7 @@ import styles from './ReferencePage.module.css';
 import Header from '../../components/Header';
 import ReferenceSearch from '../../components/ReferenceSearch';
 import ScrollToTopButton from '../../components/ScrollToTopButton';
+import { getYouTubeEmbedUrl } from './getYouTubeEmbedUrl';
 import ArrowIcon from './assets/ArrowIcon';
 
 type ReferencePageProps = {
@@ -48,6 +49,17 @@ const renderToken = (token: Prism.Token | string, key: string): React.ReactNode 
     </span>
   );
 };
+
+const renderInlineCode = (text: string): React.ReactNode =>
+  text.split(/(`[^`]+`)/g).map((part, index) =>
+    part.startsWith('`') && part.endsWith('`') ? (
+      <code key={index} className={styles.inlineCode}>
+        {part.slice(1, -1)}
+      </code>
+    ) : (
+      part
+    )
+  );
 
 const getHighlightedCode = (code: string, language: string) => {
   const normalizedLanguage = language
@@ -93,7 +105,7 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
   if (block.type === 'paragraph') {
     return (
       <p key={index} className={styles.paragraph}>
-        {block.text}
+        {renderInlineCode(block.text)}
       </p>
     );
   }
@@ -112,8 +124,8 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
       <dl key={index} className={styles.definitions}>
         {block.items.map((item, itemIndex) => (
           <div key={itemIndex} className={styles.definitionItem}>
-            <dt className={styles.definitionTerm}>{item.term}</dt>
-            <dd className={styles.definitionDescription}>{item.description}</dd>
+            <dt className={styles.definitionTerm}>{renderInlineCode(item.term)}</dt>
+            <dd className={styles.definitionDescription}>{renderInlineCode(item.description)}</dd>
           </div>
         ))}
       </dl>
@@ -128,7 +140,7 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
           <thead>
             <tr>
               {block.headers.map((header, headerIndex) => (
-                <th key={headerIndex}>{header}</th>
+                <th key={headerIndex}>{renderInlineCode(header)}</th>
               ))}
             </tr>
           </thead>
@@ -137,17 +149,7 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
             {block.rows.map((row, rowIndex) => (
               <tr key={rowIndex}>
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex}>
-                    {cell.startsWith('`') && cell.endsWith('`') ? (
-                      <code className={styles.inlineCode}>
-                        {getHighlightedCode(cell.slice(1, -1), 'html').map((token, tokenIndex) =>
-                          renderToken(token, `table-token-${rowIndex}-${cellIndex}-${tokenIndex}`)
-                        )}
-                      </code>
-                    ) : (
-                      cell
-                    )}
-                  </td>
+                  <td key={cellIndex}>{renderInlineCode(cell)}</td>
                 ))}
               </tr>
             ))}
@@ -162,7 +164,7 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
     if (block.level === 3) {
       return (
         <h3 key={index} className={styles.subheading}>
-          {block.text}
+          {renderInlineCode(block.text)}
         </h3>
       );
     }
@@ -170,7 +172,7 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
     if (block.level === 4) {
       return (
         <h4 key={index} className={styles.subheading}>
-          {block.text}
+          {renderInlineCode(block.text)}
         </h4>
       );
     }
@@ -178,14 +180,14 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
     if (block.level === 5) {
       return (
         <h5 key={index} className={styles.subheading}>
-          {block.text}
+          {renderInlineCode(block.text)}
         </h5>
       );
     }
 
     return (
       <h6 key={index} className={styles.subheading}>
-        {block.text}
+        {renderInlineCode(block.text)}
       </h6>
     );
   }
@@ -196,7 +198,9 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
       <figure key={index} className={styles.imageFigure}>
         <img src={block.src} alt={block.alt} className={styles.contentImage} />
 
-        {block.alt && <figcaption className={styles.imageCaption}>{block.alt}</figcaption>}
+        {block.alt && (
+          <figcaption className={styles.imageCaption}>{renderInlineCode(block.alt)}</figcaption>
+        )}
       </figure>
     );
   }
@@ -235,7 +239,7 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
     return (
       <ListTag key={index} className={styles.list} start={block.ordered ? block.start : undefined}>
         {block.items.map((item, itemIndex) => (
-          <li key={itemIndex}>{item}</li>
+          <li key={itemIndex}>{renderInlineCode(item)}</li>
         ))}
       </ListTag>
     );
@@ -248,8 +252,8 @@ const renderBlock = (block: ContentBlock, index: number): React.ReactNode => {
 
     return (
       <aside key={index} className={calloutClass}>
-        <strong>{block.callout.title}</strong>
-        <p>{block.callout.body}</p>
+        <strong>{renderInlineCode(block.callout.title)}</strong>
+        <p>{renderInlineCode(block.callout.body)}</p>
       </aside>
     );
   }
@@ -263,14 +267,14 @@ const renderVideos = (videos: { title: string; embedUrl: string }[]) => (
 
     {videos.map((video) => (
       <div key={video.embedUrl} className={styles.videoCard}>
-        <h3 className={styles.videoTitle}>{video.title}</h3>
+        <h3 className={styles.videoTitle}>{renderInlineCode(video.title)}</h3>
 
         <iframe
           className={styles.videoFrame}
-          src={video.embedUrl}
+          src={getYouTubeEmbedUrl(video.embedUrl)}
           title={video.title}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          referrerPolicy="strict-origin-when-cross-origin"
+          referrerPolicy="origin"
           allowFullScreen
         />
       </div>
@@ -306,7 +310,7 @@ const ReferencePage = ({ dayId }: ReferencePageProps) => {
 
         <div ref={contentRef} className={styles.referenceContainer}>
           {content.instruction && (
-            <div className={styles.instructionBox}>{content.instruction}</div>
+            <div className={styles.instructionBox}>{renderInlineCode(content.instruction)}</div>
           )}
           {content.videoAtStart && content.videos?.length ? renderVideos(content.videos) : null}
 
@@ -348,7 +352,7 @@ const ReferencePage = ({ dayId }: ReferencePageProps) => {
                     <span className={styles.sectionAccent} />
 
                     <span>
-                      {section.number}. {section.heading}
+                      {section.number}. {renderInlineCode(section.heading)}
                     </span>
                   </h2>
 

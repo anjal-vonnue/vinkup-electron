@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, WebContents } from 'electron';
 
 const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
   browserWindowMock: vi.fn<(options: Record<string, unknown>) => object>(),
@@ -19,6 +19,7 @@ const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
     setFocused: (focused: boolean) => void;
     isFocusable: () => boolean;
     executeJavaScript: ReturnType<typeof vi.fn>;
+    webContents: EventEmitter;
   }>,
 }));
 
@@ -28,6 +29,8 @@ vi.mock('electron', () => ({
 }));
 
 import { DisplayWindowManager } from './displayWindowManager.js';
+
+const OVERLAY_URL = 'http://127.0.0.1:1234';
 
 class FakeWindow extends EventEmitter {
   readonly webContents: EventEmitter & {
@@ -113,6 +116,11 @@ class FakeWindow extends EventEmitter {
     return Promise.resolve();
   }
 
+  loadURL(): Promise<void> {
+    this.emit('ready-to-show');
+    return Promise.resolve();
+  }
+
   destroy(): void {
     this.destroyed = true;
     this.emit('closed');
@@ -141,9 +149,11 @@ describe('DisplayWindowManager focus alerts', () => {
         options,
         setFocused: (focused) => {
           window.focused = focused;
+          window.emit(focused ? 'focus' : 'blur');
         },
         isFocusable: () => window.focusable,
         executeJavaScript: window.webContents.executeJavaScript,
+        webContents: window.webContents,
       });
       window.on('closed', () => {
         const record = createdWindows.find((item) => item.options === options);
@@ -183,7 +193,8 @@ describe('DisplayWindowManager focus alerts', () => {
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
-      1
+      1,
+      OVERLAY_URL
     );
 
     await manager.start();
@@ -209,7 +220,8 @@ describe('DisplayWindowManager focus alerts', () => {
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
-      1
+      1,
+      OVERLAY_URL
     );
 
     await manager.start();
@@ -223,6 +235,35 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('reports reference-screen focus only for an active, focused overlay', async () => {
+    const mainWindow = new FakeWindow();
+    const onReferenceFocusChange = vi.fn();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL,
+      onReferenceFocusChange
+    );
+
+    await manager.start();
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+    expect(overlay).toBeDefined();
+
+    manager.setOverlayReferencesActive(overlay?.webContents as unknown as WebContents, true);
+    expect(manager.isReferenceScreenFocused()).toBe(false);
+
+    overlay?.setFocused(true);
+    expect(manager.isReferenceScreenFocused()).toBe(true);
+    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
+
+    overlay?.setFocused(false);
+    expect(manager.isReferenceScreenFocused()).toBe(false);
+    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+    manager.dispose();
+  });
+
   it.each(['mentor', 'manager'] as const)(
     'disables screen protection for the %s role',
     async (role) => {
@@ -231,7 +272,8 @@ describe('DisplayWindowManager focus alerts', () => {
         mainWindow as unknown as BrowserWindow,
         vi.fn(),
         true,
-        1
+        1,
+        OVERLAY_URL
       );
 
       await manager.start();
@@ -253,7 +295,8 @@ describe('DisplayWindowManager focus alerts', () => {
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
-      1
+      1,
+      OVERLAY_URL
     );
 
     await manager.start();
@@ -271,7 +314,8 @@ describe('DisplayWindowManager focus alerts', () => {
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
-      1
+      1,
+      OVERLAY_URL
     );
 
     await manager.start();
@@ -302,7 +346,8 @@ describe('DisplayWindowManager focus alerts', () => {
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
-      1
+      1,
+      OVERLAY_URL
     );
 
     await manager.start();
@@ -340,7 +385,8 @@ describe('DisplayWindowManager focus alerts', () => {
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
-      2
+      2,
+      OVERLAY_URL
     );
 
     await manager.start();
