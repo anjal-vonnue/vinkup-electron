@@ -218,6 +218,34 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('dismisses the alert when a secondary display overlay regains focus', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(800);
+
+    const alertWindow = createdWindows.find(({ options }) => isAlertWindow(options));
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+    expect(alertWindow?.destroyed).toBe(false);
+    expect(overlay).toBeDefined();
+
+    overlay?.setFocused(true);
+
+    expect(alertWindow?.destroyed).toBe(true);
+    manager.dispose();
+  });
+
   it('updates the theme of existing secondary display overlays', async () => {
     const mainWindow = new FakeWindow();
     const manager = new DisplayWindowManager(

@@ -853,6 +853,7 @@ export class DisplayWindowManager {
       this.focusedOverlayId = display.id;
       this.updateReferenceScreenFocus();
       this.focusLostAt = null;
+      if (this.areAlertsOpen) this.dismissAlerts();
     });
     window.on('blur', () => {
       if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
