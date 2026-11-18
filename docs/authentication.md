@@ -162,7 +162,7 @@ separate Desktop client and no client secret in the Electron build.
 3. Under **Authorized redirect URIs**, add the desktop callback for every
    backend the app talks to:
    - local: `http://localhost:3000/api/auth/desktop/callback`
-   - production: `https://vinkup-backend.onrender.com/api/auth/desktop/callback`
+   - production: `https://vinkup-electron.onrender.com/api/auth/desktop/callback`
      (replace with the real API host if it differs)
 4. Keep the existing web callback
    (`/api/auth/google/callback`) registered. Removing it breaks the web app.
@@ -198,7 +198,7 @@ Desktop (environment of the Electron process):
 | `VINKUP_DESKTOP_PORT` | `43110`                        | Renderer origin; the `auth_token` cookie is set for this origin                      |
 
 In development the app uses `http://localhost:3000`; production defaults to
-`https://vinkup-backend.onrender.com`.
+`https://vinkup-electron.onrender.com`.
 
 ## Persistence
 

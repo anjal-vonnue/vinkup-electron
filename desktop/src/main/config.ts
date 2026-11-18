@@ -7,7 +7,7 @@ export const APP_NAME = 'Vinkup';
 export const DEV_RENDERER_URL = 'http://localhost:5173';
 
 /** Production API. Override with VINKUP_API_URL for a local backend. */
-export const DEFAULT_API_URL = 'https://vinkup-backend.onrender.com';
+export const DEFAULT_API_URL = 'https://vinkup-electron.onrender.com';
 
 /** In development the backend runs next to Vite (`npm run dev:backend`). */
 export const DEFAULT_DEV_API_URL = 'http://localhost:3000';

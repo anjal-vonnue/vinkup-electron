@@ -6,7 +6,7 @@ REST/JSON API of Vinkup, the in-house trainee training platform (Express 5 backe
 
 | Environment | Base URL                         | How it reaches the backend                                                                                                                                          |
 | ----------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Production  | `https://vinkup.netlify.app/api` | Netlify rewrite `/api/*  https://vinkup-backend.onrender.com/api/:splat  200` (`frontend/public/_redirects:1`) proxies to the Render backend.                       |
+| Production  | `https://vinkup.netlify.app/api` | Netlify rewrite `/api/*  https://vinkup-electron.onrender.com/api/:splat  200` (`frontend/public/_redirects:1`) proxies to the Render backend.                      |
 | Local       | `http://localhost:5173/api`      | Vite dev server proxy `'/api': 'http://localhost:3000'` (`frontend/vite.config.ts`). Backend listens on `env.PORT`, default `3000` (`backend/src/config/env.ts:5`). |
 
 All paths below include the `/api` prefix. The frontend axios client uses the relative base URL `/api` with `withCredentials: true` and a 15 s timeout (`frontend/src/api/client.ts`). Only the Google login redirect uses `VITE_API_URL` (`${VITE_API_URL}/api/auth/google`; `VITE_API_URL` is `""` locally and `https://vinkup.netlify.app` in production).
