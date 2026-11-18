@@ -39,6 +39,8 @@ const api: DesktopApi = {
     setFullscreen: (value: boolean) =>
       ipcRenderer.invoke('window:set-fullscreen', value) as Promise<boolean>,
     isFullscreen: () => ipcRenderer.invoke('window:is-fullscreen') as Promise<boolean>,
+    setDisplayTheme: (theme) =>
+      ipcRenderer.invoke('window:set-display-theme', theme) as Promise<void>,
     beginCertificatePrint: () =>
       ipcRenderer.invoke('window:begin-certificate-print') as Promise<void>,
     endCertificatePrint: () => ipcRenderer.invoke('window:end-certificate-print') as Promise<void>,

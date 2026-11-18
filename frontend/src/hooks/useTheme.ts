@@ -22,6 +22,12 @@ export function useTheme() {
     } catch {
       // storage can be unavailable (private mode); the theme still works for this session
     }
+    const setDisplayTheme = window.desktop?.window?.setDisplayTheme;
+    if (setDisplayTheme) {
+      void setDisplayTheme(theme).catch((error: unknown) => {
+        console.error('[theme] Failed to update the secondary display theme', error);
+      });
+    }
   }, [theme]);
 
   const toggleTheme = useCallback(() => {

@@ -143,6 +143,7 @@ export interface DesktopApi {
   window: {
     setFullscreen: (value: boolean) => Promise<boolean>;
     isFullscreen: () => Promise<boolean>;
+    setDisplayTheme: (theme: 'light' | 'dark') => Promise<void>;
     beginCertificatePrint: () => Promise<void>;
     endCertificatePrint: () => Promise<void>;
     /** Returns an unsubscribe function. */
