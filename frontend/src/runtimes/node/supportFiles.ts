@@ -3,7 +3,8 @@ import { PRISMA_PGLITE_SUPPORT_FILES } from './support/prismaPglite';
 /**
  * Hidden helper files a Node task needs, written into the workspace next to the trainee's files.
  * They go in .vinkup/, which the workspace ignores, so they are never shown or saved.
- * Today: Prisma tasks that depend on prisma-pglite (Prisma on PGlite).
+ * Only for tasks saved before Prisma moved to the machine's PostgreSQL: they still
+ * depend on prisma-pglite. New Prisma tasks need no hidden files.
  */
 export function supportFilesFor(files: Record<string, string>): Record<string, string> {
   return dependsOn(files['package.json'], 'prisma-pglite') ? PRISMA_PGLITE_SUPPORT_FILES : {};

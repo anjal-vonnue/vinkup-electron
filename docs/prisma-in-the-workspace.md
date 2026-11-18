@@ -1,9 +1,9 @@
 # Prisma in the workspace
 
 The Prisma course (8 days, 16 tasks) runs in the desktop app's Node workspace like every other
-Node.js task. Prisma Client talks to **PGlite**, PostgreSQL compiled to WebAssembly, through the
-community package `prisma-pglite`. There is no database server, no `DATABASE_URL` and nothing to
-install.
+Node.js task, and Prisma Client talks to **PostgreSQL installed on the trainee's machine**. There is
+no WebAssembly database: the normal Prisma workflow (`prisma migrate dev`, `prisma migrate deploy`,
+`prisma migrate reset`) works here.
 
 ## What the trainee gets
 
@@ -11,177 +11,153 @@ Every Prisma task starts from the same small project (`prismaStarter` in
 `frontend/src/api/mockTasks/starters.ts`):
 
 ```
-README.md          package.json       prisma.config.ts   tsconfig.json   vitest.config.ts
+README.md          package.json       prisma.config.ts      tsconfig.json   vitest.config.ts
 prisma/schema.prisma   prisma/seed.ts
+prisma/migrations/20250101000000_init/migration.sql
 src/app.ts   src/db.ts   src/server.ts
-tests/tickets.test.ts
+scripts/prepare-test-db.mjs
+tests/setup.ts   tests/tickets.test.ts
 ```
 
-It has one `Ticket` model, a seed with three tickets, `GET /tickets`, and one Vitest + Supertest
-test. The trainee builds the rest, day by day.
+It has one `Ticket` model, an initial migration, a seed with three tickets, `GET /tickets`, and one
+Vitest + Supertest test. The trainee builds the rest, day by day.
 
-| Command                               | What it does                                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Run** (`npm run dev`)               | Generates the Prisma client, runs the seed, starts the API on port 3000 (opens the Preview)                   |
-| `npm test`                            | Vitest + Supertest on a separate test database that starts empty on every run                                 |
-| `npm run db:migrate -- --name <name>` | Writes `prisma/migrations/<time>_<name>/migration.sql` from `schema.prisma` (instead of `prisma migrate dev`) |
-| `npm run db:reset`                    | Deletes the database; the next Run seeds a fresh one                                                          |
-| `npm run db:seed`                     | Runs `prisma/seed.ts`                                                                                         |
-| `npm run db:generate`                 | `prisma generate`                                                                                             |
-| `npm run db:validate`                 | `prisma validate`                                                                                             |
-| `npm run check`                       | `tsc --noEmit`                                                                                                |
+| Command                               | What it does                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Run** (`npm run dev`)               | `prisma generate`, `prisma migrate deploy`, the seed, then the API on port 3000 (opens Preview) |
+| `npm test`                            | Prepares the test database, then Vitest + Supertest on it (empty tables for every test)         |
+| `npm run db:migrate -- --name <name>` | `prisma migrate dev`: writes `prisma/migrations/<time>_<name>/migration.sql` and applies it     |
+| `npm run db:reset`                    | `prisma migrate reset --force`: drops the contents and applies the migrations again             |
+| `npm run db:seed`                     | Runs `prisma/seed.ts`                                                                           |
+| `npm run db:generate`                 | `prisma generate`                                                                               |
+| `npm run db:validate`                 | `prisma validate`                                                                               |
+| `npm run check`                       | `tsc --noEmit`                                                                                  |
 
-The "Platform note" at the top of each day's first task says the same in short, and that native
-packages such as `bcrypt` don't work (use `bcryptjs`).
+The "Platform note" at the top of each day's first task says the same in short.
 
 ## How it works
 
 ```
-src/server.ts → src/app.ts → Prisma Client (generated/)
-                                └── createAdapter()          .vinkup/prisma/adapter.mjs (hidden)
-                                      └── createPgliteAdapter()   prisma-pglite
-                                            └── PGlite files in .vinkup/db/dev   (tests: .vinkup/db/test)
-                                                  ⇅ copied to and from IndexedDB by the page
+src/server.ts → src/app.ts → Prisma Client (generated/client)
+                                 └── new PrismaPg({ connectionString: DATABASE_URL })   @prisma/adapter-pg
+                                       └── PostgreSQL on this machine
+                                             ├── vinkup_prisma        (the course database)
+                                             └── vinkup_prisma_test   (npm test)
 ```
 
-### Hidden helper files
+### The database the desktop app creates
 
-When a Node.js task's `package.json` depends on `prisma-pglite`, `useNodeSession` writes these
-right after mounting the task's files (`runtimes/node/supportFiles.ts`,
-`runtimes/node/support/prismaPglite.ts`):
+When a task contains `prisma/schema.prisma` (and its `package.json` does not depend on
+`prisma-pglite`), the workspace manager resolves PostgreSQL **before** the workspace starts
+(`desktop/src/main/workspace/postgres.ts`):
 
-| File                           | Job                                                                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.vinkup/prisma/engine.mjs`    | Points `PRISMA_SCHEMA_ENGINE_BINARY` at an empty placeholder, so the Prisma CLI doesn't download its native schema engine (it can't run in the browser)      |
-| `.vinkup/prisma/adapter.mjs`   | `createAdapter()` for `src/db.ts`: picks the `dev` or `test` database, recreates it when `schema.prisma` changes, and starts fresh if a saved one won't open |
-| `.vinkup/prisma/adapter.d.mts` | Its types, so `npm run check` passes                                                                                                                         |
-| `.vinkup/prisma/cli.mjs`       | Behind the `db:*` scripts: runs the Prisma CLI with its OpenSSL warnings filtered out, and calls `createPgliteMigration()` for migrations                    |
+1. It runs `psql` from the login-shell PATH, so a menu-launched app finds PostgreSQL the same way a
+   terminal does.
+2. By default it connects over the Unix socket with peer authentication:
 
-`.vinkup/` is an ignored folder (`lib/workspaceIgnore.ts`): never shown in Files, never saved,
-never sent to the server. The files are written again on every open, so a trainee can't break
-them for good, and fixing them only needs a frontend deploy.
+   ```
+   postgresql://<your OS user>:vinkup@localhost/<database>?host=/var/run/postgresql
+   ```
 
-### Why each workaround is there
+   The password is a placeholder: peer authentication matches the OS user. Set
+   `VINKUP_DATABASE_URL` (for example `postgresql://postgres:secret@localhost:5432/vinkup_prisma`)
+   to use a different server or a password, then restart the app.
 
-- **prisma-pglite's own CLI isn't used.** `cli.mjs` calls its functions directly, and reset deletes
-  the folder.
-- **The database is recreated when the schema changes.** The adapter creates tables only on a new
-  database; it can't add a column to an existing one (`P2022 ColumnNotFound`). `adapter.mjs`
-  stores a hash of `schema.prisma` next to the database and starts a fresh one when it changes,
-  printing `[database] schema.prisma changed, so the database was recreated`. The seed (part of
-  Run) fills it again. The SQL runtime does the same when a task's setup changes.
-- **Tests get their own database.** `vitest.config.ts` sets `VINKUP_DATABASE=test`; that database
-  is emptied at the start of each test file, and test files run one at a time.
-- **PGlite is never closed, and doesn't need to be.** prisma-pglite's adapter `dispose()` does
-  nothing, so the database stays open until the process ends. That is safe: Postgres writes each
-  committed change to its write-ahead log (`pg_wal`) straight away and replays it the next time
-  the database opens. Tested with Prisma 7.10, prisma-pglite 3.0.2 and PGlite 0.4.3: rows survived
-  `process.exit`, Ctrl+C and even `kill -9` right after the commit. (An earlier version of
-  `adapter.mjs` ran a `CHECKPOINT` after each burst of queries and
-  closed PGlite on `prisma.$disconnect()`. It was removed: it didn't change what survives, and
-  after a `$disconnect()` every query failed with `PGlite is closed` instead of reconnecting.)
-- **The seed reads the count into a variable before the `if`.** This was needed by the earlier
-  in-browser runtime, which evaluated `if (await count() === 0)` at a file's top level as
-  `await (count() === 0)`. On the host Node process the pattern is unnecessary, but existing
-  saved starters still use it and it works either way:
-  `const ticketCount = await prisma.ticket.count(); if (ticketCount === 0) { ... }`.
-- **The seed ends with `process.exit(0)`.** Without it, the script waits about 12 seconds after
-  `prisma.$disconnect()` before it ends, so the server would start late.
+3. It creates `vinkup_prisma` and `vinkup_prisma_test` when they do not exist. The name comes from
+   the course part of the task id (`prisma-day-03-t-1` → `prisma`), so **all Prisma tasks share one
+   database** and rows created in one task are still there in the next.
+4. It passes `DATABASE_URL` and `VINKUP_TEST_DATABASE_URL` in the environment of `npm install`,
+   Run, and every terminal, so `npx prisma ...` typed in the terminal uses the same database.
 
-### Keeping the database between visits
+If PostgreSQL is missing, not running, or the role cannot create databases, opening the task fails
+with an actionable message in the Result pane instead of starting a broken workspace.
 
-The desktop workspace is reset to the editor's files every time a task opens, but `.vinkup/db` is
-preserved: the workspace manager moves it aside, empties the folder, and moves it back
-(`desktop/src/main/workspace/files.ts`). The dev database and its schema marker
-(`dev.schema-hash`) therefore survive closing and reopening the task.
+### Databases are never deleted automatically
 
-- **Where:** `.vinkup/db/dev` inside `<userData>/workspaces/<taskId>`. `.vinkup` is ignored
-  (`lib/workspaceIgnore.ts`), so it never appears in Files and is never sent to the server.
-- **Not kept:** the test database, which starts empty on every run, and Postgres's
-  `postmaster.pid` / `postmaster.opts` lock files.
-- **Resetting:** `npm run db:reset` deletes `.vinkup/db`; the next Run seeds a fresh database.
-- **If a saved database is broken** (for example the app closed in the middle of Postgres writing),
-  `adapter.mjs` catches the open error, prints
-  `[database] The saved database couldn't be opened, so a fresh one was created.` and the seed
-  runs as usual.
+Closing a task removes `<userData>/workspaces/<taskId>`, but the PostgreSQL databases live in the
+server's data directory, not in the workspace, so they are untouched. That is deliberate: several
+tasks continue from the database the previous one created. Use `npm run db:reset` when a trainee
+wants to start over.
+
+`vinkup_prisma_test` is also kept, but `npm test` runs `scripts/prepare-test-db.mjs` first
+(`prisma migrate deploy` against the test URL) and `tests/setup.ts` truncates every table before each
+test, so tests always start from empty tables.
+
+### Requirements on the machine
+
+- PostgreSQL 16 or newer installed and running.
+- `psql` on the login-shell PATH.
+- A role that can create databases: `prisma migrate dev` needs a shadow database. If the message
+  says the role cannot create databases, run once:
+
+  ```sql
+  ALTER ROLE "<your user>" CREATEDB;
+  ```
 
 ## Rolling it out
 
-The diff already includes the regenerated `backend/prisma/seed-data/curriculum.json` (only the 8
-Prisma days changed). After it is merged and deployed:
+The diff includes the regenerated `backend/prisma/seed-data/curriculum.json`. After it is merged
+and deployed:
 
-1. Re-run the seed against the production database, as after any curriculum change:
+1. Re-run the seed against the backend's database, as after any curriculum change:
 
    ```bash
    npm run db:seed -w backend
    ```
 
-   It updates the 16 Prisma tasks' run command, instructions and starter files. It doesn't touch
-   trainees' progress.
+   It updates the 16 Prisma tasks' instructions and starter files. It does not touch trainees'
+   progress.
 
-2. A trainee who already opened and saved a Prisma task keeps their own old files, which don't
-   have the `db:*` scripts or `prisma-pglite`. If anyone is in that state, they can copy the new
-   files from the starter or have their saved code for that task cleared.
+2. **Existing saved work keeps its PGlite database.** Tasks saved before this change still have
+   `prisma-pglite` in `package.json`; the workspace keeps writing the old `.vinkup/prisma/*` helpers
+   for them (`frontend/src/runtimes/node/support/prismaPglite.ts`), so nothing breaks. Clear a
+   trainee's saved code for a task to move it onto the new PostgreSQL starter.
 
 ## Checking it
 
 Open any Prisma task (for example `/tasks/prisma-day-01-t-1`) in the desktop app:
 
-1. Wait for **Node ready** (1 to 3 minutes, mostly `npm install`). Files shows no `.vinkup`,
-   `generated` or `node_modules`.
-2. **Run.** Expect `Generated Prisma Client (7.10.0) to ./generated` (no OpenSSL warnings),
-   `[seed] Added 3 tickets.`, `API on http://localhost:3000 (open the Preview tab)`. The Preview
-   shows the three tickets as JSON.
-3. Add rows: in `prisma/seed.ts` change `if (ticketCount === 0)` to `if (true)`,
-   press Run (six tickets), then change it back.
-4. **Close the task and open it again.** Run still shows the six tickets. (Without the preserved
-   database it would show three.)
-5. `npm test`: 1 test passes and the prompt comes back.
-6. Add `priority String @default("normal")` to `Ticket`, then
-   `npm run db:migrate -- --name add_priority`: a new `migration.sql` appears in Files (a
-   `CREATE TABLE` with `priority`, because the starter has no earlier migration). Run: the `schema.prisma changed` line, three seeded tickets with `"priority": "normal"`.
-7. `npm run db:reset`, then close and reopen the task: Run seeds three tickets.
-8. Quit and relaunch the app: the dev database is still there, because it lives under the app's
-   user-data folder.
-9. No database errors in the terminal at any point.
+1. Wait for **Node ready** (mostly `npm install`; Prisma is a large download).
+2. **Run.** Expect the generated client, `1 migration found`, `[seed] Added 3 tickets.`, then
+   `API on http://localhost:3000 (open the Preview tab)`. The Preview shows three tickets as JSON.
+3. Open a terminal: `echo $DATABASE_URL` prints the course URL, and
+   `npx prisma migrate status` reports the migration as applied.
+4. Add `priority String @default("normal")` to `Ticket`, then
+   `npm run db:migrate -- --name add_priority`. A new migration appears in Files and the column is
+   added without losing rows.
+5. **Close the task and open it again**, then Run: the rows are still there (the database is
+   shared, not recreated).
+6. `npm test`: the test passes and the prompt comes back.
+7. `psql "$DATABASE_URL" -c 'select * from "Ticket"'` in the terminal shows the same rows.
+8. `npm run db:reset`, then Run: three seeded tickets again.
 
 ## If something fails
 
-| Symptom                                                                                              | Likely cause                                                                | Try                                                                              |
-| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Preview shows `[]`, and Run printed no `[seed] Added 3 tickets.` line                                | The seed didn't run, or it failed                                           | Check the terminal for the seed's error, then `npm run db:reset` and Run         |
-| `Cannot find module '.../.vinkup/prisma/adapter.mjs'`                                                | Helper files not written                                                    | The task's `package.json` must list `prisma-pglite`                              |
-| Tables in `.not-committed/pglite` instead of `.vinkup/db/dev`; nothing kept after reopening the task | `createPgliteAdapter` ignores `dbParentDirPath`/`dbDirName` in this version | Pin the version that honours them, or change `adapter.mjs` to the folder it uses |
-| `P2022 ColumnNotFound` after a migration                                                             | Database not recreated                                                      | `npm run db:reset`, then Run                                                     |
-| Rows are missing after reopening the task                                                            | The database was deleted, or the task was reset                             | Check that `.vinkup/db/dev` exists on disk; avoid `npm run db:reset`             |
-| `npm test` doesn't return to the prompt after passing                                                | PGlite keeping a Vitest worker alive                                        | Ctrl+C (the results stand); add `teardownTimeout: 1000` to `vitest.config.ts`    |
-| `TypeError [ERR_INVALID_ARG_TYPE] ... relevant-args.js`                                              | Something ran `npx prisma-pglite`                                           | Use the npm scripts                                                              |
-| `Downloading Prisma engines ...` then `socket hang up`                                               | `npx prisma ...` run directly, without the placeholder                      | Use the npm scripts                                                              |
-| `prisma:warn Prisma failed to detect the libssl/openssl version`                                     | Prisma CLI run directly                                                     | Harmless                                                                         |
+| Symptom                                                 | Likely cause                                         | Try                                                                         |
+| ------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| `PostgreSQL was not found on this machine`              | `psql` missing from the login PATH                   | Install PostgreSQL, make sure `psql -V` works in a terminal                 |
+| `PostgreSQL is installed but its server is not running` | Server stopped                                       | `sudo systemctl start postgresql` (or your platform's service)              |
+| `Your PostgreSQL user cannot create databases`          | Role lacks `CREATEDB`                                | `ALTER ROLE "<your user>" CREATEDB;`                                        |
+| `PostgreSQL rejected the connection`                    | TCP/password auth, not peer                          | Set `VINKUP_DATABASE_URL` and restart the app                               |
+| `P1000 Authentication failed` in the terminal           | URL has no usable credentials                        | Same as above; the terminal inherits `DATABASE_URL` from the app            |
+| `P3005 The database schema is not empty`                | A task's migrations do not match the shared database | `npm run db:reset` (destroys the course data) or add the missing migration  |
+| `npm test` connects to the course database              | `VINKUP_TEST_DATABASE_URL` not set                   | Open the task in the desktop app; a plain `npm test` outside it cannot work |
+| Preview shows `[]`                                      | The seed did not run                                 | Check the Run output for the seed's error, then `npm run db:seed`           |
 
 ## Limits
 
-- `prisma-pglite` is a community package, not official Prisma; the engine placeholder is a
-  workaround.
-- A schema change drops the trainee's rows (the seed adds its rows back). Migrations are written
-  as files but aren't applied one by one like `prisma migrate dev`, so "fix a faulty migration"
-  (Day 1 stretch task) is about editing and re-creating migration files.
-- `prisma studio`, `prisma migrate deploy` and `prisma db push` don't run here.
-- The database is stored with the workspace on this machine, under the app's user-data folder.
+- PostgreSQL is a real install: **no database works in a plain browser build** and a trainee without
+  PostgreSQL cannot open a Prisma task.
+- `prisma migrate dev` needs permission to create the shadow database.
+- All Prisma tasks share one database, so a task that changes the schema also changes what the next
+  task sees. `db:reset` is the escape hatch.
 - Stay on Prisma 7.10. Prisma 8 changes the API.
+- The old PGlite path is kept only for already-saved work; new starters never use it.
 
 ## History
 
-These runs predate the desktop host runtime, when tasks used the in-browser WebContainer. They are
-kept as the record of why the workarounds above exist.
-
-The setup came out of a pilot test task (`t-prisma`, mock mode only), October 2026:
-
-| Run | Result                                                                                                                                                                                                                                                                                                          |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `npm install` to Node ready 1 min 17 s; `generate`, client queries and `createPgliteMigration` worked. `resetPgliteDatabase()` threw; scratch databases in `.not-committed/pglite` printed "won't be saved" lines (now ignored)                                                                                 |
-| 2   | Preview blank: Express 4 dropped the error from an async route                                                                                                                                                                                                                                                  |
-| 3   | `P2022` after a migration: the old database didn't have the new column (now recreated on schema change)                                                                                                                                                                                                         |
-| 4   | Worked end to end. Data was lost on page reload, which led to saving it in IndexedDB                                                                                                                                                                                                                            |
-| 5   | Course starter: Preview showed `[]`. A checkpoint-and-close wrapper was added to `adapter.mjs`, then removed: committed rows survive without it, and it broke queries after `$disconnect()`                                                                                                                     |
-| 6   | Playwright run of "Checking it" reproduced the `[]`: the seed printed nothing and added no rows. Cause: WebContainer skips `if (await x === y)` at the top level (see "The seed reads the count into a variable"). With the seed changed, the run passed: 3 tickets, restored after a reload, `npm test` passed |
+The course originally ran on PGlite (PostgreSQL compiled to WebAssembly) through the community
+package `prisma-pglite`, first in the browser and later in the Electron host process. It needed hidden
+`.vinkup/prisma/*` helpers, recreated the database whenever `schema.prisma` changed, and could not run
+`prisma migrate dev`, `prisma studio` or `prisma migrate deploy`. Now that tasks run on the host
+machine, the local PostgreSQL server replaces all of that with the standard Prisma workflow.

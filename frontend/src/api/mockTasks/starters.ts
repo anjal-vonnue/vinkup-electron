@@ -268,12 +268,9 @@ function nodeStarter(task: CatalogTask, flavour: NodeFlavour): TaskFile[] {
   return files;
 }
 
-// Prisma runs on PGlite (PostgreSQL in WebAssembly) through the prisma-pglite package. Because the
-// task depends on prisma-pglite, the workspace adds hidden helper files in .vinkup/ that the db:*
-// scripts and src/db.ts use (runtimes/node/support/prismaPglite.ts); the database itself lives in
-// .vinkup/db and is preserved between visits.
-const PRISMA_CLI = 'node .vinkup/prisma/cli.mjs';
-
+// Prisma talks to PostgreSQL on the trainee's machine. The desktop workspace creates one database
+// per course (vinkup_prisma for these tasks) and passes DATABASE_URL, plus
+// VINKUP_TEST_DATABASE_URL for `npm test`, in the task's environment.
 function prismaStarter(task: CatalogTask): TaskFile[] {
   return [
     file(
@@ -283,19 +280,20 @@ function prismaStarter(task: CatalogTask): TaskFile[] {
         private: true,
         type: 'module',
         scripts: {
-          dev: `${PRISMA_CLI} generate && tsx prisma/seed.ts && tsx src/server.ts`,
-          test: `${PRISMA_CLI} generate && vitest run`,
+          dev: 'prisma generate && prisma migrate deploy && tsx prisma/seed.ts && tsx src/server.ts',
+          test: 'prisma generate && node scripts/prepare-test-db.mjs && vitest run',
           check: 'tsc --noEmit',
-          'db:migrate': `${PRISMA_CLI} migrate`,
-          'db:reset': `${PRISMA_CLI} reset`,
+          'db:migrate': 'prisma migrate dev',
+          'db:reset': 'prisma migrate reset --force',
           'db:seed': 'tsx prisma/seed.ts',
-          'db:generate': `${PRISMA_CLI} generate`,
-          'db:validate': `${PRISMA_CLI} validate`,
+          'db:generate': 'prisma generate',
+          'db:validate': 'prisma validate',
         },
         dependencies: {
+          '@prisma/adapter-pg': '7.10.0',
           '@prisma/client': '7.10.0',
           express: '^4.21.1',
-          'prisma-pglite': '^3.0.2',
+          pg: '^8.23.0',
         },
         devDependencies: {
           prisma: '7.10.0',
@@ -313,59 +311,223 @@ function prismaStarter(task: CatalogTask): TaskFile[] {
       'README.md',
       `# Ticket API
 
-Express and Prisma. The database is PostgreSQL running inside your browser (PGlite): there is no
-server to install and no DATABASE_URL.
+Express and Prisma on PostgreSQL. The desktop app starts the database for you: it creates
+\`vinkup_prisma\` and sets \`DATABASE_URL\`, so there are no credentials or .env files to manage.
+PostgreSQL 16 or newer must be installed and running on this machine.
 
 | Command | What it does |
 | --- | --- |
-| Run (npm run dev) | Generates the Prisma client, runs the seed, starts the API on port 3000 |
-| npm test | Runs the tests in tests/ with Vitest and Supertest, on a separate empty test database |
-| npm run db:migrate -- --name add_priority | Creates a migration in prisma/migrations from your schema changes |
-| npm run db:reset | Deletes the database (Run fills it again from the seed) |
+| Run (npm run dev) | Generates the Prisma client, applies migrations, seeds and starts the API on port 3000 |
+| npm test | Runs Vitest and Supertest against a separate, empty test database |
+| npm run db:migrate -- --name add_priority | Creates and applies a migration from your schema changes |
+| npm run db:reset | Drops the database contents and applies the migrations again |
 | npm run db:seed | Runs prisma/seed.ts |
 | npm run db:generate | Regenerates the Prisma client after editing schema.prisma |
 | npm run db:validate | Checks prisma/schema.prisma |
 | npm run check | Type-checks the project |
 
-Use these instead of Prisma CLI commands such as prisma migrate dev, which need a database server.
-
-- Your database is saved in this browser, so your rows are still there after a reload.
-- When schema.prisma changes, the database starts empty on the next Run and the seed fills it again.
-  Your migrations in prisma/migrations are kept like in any project.
-- Packages with native code, such as bcrypt, can't run here. Use bcryptjs instead.
+- The whole course uses \`vinkup_prisma\`, so the next task continues with the rows and migrations
+  you created here.
+- \`npm test\` uses \`vinkup_prisma_test\`, also created by the app, and every test starts from empty
+  tables.
+- Because PostgreSQL runs on this machine, the normal Prisma commands work. \`migrate dev\` needs a
+  role with permission to create databases.
 `
     ),
     file(
       'prisma.config.ts',
-      `import { defineConfig } from 'prisma/config';\n\nexport default defineConfig({\n  schema: 'prisma/schema.prisma',\n  migrations: { path: 'prisma/migrations' },\n});\n`
+      `import { defineConfig } from 'prisma/config';
+
+export default defineConfig({
+  schema: 'prisma/schema.prisma',
+  migrations: { path: 'prisma/migrations' },
+  datasource: { url: process.env.DATABASE_URL },
+});
+`
     ),
     file(
       'prisma/schema.prisma',
-      `// ${heading(task)}\ngenerator client {\n  provider = "prisma-client"\n  output   = "../generated"\n}\n\ndatasource db {\n  provider = "postgresql"\n}\n\nmodel Ticket {\n  id        Int      @id @default(autoincrement())\n  title     String\n  status    String   @default("open")\n  createdAt DateTime @default(now())\n}\n`
+      `// ${heading(task)}
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Ticket {
+  id        Int      @id @default(autoincrement())
+  title     String
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+}
+`
+    ),
+    file(
+      'prisma/migrations/migration_lock.toml',
+      `# Please do not edit this file manually
+# It should be added in your version-control system (e.g., Git)
+provider = "postgresql"
+`
+    ),
+    file(
+      'prisma/migrations/20250101000000_init/migration.sql',
+      `-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
+-- CreateTable
+CREATE TABLE "Ticket" (
+    "id" SERIAL NOT NULL,
+    "title" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'open',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Ticket_pkey" PRIMARY KEY ("id")
+);
+`
     ),
     file(
       'prisma/seed.ts',
-      `import { prisma } from '../src/db.js';\n\n// Sample data. Runs on every Run, so it only adds rows to an empty database.\n// The count goes in a variable first: in this workspace, code like\n// if ((await prisma.ticket.count()) === 0) at the top level of a file is skipped.\nconst ticketCount = await prisma.ticket.count();\nif (ticketCount === 0) {\n  await prisma.ticket.createMany({\n    data: [\n      { title: 'Printer is offline' },\n      { title: 'Cannot log in to the VPN', status: 'in_progress' },\n      { title: 'Laptop battery drains fast', status: 'closed' },\n    ],\n  });\n  console.log('[seed] Added 3 tickets.');\n}\n\nawait prisma.$disconnect();\nprocess.exit(0); // the in-browser database would otherwise keep the script running\n`
+      `import { prisma } from '../src/db.js';
+
+// Sample data. Runs on every Run, so it only adds rows to an empty database.
+const ticketCount = await prisma.ticket.count();
+if (ticketCount === 0) {
+  await prisma.ticket.createMany({
+    data: [
+      { title: 'Printer is offline' },
+      { title: 'Cannot log in to the VPN', status: 'in_progress' },
+      { title: 'Laptop battery drains fast', status: 'closed' },
+    ],
+  });
+  console.log('[seed] Added 3 tickets.');
+}
+
+await prisma.$disconnect();
+`
     ),
     file(
       'src/db.ts',
-      `import { PrismaClient } from '../generated/client.js';\nimport { createAdapter } from '../.vinkup/prisma/adapter.mjs';\n\n// The workspace's PostgreSQL (PGlite) instead of a DATABASE_URL. Tests get their own empty\n// database (VINKUP_DATABASE=test in vitest.config.ts).\nexport const prisma = new PrismaClient({ adapter: await createAdapter() });\n`
+      `import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../generated/client.js';
+
+// The desktop workspace sets DATABASE_URL; npm test points it at the test database instead.
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL is not set. Open this task in the Vinkup desktop app.');
+}
+
+export const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+`
     ),
     file(
       'src/app.ts',
-      `import express from 'express';\nimport { prisma } from './db.js';\n\nexport const app = express();\napp.use(express.json());\n\napp.get('/', (_req, res) => {\n  res.redirect('/tickets');\n});\n\napp.get('/tickets', async (_req, res, next) => {\n  try {\n    res.json(await prisma.ticket.findMany({ orderBy: { id: 'asc' } }));\n  } catch (error) {\n    next(error); // Express 4 doesn't pass errors from async routes on by itself\n  }\n});\n`
+      `import express from 'express';
+import { prisma } from './db.js';
+
+export const app = express();
+app.use(express.json());
+
+app.get('/', (_req, res) => {
+  res.redirect('/tickets');
+});
+
+app.get('/tickets', async (_req, res, next) => {
+  try {
+    res.json(await prisma.ticket.findMany({ orderBy: { id: 'asc' } }));
+  } catch (error) {
+    next(error); // Express 4 doesn't pass errors from async routes on by itself
+  }
+});
+`
     ),
     file(
       'src/server.ts',
-      `import { app } from './app.js';\n\napp.listen(3000, () => console.log('API on http://localhost:3000 (open the Preview tab)'));\n`
+      `import { app } from './app.js';
+
+app.listen(3000, () => console.log('API on http://localhost:3000 (open the Preview tab)'));
+`
+    ),
+    file(
+      'scripts/prepare-test-db.mjs',
+      `// Puts the separate test database on the current schema before npm test runs.
+// The desktop workspace sets VINKUP_TEST_DATABASE_URL when it opens the task.
+import { spawnSync } from 'node:child_process';
+
+const url = process.env.VINKUP_TEST_DATABASE_URL;
+if (!url) {
+  console.error('VINKUP_TEST_DATABASE_URL is not set. Open this task in the Vinkup desktop app.');
+  process.exit(1);
+}
+
+const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const result = spawnSync(npx, ['prisma', 'migrate', 'deploy'], {
+  stdio: 'inherit',
+  env: { ...process.env, DATABASE_URL: url },
+});
+
+process.exit(result.status ?? 1);
+`
+    ),
+    file(
+      'tests/setup.ts',
+      [
+        "import { beforeEach } from 'vitest';",
+        "import { prisma } from '../src/db.js';",
+        '',
+        '// Every test starts from empty tables, even when a previous run left rows behind.',
+        'beforeEach(async () => {',
+        '  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`',
+        '    SELECT tablename FROM pg_tables',
+        "    WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'",
+        '  `;',
+        '  if (tables.length === 0) return;',
+        '  const list = tables.map((table) => `"public"."${table.tablename}"`).join(\', \');',
+        '  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);',
+        '});',
+        '',
+      ].join('\n')
     ),
     file(
       'tests/tickets.test.ts',
-      `import request from 'supertest';\nimport { afterAll, beforeEach, describe, expect, it } from 'vitest';\nimport { app } from '../src/app.js';\nimport { prisma } from '../src/db.js';\n\nbeforeEach(async () => {\n  await prisma.ticket.deleteMany();\n});\n\nafterAll(async () => {\n  await prisma.$disconnect();\n});\n\ndescribe('GET /tickets', () => {\n  it('returns the tickets in the database', async () => {\n    await prisma.ticket.create({ data: { title: 'Printer is offline' } });\n\n    const response = await request(app).get('/tickets');\n\n    expect(response.status).toBe(200);\n    expect(response.body).toHaveLength(1);\n    expect(response.body[0]).toMatchObject({ title: 'Printer is offline', status: 'open' });\n  });\n});\n`
+      `import request from 'supertest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { app } from '../src/app.js';
+import { prisma } from '../src/db.js';
+
+afterAll(async () => {
+  await prisma.$disconnect();
+});
+
+describe('GET /tickets', () => {
+  it('returns the tickets in the database', async () => {
+    await prisma.ticket.create({ data: { title: 'Printer is offline' } });
+
+    const response = await request(app).get('/tickets');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({ title: 'Printer is offline', status: 'open' });
+  });
+});
+`
     ),
     file(
       'vitest.config.ts',
-      `import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({\n  test: {\n    include: ['tests/**/*.test.ts'],\n    env: { VINKUP_DATABASE: 'test' }, // a separate database that starts empty on every npm test\n    fileParallelism: false, // test files share that database, so they run one at a time\n    hookTimeout: 30_000, // starting the database takes a few seconds\n    testTimeout: 30_000,\n  },\n});\n`
+      `import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    include: ['tests/**/*.test.ts'],
+    setupFiles: ['tests/setup.ts'],
+    // A separate database, prepared before the run by scripts/prepare-test-db.mjs.
+    env: { DATABASE_URL: process.env.VINKUP_TEST_DATABASE_URL ?? '' },
+    fileParallelism: false, // test files share that database, so they run one at a time
+  },
+});
+`
     ),
     file(
       'tsconfig.json',
@@ -525,7 +687,7 @@ export function workspaceForDay(dayId: string): DayWorkspace {
       };
     }
     case 'prisma':
-      return node('npm run dev', prismaStarter); // Prisma on PGlite, see prismaStarter
+      return node('npm run dev', prismaStarter); // Prisma on the local PostgreSQL, see prismaStarter
     case 'react':
       if (dayNumber === 10) {
         return node('npm test', (task) => reactStarter(task, { apiProxy: false, tests: true }));

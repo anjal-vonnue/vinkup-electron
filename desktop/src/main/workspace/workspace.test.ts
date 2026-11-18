@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -14,6 +15,7 @@ import {
   resolveInsideRoot,
   shouldWriteFile,
 } from './paths';
+import { baseUrlFor, databaseNameFor, urlFor } from './postgres';
 import { extractServerPort, splitCommand } from './process';
 import {
   rewriteScripts,
@@ -27,6 +29,33 @@ async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vinkup-workspace-'));
   temporaryRoots.push(root);
   return root;
+}
+
+function postgresReachable(): boolean {
+  try {
+    execFileSync('psql', [urlFor('postgres', baseUrlFor()), '-Atqc', 'select 1'], {
+      stdio: 'pipe',
+      timeout: 5_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function dropDatabases(taskId: string): void {
+  const name = databaseNameFor(taskId);
+  for (const database of [`${name}_test`, name]) {
+    try {
+      execFileSync(
+        'psql',
+        [urlFor('postgres', baseUrlFor()), '-c', `DROP DATABASE IF EXISTS "${database}"`],
+        { stdio: 'pipe', timeout: 5_000 }
+      );
+    } catch {
+      // Best effort; a leftover database is harmless.
+    }
+  }
 }
 
 afterEach(async () => {
@@ -260,7 +289,7 @@ describe('WorkspaceManager', () => {
     );
   });
 
-  it('keeps the Prisma database across reopens but not the old code', async () => {
+  it('keeps the legacy PGlite database across reopens but not the old code', async () => {
     const baseDir = await temporaryRoot();
     const manager = new WorkspaceManager({
       baseDir,
@@ -313,6 +342,41 @@ describe('WorkspaceManager', () => {
 
     await expect(stat(root)).rejects.toThrow();
     await closing;
+  });
+
+  it('passes DATABASE_URL to a Prisma task', async () => {
+    if (!postgresReachable()) return;
+    const baseDir = await temporaryRoot();
+    const output: string[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: (event) => {
+        if (event.type === 'run-output') output.push(event.data);
+      },
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    const taskId = 'it-course-day-01-t-1';
+    dropDatabases(taskId);
+
+    try {
+      await manager.open({
+        taskId,
+        files: {
+          'package.json': JSON.stringify({ dependencies: { '@prisma/adapter-pg': '7.10.0' } }),
+          'prisma/schema.prisma': 'model Ticket {\n  id Int @id\n}\n',
+        },
+      });
+      await manager.dev(taskId, `node -e "console.log(process.env.DATABASE_URL)"`);
+
+      await vi.waitFor(() => expect(output.join('')).toContain('vinkup_it_course'), {
+        timeout: 20_000,
+      });
+
+      await manager.close(taskId);
+    } finally {
+      dropDatabases(taskId);
+    }
   });
 
   it('writes terminal input to a real shell and streams its output back', async () => {
