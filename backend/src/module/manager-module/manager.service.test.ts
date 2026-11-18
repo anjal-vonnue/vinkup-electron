@@ -27,8 +27,8 @@ vi.mock('./manager.repository', () => ({
   },
 }));
 
-import { ManagerService } from './manager.service';
-import { assignMentorSchema } from './manager.schema';
+import { ManagerService } from './manager.service.js';
+import { assignMentorSchema } from './manager.schema.js';
 
 const MANAGER_ID = 'b5f9c5d1-2a44-4f4d-8a1e-6f2c9d7b3e55';
 const MENTOR_ID = '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77';

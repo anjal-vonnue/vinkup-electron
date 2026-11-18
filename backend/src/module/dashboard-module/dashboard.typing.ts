@@ -1,5 +1,5 @@
 import type { TypingSummaryResponse } from '@itp/types';
-import { istDateString, toIstDateString } from '../../utils/istDate';
+import { istDateString, toIstDateString } from '../../utils/istDate.js';
 
 /** How many calendar days (today included) the typing trend covers. */
 export const TYPING_TREND_DAYS = 30;

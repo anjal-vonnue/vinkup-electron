@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotFoundError, DayLockedError } from '../../errors/AppError';
+import { NotFoundError, DayLockedError } from '../../errors/AppError.js';
 
 const { mockGetCurriculumDays, mockGetDayCompletions, mockGetTaskById } = vi.hoisted(() => ({
   mockGetCurriculumDays: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('./progress.repository', () => ({
   },
 }));
 
-import { ProgressService } from './progress.service';
+import { ProgressService } from './progress.service.js';
 
 describe('ProgressService', () => {
   let service: ProgressService;

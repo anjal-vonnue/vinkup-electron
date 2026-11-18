@@ -8,15 +8,15 @@ import type {
   TypingStats,
 } from '@itp/types';
 
-import { NotFoundError } from '../../errors/AppError';
-import { istDateValue, istDayStart, toIstDateString } from '../../utils/istDate';
-import { ProfileService } from '../profile-module/profile.service';
-import { ProgressService } from '../progress-module/progress.service';
-import { AdminRepository } from './admin.repository';
-import { env } from '../../config/env';
-import { ConflictError, TraineeDomainError } from '../../errors/AppError';
-import type { AnalyticsQuery, CreateTraineeBody } from './admin.schema';
-import { buildAdminIntegrity } from './integrity.overall';
+import { NotFoundError } from '../../errors/AppError.js';
+import { istDateValue, istDayStart, toIstDateString } from '../../utils/istDate.js';
+import { ProfileService } from '../profile-module/profile.service.js';
+import { ProgressService } from '../progress-module/progress.service.js';
+import { AdminRepository } from './admin.repository.js';
+import { env } from '../../config/env.js';
+import { ConflictError, TraineeDomainError } from '../../errors/AppError.js';
+import type { AnalyticsQuery, CreateTraineeBody } from './admin.schema.js';
+import { buildAdminIntegrity } from './integrity.overall.js';
 import {
   buildIntegrityTrend,
   buildProgressTrend,
@@ -24,7 +24,7 @@ import {
   buildTraineeComparison,
   buildTypingTrend,
   listDates,
-} from './admin.analytics';
+} from './admin.analytics.js';
 
 const repo = new AdminRepository();
 const profileService = new ProfileService();

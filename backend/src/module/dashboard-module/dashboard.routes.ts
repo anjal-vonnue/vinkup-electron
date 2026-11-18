@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { dashboardController } from './dashboard.controller';
-import { courseIdParamsSchema } from './dashboard.schema';
+import { validate } from '../../middleware/validate.js';
+import { dashboardController } from './dashboard.controller.js';
+import { courseIdParamsSchema } from './dashboard.schema.js';
 
 // Both routers are mounted behind requireAuth in app.ts.
 

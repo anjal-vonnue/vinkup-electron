@@ -2,10 +2,10 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
-import app from '../../../app';
-import { env } from '../../../config/env';
-import { signJwt, verifyJwt } from '../../../utils/jwt';
-import { AUTH_COOKIE_NAME } from '../auth.constants';
+import app from '../../../app.js';
+import { env } from '../../../config/env.js';
+import { signJwt, verifyJwt } from '../../../utils/jwt.js';
+import { AUTH_COOKIE_NAME } from '../auth.constants.js';
 
 const { findBymail, findActiveStaffByEmail, findActiveStaffById, recordAdminLogin } = vi.hoisted(
   () => ({

@@ -1,8 +1,8 @@
 import type { DayIntegrityResponse } from '@itp/types';
-import { integrityRepository } from './integrity.repository';
-import { DayLockedError } from '../../errors/AppError';
-import { dayService } from './day.services';
-import { buildDayIntegrity } from './integrity.scoring';
+import { integrityRepository } from './integrity.repository.js';
+import { DayLockedError } from '../../errors/AppError.js';
+import { dayService } from './day.services.js';
+import { buildDayIntegrity } from './integrity.scoring.js';
 
 export const integrityService = {
   async getDayIntegrity(traineeId: string, dayId: string): Promise<DayIntegrityResponse> {

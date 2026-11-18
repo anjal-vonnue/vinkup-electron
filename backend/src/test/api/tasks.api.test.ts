@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { TaskResponse } from '@itp/types';
-import { db } from './helpers/db';
+import { db } from './helpers/db.js';
 import {
   DAY,
   SETUP_SQL,
@@ -10,8 +10,8 @@ import {
   markTaskCompleted,
   seedCurriculum,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError } from './helpers/http.js';
 
 let a: TestTrainee;
 let b: TestTrainee;

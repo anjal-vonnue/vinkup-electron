@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Profile } from 'passport-google-oauth20';
 
-import { AuthService } from '../auth.service';
+import { AuthService } from '../auth.service.js';
 import {
   UnauthorizedError,
   DomainNotPermittedError,
   NotProvisionedError,
-} from '../../../errors/AppError';
+} from '../../../errors/AppError.js';
 
 const { findBymail, findActiveStaffByEmail, recordAdminLogin } = vi.hoisted(() => ({
   findBymail: vi.fn(),

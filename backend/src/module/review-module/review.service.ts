@@ -1,7 +1,7 @@
 import type { AdminFeedbackEntry, TaskReview, TaskReviewSummary } from '@itp/types';
-import { ConflictError, NotFoundError, TaskNotSubmittedError } from '../../errors/AppError';
-import { ProgressService } from '../progress-module/progress.service';
-import { ReviewRepository } from './review.repository';
+import { ConflictError, NotFoundError, TaskNotSubmittedError } from '../../errors/AppError.js';
+import { ProgressService } from '../progress-module/progress.service.js';
+import { ReviewRepository } from './review.repository.js';
 
 const reviewRepository = new ReviewRepository();
 const progressService = new ProgressService();

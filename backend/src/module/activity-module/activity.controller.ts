@@ -1,10 +1,10 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { ActivityTimeBodyType } from './activity.schema';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import { ActivityService } from './activity.service';
+import type { ActivityTimeBodyType } from './activity.schema.js';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import { ActivityService } from './activity.service.js';
 import type { ActivityTimeDay } from '@itp/types';
-import { activityTimeQuerySchema } from './activity.schema';
-import { ValidationError } from '../../errors/AppError';
+import { activityTimeQuerySchema } from './activity.schema.js';
+import { ValidationError } from '../../errors/AppError.js';
 
 const activityService = new ActivityService();
 

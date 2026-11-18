@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { activityController } from './activity.controller';
-import { activityTimeBodySchema } from './activity.schema';
+import { validate } from '../../middleware/validate.js';
+import { activityController } from './activity.controller.js';
+import { activityTimeBodySchema } from './activity.schema.js';
 
 const activityRoutes = Router();
 

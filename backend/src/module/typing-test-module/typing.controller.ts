@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { TypingResultRecord, TypingStats } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import type { SaveTypingResultBody } from './typing.schema';
-import { TypingService } from './typing.service';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import type { SaveTypingResultBody } from './typing.schema.js';
+import { TypingService } from './typing.service.js';
 
 const typingService = new TypingService();
 

@@ -1,9 +1,9 @@
 import type { DayJournal } from '@itp/types';
 import type { JournalListResponse } from '@itp/types';
-import { journalRepository } from './journal.repository';
-import { assertDayIsAccessible } from './day-access.services';
-import { ProgressService } from '../progress-module/progress.service';
-import { istDateString } from '../../utils/istDate';
+import { journalRepository } from './journal.repository.js';
+import { assertDayIsAccessible } from './day-access.services.js';
+import { ProgressService } from '../progress-module/progress.service.js';
+import { istDateString } from '../../utils/istDate.js';
 
 const progressService = new ProgressService();
 

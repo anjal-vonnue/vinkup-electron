@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma.js';
 
 export class AuthRepository {
   /** Only active trainees can sign in or keep a session. */

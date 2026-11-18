@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { istDateString } from '../../utils/istDate';
+import { istDateString } from '../../utils/istDate.js';
 
 export const traineeIdParamsSchema = z.object({ traineeId: z.string().uuid() });
 

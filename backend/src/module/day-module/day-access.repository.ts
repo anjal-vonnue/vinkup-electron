@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma.js';
 
 // Day content, completion counts and day completion used by the day routes.
 // The unlock rule lives in ProgressService.isDayUnlocked(), not here.

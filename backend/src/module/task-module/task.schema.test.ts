@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { saveCodeBodySchema, taskIdParamsSchema } from './task.schema';
+import { saveCodeBodySchema, taskIdParamsSchema } from './task.schema.js';
 
 const file = (path: string, content = '') => ({ path, content });
 

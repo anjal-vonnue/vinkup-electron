@@ -8,7 +8,7 @@ const prisma = vi.hoisted(() => ({
 
 vi.mock('../../lib/prisma', () => ({ prisma }));
 
-import { AuthRepository } from './auth.repository';
+import { AuthRepository } from './auth.repository.js';
 
 const TRAINEE_ID = '3f2c9c0e-5b1d-4c53-9a7e-0d6f2f1a9b11';
 

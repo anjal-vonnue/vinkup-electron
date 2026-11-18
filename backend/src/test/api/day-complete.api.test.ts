@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ApiErrorResponse, DayCurrentStatus } from '@itp/types';
-import { db } from './helpers/db';
+import { db } from './helpers/db.js';
 import {
   DAY,
   TASK,
@@ -9,8 +9,8 @@ import {
   markTaskCompleted,
   seedCurriculum,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError } from './helpers/http.js';
 
 // Response of PATCH /api/days/:dayId/complete (add to packages/types as CompleteDayResponse).
 type CompleteDayResponse = { status: DayCurrentStatus; nextDayId: string | null };

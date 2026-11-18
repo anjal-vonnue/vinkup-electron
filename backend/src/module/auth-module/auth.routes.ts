@@ -1,12 +1,12 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { URLSearchParams } from 'url';
-import passport from './passport';
+import passport from './passport.js';
 import type { RequestHandler } from 'express';
-import { env } from '../../config/env';
-import { signJwt } from '../../utils/jwt';
-import { AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS, AUTH_COOKIE_MAX_AGE_MS } from './auth.constants';
-import { authController } from './auth.controller';
-import { requireAuth } from '../../middleware/authMiddleware';
+import { env } from '../../config/env.js';
+import { signJwt } from '../../utils/jwt.js';
+import { AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS, AUTH_COOKIE_MAX_AGE_MS } from './auth.constants.js';
+import { authController } from './auth.controller.js';
+import { requireAuth } from '../../middleware/authMiddleware.js';
 
 const authRoutes = Router();
 

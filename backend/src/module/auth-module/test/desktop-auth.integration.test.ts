@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import app from '../../../app';
-import { verifyDesktopAccessToken } from '../../../utils/jwt';
+import app from '../../../app.js';
+import { verifyDesktopAccessToken } from '../../../utils/jwt.js';
 
 type Trainee = {
   id: string;

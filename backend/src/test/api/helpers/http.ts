@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { expect } from 'vitest';
 import type { ApiErrorResponse, ErrorCode } from '@itp/types';
-import app from '../../../app';
+import app from '../../../app.js';
 
 export type Res = request.Response;
 

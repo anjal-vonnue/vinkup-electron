@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { env } from '../config/env';
+import { env } from '../config/env.js';
 
 // Seeds the database. Safe to run again: it updates what changed and never deletes trainee data.
 //

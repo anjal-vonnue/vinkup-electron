@@ -1,6 +1,6 @@
-import type { task_progress } from '../../generated/prisma/client';
-import { NotFoundError, DayLockedError } from '../../errors/AppError';
-import { ProgressRepository } from './progress.repository';
+import type { task_progress } from '../../generated/prisma/client.js';
+import { NotFoundError, DayLockedError } from '../../errors/AppError.js';
+import { ProgressRepository } from './progress.repository.js';
 
 const progressRepository = new ProgressRepository();
 

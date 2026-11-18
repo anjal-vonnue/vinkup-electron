@@ -1,5 +1,5 @@
 import type { ProfileDay } from '@itp/types';
-import { istDateString, toIstDateString } from '../../utils/istDate';
+import { istDateString, toIstDateString } from '../../utils/istDate.js';
 
 export const DAILY_ACTIVITY_DAYS = 7;
 

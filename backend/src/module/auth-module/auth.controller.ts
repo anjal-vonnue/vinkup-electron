@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import { AUTH_COOKIE_NAME, AUTH_COOKIE_CLEAR_OPTIONS } from './auth.constants';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import { AUTH_COOKIE_NAME, AUTH_COOKIE_CLEAR_OPTIONS } from './auth.constants.js';
 
 import type { MeResponse } from '@itp/types';
 

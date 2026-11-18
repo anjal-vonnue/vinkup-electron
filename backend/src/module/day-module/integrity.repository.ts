@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma.js';
 
 export const integrityRepository = {
   /** Tasks of this day the trainee has worked on (a task_progress row that is not "not_started"). */

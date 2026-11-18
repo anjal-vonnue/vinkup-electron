@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { CompleteDayResponse, DayContent, DayCurrentStatus } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import { dayService } from './day.services';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import { dayService } from './day.services.js';
 
 export const dayController = {
   getDay: async (req: Request, res: Response<DayContent>, next: NextFunction) => {

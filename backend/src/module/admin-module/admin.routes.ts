@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { adminController } from './admin.controller';
-import { traineeIdParamsSchema, traineeTaskParamsSchema } from './admin.schema';
-import { createTraineeSchema } from './admin.schema';
-import { adminReviewRoutes } from '../review-module/review.routes';
-import { requireAssignedTrainee } from '../../middleware/authMiddleware';
+import { validate } from '../../middleware/validate.js';
+import { adminController } from './admin.controller.js';
+import { traineeIdParamsSchema, traineeTaskParamsSchema } from './admin.schema.js';
+import { createTraineeSchema } from './admin.schema.js';
+import { adminReviewRoutes } from '../review-module/review.routes.js';
+import { requireAssignedTrainee } from '../../middleware/authMiddleware.js';
 
 export const adminRoutes = Router();
 

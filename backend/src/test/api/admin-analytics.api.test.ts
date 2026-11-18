@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AdminAnalytics } from '@itp/types';
-import { db } from './helpers/db';
+import { db } from './helpers/db.js';
 import {
   DAY,
   TASK,
@@ -14,8 +14,8 @@ import {
   seedCurriculum,
   type TestAdmin,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError } from './helpers/http.js';
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 const TASKS_IN_CURRICULUM = 6; // see seedCurriculum

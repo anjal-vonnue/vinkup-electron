@@ -5,9 +5,9 @@ import type {
   TaskReviewListResponse,
   TaskReviewSummary,
 } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import type { ReworkFeedbackBody, ApproveNoteBody } from './review.schema';
-import { ReviewService } from './review.service';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import type { ReworkFeedbackBody, ApproveNoteBody } from './review.schema.js';
+import { ReviewService } from './review.service.js';
 
 const reviewService = new ReviewService();
 

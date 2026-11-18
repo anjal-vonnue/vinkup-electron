@@ -17,8 +17,8 @@ vi.mock('./admin.repository', () => ({
 vi.mock('../profile-module/profile.service', () => ({ ProfileService: class {} }));
 vi.mock('../progress-module/progress.service', () => ({ ProgressService: class {} }));
 
-import { AdminService } from './admin.service';
-import { createTraineeSchema } from './admin.schema';
+import { AdminService } from './admin.service.js';
+import { createTraineeSchema } from './admin.schema.js';
 
 const ADMIN_ID = '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77';
 

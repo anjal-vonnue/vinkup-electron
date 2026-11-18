@@ -1,8 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DashboardResponse } from '@itp/types';
-import { db } from './helpers/db';
-import { freshTrainees, seedCurriculum, type TestTrainee } from './helpers/fixtures';
-import { api, body, expectError, expectIsoDateTime } from './helpers/http';
+import { db } from './helpers/db.js';
+import { freshTrainees, seedCurriculum, type TestTrainee } from './helpers/fixtures.js';
+import { api, body, expectError, expectIsoDateTime } from './helpers/http.js';
 
 type TypingResult = { wpm: number; accuracy: number; takenAt: string };
 

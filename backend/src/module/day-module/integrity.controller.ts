@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { DayIntegrityResponse } from '@itp/types';
-import { integrityService } from './integrity.service';
+import { integrityService } from './integrity.service.js';
 
 export const integrityController = {
   getDayIntegrity: async (

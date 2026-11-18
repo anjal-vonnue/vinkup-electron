@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toTaskFiles } from './task.files';
+import { toTaskFiles } from './task.files.js';
 
 describe('toTaskFiles', () => {
   it('keeps { path, content } string pairs in order', () => {

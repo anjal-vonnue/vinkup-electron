@@ -1,6 +1,6 @@
 import type { DayTask, ReviewStatus } from '@itp/types';
-import { assertDayIsAccessible } from './day-access.services';
-import { dayTasksRepository } from './day-tasks.repository';
+import { assertDayIsAccessible } from './day-access.services.js';
+import { dayTasksRepository } from './day-tasks.repository.js';
 
 type TaskRow = Awaited<ReturnType<typeof dayTasksRepository.findTasksByDay>>[number];
 type TaskStatus = DayTask['status'];

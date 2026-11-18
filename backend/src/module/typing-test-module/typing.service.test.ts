@@ -14,7 +14,7 @@ vi.mock('./typing.repository', () => ({
   },
 }));
 
-import { TypingService } from './typing.service';
+import { TypingService } from './typing.service.js';
 
 describe('TypingService', () => {
   let service: TypingService;

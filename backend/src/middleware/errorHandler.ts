@@ -1,7 +1,7 @@
 // src/middleware/errorHandler.ts
 import type { Request, Response, NextFunction } from 'express';
 import type { ApiErrorResponse } from '@itp/types';
-import { AppError } from '../errors/AppError';
+import { AppError } from '../errors/AppError.js';
 
 /**
  * express.json() rejects a body over its limit or with broken JSON before any route runs. Those

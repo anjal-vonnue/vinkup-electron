@@ -6,12 +6,12 @@ import type {
   NextDay,
   ReworkTaskSummary,
 } from '@itp/types';
-import { NotFoundError } from '../../errors/AppError';
-import { istDateString, istDateValue, istDayStart } from '../../utils/istDate';
-import { ProgressService } from '../progress-module/progress.service';
-import { DashboardRepository } from './dashboard.repository';
-import { buildTypingSummary, TYPING_TREND_DAYS } from './dashboard.typing';
-import { CertificateService } from './certificate.service';
+import { NotFoundError } from '../../errors/AppError.js';
+import { istDateString, istDateValue, istDayStart } from '../../utils/istDate.js';
+import { ProgressService } from '../progress-module/progress.service.js';
+import { DashboardRepository } from './dashboard.repository.js';
+import { buildTypingSummary, TYPING_TREND_DAYS } from './dashboard.typing.js';
+import { CertificateService } from './certificate.service.js';
 
 const certificateService = new CertificateService();
 const dashboardRepository = new DashboardRepository();

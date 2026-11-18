@@ -6,8 +6,8 @@ import {
   markDayCompleted,
   seedCurriculum,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError } from './helpers/http.js';
 
 let a: TestTrainee;
 let b: TestTrainee;

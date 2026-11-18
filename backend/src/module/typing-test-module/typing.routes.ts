@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { typingController } from './typing.controller';
-import { saveTypingResultBodySchema } from './typing.schema';
+import { validate } from '../../middleware/validate.js';
+import { typingController } from './typing.controller.js';
+import { saveTypingResultBodySchema } from './typing.schema.js';
 
 const typingRoutes = Router();
 

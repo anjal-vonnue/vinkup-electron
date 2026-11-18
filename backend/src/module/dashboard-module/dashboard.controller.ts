@@ -5,10 +5,10 @@ import type {
   CourseCertificate,
   ReworkTaskSummary,
 } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import type { CourseIdParams } from './dashboard.schema';
-import { DashboardService } from './dashboard.service';
-import { CertificateService } from './certificate.service';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import type { CourseIdParams } from './dashboard.schema.js';
+import { DashboardService } from './dashboard.service.js';
+import { CertificateService } from './certificate.service.js';
 
 const dashboardService = new DashboardService();
 const certificateService = new CertificateService();

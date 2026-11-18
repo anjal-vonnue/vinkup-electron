@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { desktopAuthController } from './desktop-auth.controller';
+import { validate } from '../../middleware/validate.js';
+import { desktopAuthController } from './desktop-auth.controller.js';
 import {
   createDesktopTransactionSchema,
   exchangeDesktopCodeSchema,
   logoutDesktopSessionSchema,
   refreshDesktopSessionSchema,
-} from './desktop-auth.schema';
+} from './desktop-auth.schema.js';
 
 const desktopAuthRoutes = Router();
 

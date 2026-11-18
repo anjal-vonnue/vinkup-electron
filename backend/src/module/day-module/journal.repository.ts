@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma.js';
 
 // Model and field names follow the existing snake_case schema.prisma.
 export const journalRepository = {

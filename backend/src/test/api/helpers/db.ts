@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../../../generated/prisma/client';
+import { PrismaClient } from '../../../generated/prisma/client.js';
 
 /** The tests' own Prisma client, for setting up rows and checking what the API wrote. */
 export const db = new PrismaClient({

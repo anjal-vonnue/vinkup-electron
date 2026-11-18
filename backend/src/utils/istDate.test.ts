@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { istDateString, istDateValue, istDayStart, toIstDateString } from './istDate';
+import { istDateString, istDateValue, istDayStart, toIstDateString } from './istDate.js';
 
 describe('istDate', () => {
   // 20:00 UTC on 14 Oct is 01:30 on 15 Oct in India.

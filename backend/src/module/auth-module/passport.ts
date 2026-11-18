@@ -4,9 +4,9 @@ import {
   type Profile,
   type VerifyCallback,
 } from 'passport-google-oauth20';
-import { env, googleDesktopCallbackUrl } from '../../config/env';
-import { AuthService } from './auth.service';
-import { AppError } from '../../errors/AppError';
+import { env, googleDesktopCallbackUrl } from '../../config/env.js';
+import { AuthService } from './auth.service.js';
+import { AppError } from '../../errors/AppError.js';
 
 const authService = new AuthService();
 

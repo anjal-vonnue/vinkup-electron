@@ -1,5 +1,5 @@
-import type { ActivityTimeBodyType } from './activity.schema';
-import { ActivityRepository } from './activity.repository';
+import type { ActivityTimeBodyType } from './activity.schema.js';
+import { ActivityRepository } from './activity.repository.js';
 import type { ActivityTimeDay } from '@itp/types';
 
 const DAY_MS = 86_400_000;

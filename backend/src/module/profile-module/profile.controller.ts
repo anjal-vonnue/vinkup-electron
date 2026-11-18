@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { ProfileData } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import { ProfileService } from './profile.service';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import { ProfileService } from './profile.service.js';
 
 const profileService = new ProfileService();
 

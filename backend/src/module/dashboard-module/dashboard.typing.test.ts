@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTypingSummary } from './dashboard.typing';
+import { buildTypingSummary } from './dashboard.typing.js';
 
 // 2026-10-01 10:00 in India (04:30 UTC).
 const NOW = new Date('2026-10-01T04:30:00.000Z');

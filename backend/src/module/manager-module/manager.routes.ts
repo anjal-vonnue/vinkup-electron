@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { managerController } from './manager.controller';
+import { validate } from '../../middleware/validate.js';
+import { managerController } from './manager.controller.js';
 import {
   accountStatusSchema,
   assignMentorSchema,
@@ -10,7 +10,7 @@ import {
   traineeIdParamsSchema,
   updateStaffSchema,
   updateTraineeSchema,
-} from './manager.schema';
+} from './manager.schema.js';
 
 export const managerRoutes = Router();
 

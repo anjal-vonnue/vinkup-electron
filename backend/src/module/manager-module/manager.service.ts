@@ -1,19 +1,19 @@
 import type { ManagerStaffMember, ManagerTrainee } from '@itp/types';
-import { env } from '../../config/env';
+import { env } from '../../config/env.js';
 import {
   ConflictError,
   ForbiddenError,
   InvalidMentorError,
   NotFoundError,
   TraineeDomainError,
-} from '../../errors/AppError';
-import { ManagerRepository, type StaffRow, type TraineeWithMentor } from './manager.repository';
+} from '../../errors/AppError.js';
+import { ManagerRepository, type StaffRow, type TraineeWithMentor } from './manager.repository.js';
 import type {
   CreateManagerTraineeBody,
   CreateStaffBody,
   UpdateManagerTraineeBody,
   UpdateStaffBody,
-} from './manager.schema';
+} from './manager.schema.js';
 
 const repo = new ManagerRepository();
 

@@ -1,9 +1,9 @@
 import type { ProfileData } from '@itp/types';
-import { NotFoundError } from '../../errors/AppError';
-import { istDateString, istDayStart } from '../../utils/istDate';
-import { ProgressService } from '../progress-module/progress.service';
-import { buildDailyActivity, DAILY_ACTIVITY_DAYS } from './profile.daily';
-import { ProfileRepository } from './profile.repository';
+import { NotFoundError } from '../../errors/AppError.js';
+import { istDateString, istDayStart } from '../../utils/istDate.js';
+import { ProgressService } from '../progress-module/progress.service.js';
+import { buildDailyActivity, DAILY_ACTIVITY_DAYS } from './profile.daily.js';
+import { ProfileRepository } from './profile.repository.js';
 
 const profileRepository = new ProfileRepository();
 const progressService = new ProgressService();

@@ -1,5 +1,5 @@
-import { prisma } from '../../lib/prisma';
-import type { ActivityTimeBodyType } from './activity.schema';
+import { prisma } from '../../lib/prisma.js';
+import type { ActivityTimeBodyType } from './activity.schema.js';
 
 export class ActivityRepository {
   addTime = (traineeId: string, body: ActivityTimeBodyType) => {

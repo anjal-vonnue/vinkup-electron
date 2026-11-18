@@ -1,10 +1,10 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { AdminTraineeSummary } from '@itp/types';
-import app from '../../app';
-import { signJwt } from '../../utils/jwt';
-import { AUTH_COOKIE_NAME } from '../../module/auth-module/auth.constants';
-import { db } from './helpers/db';
+import app from '../../app.js';
+import { signJwt } from '../../utils/jwt.js';
+import { AUTH_COOKIE_NAME } from '../../module/auth-module/auth.constants.js';
+import { db } from './helpers/db.js';
 import {
   DAY,
   createAdmin,
@@ -12,8 +12,8 @@ import {
   seedCurriculum,
   type TestAdmin,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError } from './helpers/http.js';
 
 const ENDPOINT = '/api/admin/trainees';
 const NEW_TRAINEE = { name: 'Asha Rao', email: 'asha.rao@vonnue.com' };

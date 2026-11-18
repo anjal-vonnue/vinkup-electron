@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma.js';
 
 type ReviewOutcome = { ok: true } | { ok: false; reason: 'not-submitted' | 'already-reviewed' };
 

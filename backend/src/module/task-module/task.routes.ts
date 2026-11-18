@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { taskController } from './task.controller';
-import { saveCodeBodySchema, taskIdParamsSchema } from './task.schema';
+import { validate } from '../../middleware/validate.js';
+import { taskController } from './task.controller.js';
+import { saveCodeBodySchema, taskIdParamsSchema } from './task.schema.js';
 
 // Mounted at /api/tasks behind requireAuth in app.ts.
 const taskRoutes = Router();

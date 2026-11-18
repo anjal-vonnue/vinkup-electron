@@ -1,7 +1,7 @@
-import { prisma } from '../../lib/prisma';
-import type { review_priority } from '../../generated/prisma/enums';
-import type { CreateFlagData } from './flag.schema';
-import type { flag_event_type } from '../../generated/prisma/enums';
+import { prisma } from '../../lib/prisma.js';
+import type { review_priority } from '../../generated/prisma/enums.js';
+import type { CreateFlagData } from './flag.schema.js';
+import type { flag_event_type } from '../../generated/prisma/enums.js';
 
 export class FlagRepository {
   findTask = async (taskId: string) => {

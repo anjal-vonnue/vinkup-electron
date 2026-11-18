@@ -1,10 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
-import { verifyJwt } from '../utils/jwt';
-import { UnauthorizedError } from '../errors/AppError';
-import type { AuthenticatedRequest } from '../types/auth.types';
-import { AUTH_COOKIE_NAME } from '../module/auth-module/auth.constants';
-import { ForbiddenError, NotFoundError } from '../errors/AppError';
-import { AuthRepository } from '../module/auth-module/auth.repository';
+import { verifyJwt } from '../utils/jwt.js';
+import { UnauthorizedError } from '../errors/AppError.js';
+import type { AuthenticatedRequest } from '../types/auth.types.js';
+import { AUTH_COOKIE_NAME } from '../module/auth-module/auth.constants.js';
+import { ForbiddenError, NotFoundError } from '../errors/AppError.js';
+import { AuthRepository } from '../module/auth-module/auth.repository.js';
 
 const authRepository = new AuthRepository();
 

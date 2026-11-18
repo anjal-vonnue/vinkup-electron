@@ -1,6 +1,6 @@
-import { signJwt } from '../../../utils/jwt';
-import { AUTH_COOKIE_NAME } from '../../../module/auth-module/auth.constants';
-import { db, resetDatabase, resetTraineeData } from './db';
+import { signJwt } from '../../../utils/jwt.js';
+import { AUTH_COOKIE_NAME } from '../../../module/auth-module/auth.constants.js';
+import { db, resetDatabase, resetTraineeData } from './db.js';
 
 // A small curriculum with the same id formats as the real one:
 //

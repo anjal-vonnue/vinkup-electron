@@ -1,8 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { ManagerStaffMember, ManagerTrainee, MeResponse } from '@itp/types';
-import app from '../../app';
-import { db } from './helpers/db';
+import app from '../../app.js';
+import { db } from './helpers/db.js';
 import {
   DAY,
   TASK,
@@ -13,8 +13,8 @@ import {
   seedCurriculum,
   type TestAdmin,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError } from './helpers/http.js';
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 

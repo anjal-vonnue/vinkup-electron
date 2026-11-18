@@ -1,9 +1,9 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import app from '../../app';
-import { env } from '../../config/env';
-import { AUTH_COOKIE_NAME } from '../../module/auth-module/auth.constants';
+import app from '../../app.js';
+import { env } from '../../config/env.js';
+import { AUTH_COOKIE_NAME } from '../../module/auth-module/auth.constants.js';
 import {
   DAY,
   TASK,
@@ -12,8 +12,8 @@ import {
   seedCurriculum,
   type TestAdmin,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError } from './helpers/http.js';
 
 // Admins are not trainees: every trainee endpoint must refuse them with 403,
 // while trainees (including tokens issued before roles existed) keep working.

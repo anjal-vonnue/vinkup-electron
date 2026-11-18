@@ -1,8 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { LogFlagEventRequest } from '@itp/types';
-import { db } from './helpers/db';
-import { TASK, freshTrainees, seedCurriculum, type TestTrainee } from './helpers/fixtures';
-import { api, expectError } from './helpers/http';
+import { db } from './helpers/db.js';
+import { TASK, freshTrainees, seedCurriculum, type TestTrainee } from './helpers/fixtures.js';
+import { api, expectError } from './helpers/http.js';
 
 let a: TestTrainee;
 let b: TestTrainee;

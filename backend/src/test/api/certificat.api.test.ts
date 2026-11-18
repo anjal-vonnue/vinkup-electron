@@ -1,15 +1,15 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { CourseCertificate, DashboardResponse, ApiErrorResponse } from '@itp/types';
-import { db } from './helpers/db';
+import { db } from './helpers/db.js';
 import {
   DAY,
   freshTrainees,
   markDayCompleted,
   seedCurriculum,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError, expectIsoDateTime } from './helpers/http';
-import { buildCertificateId } from '../../module/dashboard-module/certificate.util';
+} from './helpers/fixtures.js';
+import { api, body, expectError, expectIsoDateTime } from './helpers/http.js';
+import { buildCertificateId } from '../../module/dashboard-module/certificate.util.js';
 
 let a: TestTrainee;
 let b: TestTrainee;

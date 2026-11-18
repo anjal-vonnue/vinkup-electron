@@ -1,5 +1,5 @@
 import type { TypingResultRecord } from '@itp/types';
-import { TypingRepository } from './typing.repository';
+import { TypingRepository } from './typing.repository.js';
 
 const typingRepository = new TypingRepository();
 

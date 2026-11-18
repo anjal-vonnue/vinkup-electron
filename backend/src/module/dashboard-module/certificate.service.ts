@@ -1,7 +1,7 @@
 import type { CourseCertificate } from '@itp/types';
-import { ForbiddenError, NotFoundError } from '../../errors/AppError';
-import { CertificateRepository } from './certificate.repository';
-import { buildCertificateId } from './certificate.util';
+import { ForbiddenError, NotFoundError } from '../../errors/AppError.js';
+import { CertificateRepository } from './certificate.repository.js';
+import { buildCertificateId } from './certificate.util.js';
 
 const certificateRepository = new CertificateRepository();
 

@@ -6,10 +6,10 @@ import type {
   AdminTraineeDetail,
   AdminTraineeSummary,
 } from '@itp/types';
-import { AdminService } from './admin.service';
-import { analyticsQuerySchema, CreateTraineeBody } from './admin.schema';
-import { AuthenticatedRequest } from '../../types/auth.types';
-import { ValidationError } from '../../errors/AppError';
+import { AdminService } from './admin.service.js';
+import { analyticsQuerySchema, CreateTraineeBody } from './admin.schema.js';
+import { AuthenticatedRequest } from '../../types/auth.types.js';
+import { ValidationError } from '../../errors/AppError.js';
 
 const adminService = new AdminService();
 

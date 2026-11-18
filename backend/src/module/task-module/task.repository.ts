@@ -1,6 +1,6 @@
 import type { TaskFile } from '@itp/types';
-import type { task_progress } from '../../generated/prisma/client';
-import { prisma } from '../../lib/prisma';
+import type { task_progress } from '../../generated/prisma/client.js';
+import { prisma } from '../../lib/prisma.js';
 
 export class TaskRepository {
   /** A task with what the task page shows about its day, or null. */

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { ManagerStaffMember, ManagerTrainee } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import { ManagerService } from './manager.service';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import { ManagerService } from './manager.service.js';
 import type {
   AccountStatusBody,
   AssignMentorBody,
@@ -9,7 +9,7 @@ import type {
   CreateStaffBody,
   UpdateManagerTraineeBody,
   UpdateStaffBody,
-} from './manager.schema';
+} from './manager.schema.js';
 
 const managerService = new ManagerService();
 

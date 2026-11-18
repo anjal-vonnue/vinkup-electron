@@ -5,8 +5,8 @@ import type {
   AdminAnalyticsTraineeRow,
   AdminAnalyticsTypingPoint,
 } from '@itp/types';
-import { buildDayIntegrity } from '../day-module/integrity.scoring';
-import type { FlagRow, ProgressRow } from './integrity.overall';
+import { buildDayIntegrity } from '../day-module/integrity.scoring.js';
+import type { FlagRow, ProgressRow } from './integrity.overall.js';
 
 /**
  * Pure functions for GET /api/admin/analytics: no database, no req/res, easy to unit test.

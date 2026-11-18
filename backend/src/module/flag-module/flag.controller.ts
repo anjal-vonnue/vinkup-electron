@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
-import { AuthenticatedRequest } from '../../types/auth.types';
-import { FlagService } from './flag.service';
-import { LogFlagType } from './flag.schema';
+import { AuthenticatedRequest } from '../../types/auth.types.js';
+import { FlagService } from './flag.service.js';
+import { LogFlagType } from './flag.schema.js';
 
 const flagService = new FlagService();
 class FlagController {

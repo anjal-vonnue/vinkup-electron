@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AdminFeedbackEntry, TaskResponse, TaskReview, TaskReviewSummary } from '@itp/types';
-import type { task_progress } from '../../generated/prisma/client';
-import { db } from './helpers/db';
+import type { task_progress } from '../../generated/prisma/client.js';
+import { db } from './helpers/db.js';
 import {
   DAY,
   TASK,
@@ -12,8 +12,8 @@ import {
   seedCurriculum,
   type TestAdmin,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body, expectError, expectIsoDateTime } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body, expectError, expectIsoDateTime } from './helpers/http.js';
 
 let a: TestTrainee;
 let b: TestTrainee;

@@ -1,4 +1,4 @@
-import { ProgressService } from '../progress-module/progress.service'; // adjust path if needed
+import { ProgressService } from '../progress-module/progress.service.js'; // adjust path if needed
 
 const progressService = new ProgressService();
 

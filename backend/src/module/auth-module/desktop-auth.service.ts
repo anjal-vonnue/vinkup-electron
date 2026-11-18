@@ -1,20 +1,24 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import type { MeResponse } from '@itp/types';
-import { AppError } from '../../errors/AppError';
-import { signDesktopAccessToken, verifyDesktopAccessToken, type JwtPayload } from '../../utils/jwt';
-import { AuthRepository } from './auth.repository';
+import { AppError } from '../../errors/AppError.js';
+import {
+  signDesktopAccessToken,
+  verifyDesktopAccessToken,
+  type JwtPayload,
+} from '../../utils/jwt.js';
+import { AuthRepository } from './auth.repository.js';
 import {
   DESKTOP_HANDOFF_TTL_MS,
   DESKTOP_LOOPBACK_HOST,
   DESKTOP_REFRESH_TOKEN_TTL_MS,
   DESKTOP_TRANSACTION_TTL_MS,
-} from './desktop-auth.constants';
-import { DesktopAuthRepository, type DesktopUserSnapshot } from './desktop-auth.repository';
+} from './desktop-auth.constants.js';
+import { DesktopAuthRepository, type DesktopUserSnapshot } from './desktop-auth.repository.js';
 import type {
   desktop_auth_transactionModel,
   desktop_sessionModel,
-} from '../../generated/prisma/models';
+} from '../../generated/prisma/models.js';
 
 export type CreateTransactionInput = {
   redirectUri: string;

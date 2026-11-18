@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { journalController } from './journal.controller';
+import { journalController } from './journal.controller.js';
 
 export const journalRouter = Router();
 

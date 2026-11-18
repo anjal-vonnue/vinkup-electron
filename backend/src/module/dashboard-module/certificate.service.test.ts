@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenError, NotFoundError } from '../../errors/AppError';
-import { buildCertificateId } from './certificate.util';
+import { ForbiddenError, NotFoundError } from '../../errors/AppError.js';
+import { buildCertificateId } from './certificate.util.js';
 
 const repo = vi.hoisted(() => ({
   findCourse: vi.fn(),
@@ -24,7 +24,7 @@ import {
   CERTIFICATE_LOCKED_MESSAGE,
   CertificateService,
   summarizeCompletions,
-} from './certificate.service';
+} from './certificate.service.js';
 
 const traineeId = 'trainee-1';
 const courseId = 'html';

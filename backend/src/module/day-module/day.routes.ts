@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { dayTasksParamsSchema } from './day-tasks.schema';
-import { dayTasksController } from './day-tasks.controller';
-import { journalDayIdParamsSchema, saveJournalBodySchema } from './journal.schema';
-import { journalController } from './journal.controller';
-import { integrityController } from './integrity.controller';
-import { dayController } from './day.controller';
+import { validate } from '../../middleware/validate.js';
+import { dayTasksParamsSchema } from './day-tasks.schema.js';
+import { dayTasksController } from './day-tasks.controller.js';
+import { journalDayIdParamsSchema, saveJournalBodySchema } from './journal.schema.js';
+import { journalController } from './journal.controller.js';
+import { integrityController } from './integrity.controller.js';
+import { dayController } from './day.controller.js';
 
 export const dayRouter = Router();
 

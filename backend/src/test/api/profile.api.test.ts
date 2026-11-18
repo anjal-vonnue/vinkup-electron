@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ProfileData } from '@itp/types';
-import { db } from './helpers/db';
+import { db } from './helpers/db.js';
 import {
   DAY,
   freshTrainees,
@@ -10,8 +10,8 @@ import {
   minutesAgo,
   seedCurriculum,
   type TestTrainee,
-} from './helpers/fixtures';
-import { api, body } from './helpers/http';
+} from './helpers/fixtures.js';
+import { api, body } from './helpers/http.js';
 
 let a: TestTrainee;
 let b: TestTrainee;

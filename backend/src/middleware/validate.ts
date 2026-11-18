@@ -1,7 +1,7 @@
 // src/middleware/validate.ts
 import type { Request, Response, NextFunction } from 'express';
 import type { ZodType } from 'zod';
-import { ValidationError } from '../errors/AppError';
+import { ValidationError } from '../errors/AppError.js';
 
 type Schemas = {
   body?: ZodType;

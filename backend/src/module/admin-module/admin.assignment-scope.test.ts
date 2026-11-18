@@ -22,7 +22,7 @@ vi.mock('./admin.repository', () => ({
 vi.mock('../profile-module/profile.service', () => ({ ProfileService: class {} }));
 vi.mock('../progress-module/progress.service', () => ({ ProgressService: class {} }));
 
-import { AdminService } from './admin.service';
+import { AdminService } from './admin.service.js';
 
 const MENTOR_ID = '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77';
 const TRAINEE_ID = '3f2c9c0e-5b1d-4c53-9a7e-0d6f2f1a9b11';

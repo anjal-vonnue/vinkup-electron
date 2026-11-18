@@ -1,5 +1,5 @@
 import z from 'zod';
-import { flag_event_type } from '../../generated/prisma/enums';
+import { flag_event_type } from '../../generated/prisma/enums.js';
 
 const MAX_CONTEXT_KEYS = 10;
 

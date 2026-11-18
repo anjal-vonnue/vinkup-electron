@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
-import { taskIdParamsSchema } from '../task-module/task.schema';
-import { traineeIdParamsSchema, traineeTaskParamsSchema } from '../admin-module/admin.schema';
-import { reviewController } from './review.controller';
-import { approveNoteSchema, reworkFeedbackSchema } from './review.schema';
-import { requireAssignedTrainee } from '../../middleware/authMiddleware';
+import { validate } from '../../middleware/validate.js';
+import { taskIdParamsSchema } from '../task-module/task.schema.js';
+import { traineeIdParamsSchema, traineeTaskParamsSchema } from '../admin-module/admin.schema.js';
+import { reviewController } from './review.controller.js';
+import { approveNoteSchema, reworkFeedbackSchema } from './review.schema.js';
+import { requireAssignedTrainee } from '../../middleware/authMiddleware.js';
 
 /** Mounted at /api/admin behind requireAdmin (in admin.routes.ts). */
 export const adminReviewRoutes = Router();

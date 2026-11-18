@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma.js';
 
 export const dayTasksRepository = {
   /** Query 1: every task of the day, already in order. */

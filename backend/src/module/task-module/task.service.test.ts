@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConflictError, DayLockedError, NotFoundError } from '../../errors/AppError';
+import { ConflictError, DayLockedError, NotFoundError } from '../../errors/AppError.js';
 
 const repo = vi.hoisted(() => ({
   findTask: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('../progress-module/progress.service', () => ({
   },
 }));
 
-import { TaskService } from './task.service';
+import { TaskService } from './task.service.js';
 
 const traineeId = 'trainee-1';
 const taskId = 'html-day-01-t-1';

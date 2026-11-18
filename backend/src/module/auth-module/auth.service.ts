@@ -1,11 +1,11 @@
 import type { Profile } from 'passport-google-oauth20';
-import { env } from '../../config/env';
-import { AuthRepository } from './auth.repository';
+import { env } from '../../config/env.js';
+import { AuthRepository } from './auth.repository.js';
 import {
   DomainNotPermittedError,
   NotProvisionedError,
   UnauthorizedError,
-} from '../../errors/AppError';
+} from '../../errors/AppError.js';
 
 const authRepository = new AuthRepository();
 

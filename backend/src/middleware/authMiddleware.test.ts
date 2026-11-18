@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { env } from '../config/env';
-import { signJwt, type JwtPayload } from '../utils/jwt';
-import { AUTH_COOKIE_NAME } from '../module/auth-module/auth.constants';
-import { AppError } from '../errors/AppError';
-import type { AuthenticatedRequest } from '../types/auth.types';
+import { env } from '../config/env.js';
+import { signJwt, type JwtPayload } from '../utils/jwt.js';
+import { AUTH_COOKIE_NAME } from '../module/auth-module/auth.constants.js';
+import { AppError } from '../errors/AppError.js';
+import type { AuthenticatedRequest } from '../types/auth.types.js';
 
 const { findActiveStaffById, findActiveTraineeById, findTraineeMentorById } = vi.hoisted(() => ({
   findActiveStaffById: vi.fn(),
@@ -29,7 +29,7 @@ import {
   requireManager,
   requireMentor,
   requireTrainee,
-} from './authMiddleware';
+} from './authMiddleware.js';
 
 type Middleware = (req: Request, res: Response, next: NextFunction) => void;
 

@@ -1,8 +1,8 @@
 import type { SubmitTaskResponse, TaskCodeResponse, TaskFile, TaskResponse } from '@itp/types';
-import { ConflictError, NotFoundError } from '../../errors/AppError';
-import { ProgressService } from '../progress-module/progress.service';
-import { toTaskFiles } from './task.files';
-import { TaskRepository } from './task.repository';
+import { ConflictError, NotFoundError } from '../../errors/AppError.js';
+import { ProgressService } from '../progress-module/progress.service.js';
+import { toTaskFiles } from './task.files.js';
+import { TaskRepository } from './task.repository.js';
 
 const taskRepository = new TaskRepository();
 const progressService = new ProgressService();

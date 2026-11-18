@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
-import { env } from '../config/env';
-import { signJwt, verifyJwt, type JwtPayload } from './jwt';
+import { env } from '../config/env.js';
+import { signJwt, verifyJwt, type JwtPayload } from './jwt.js';
 
 const payload: JwtPayload = {
   id: 'u1',

@@ -1,5 +1,5 @@
 import type { TraineeIntegrityItem } from '@itp/types';
-import { buildDayIntegrity, type ScoredFlagEvent } from '../day-module/integrity.scoring';
+import { buildDayIntegrity, type ScoredFlagEvent } from '../day-module/integrity.scoring.js';
 
 export type ProgressRow = { traineeId: string; taskId: string; dayId: string };
 

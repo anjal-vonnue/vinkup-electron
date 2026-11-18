@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma.js';
 
 // Fields of a curriculum day that the dashboard sends (as a DaySummary).
 const daySummaryFields = {

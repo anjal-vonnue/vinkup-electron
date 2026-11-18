@@ -1,15 +1,15 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { MeResponse } from '@itp/types';
-import { UnauthorizedError } from '../../errors/AppError';
-import passport from './passport';
-import { desktopAuthService, type DesktopAuthService } from './desktop-auth.service';
+import { UnauthorizedError } from '../../errors/AppError.js';
+import passport from './passport.js';
+import { desktopAuthService, type DesktopAuthService } from './desktop-auth.service.js';
 import type {
   CreateDesktopTransactionBody,
   ExchangeDesktopCodeBody,
   LogoutDesktopSessionBody,
   RefreshDesktopSessionBody,
-} from './desktop-auth.schema';
-import type { desktop_auth_transactionModel } from '../../generated/prisma/models';
+} from './desktop-auth.schema.js';
+import type { desktop_auth_transactionModel } from '../../generated/prisma/models.js';
 
 const ERROR_ALLOWLIST = new Set(['DOMAIN_NOT_PERMITTED', 'NOT_PROVISIONED']);
 

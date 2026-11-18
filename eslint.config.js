@@ -58,7 +58,10 @@ export default tseslint.config(
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
-        project: [path.join(rootDir, 'backend/tsconfig.json')],
+        project: [
+          path.join(rootDir, 'backend/tsconfig.json'),
+          path.join(rootDir, 'backend/tsconfig.test.json'),
+        ],
         tsconfigRootDir: path.join(rootDir, 'backend'),
       },
     },

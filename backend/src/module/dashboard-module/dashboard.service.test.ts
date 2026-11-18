@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotFoundError } from '../../errors/AppError';
+import { NotFoundError } from '../../errors/AppError.js';
 
 const repo = vi.hoisted(() => ({
   findDayWithCourseSize: vi.fn(),
@@ -39,7 +39,7 @@ vi.mock('./certificate.service', () => ({
   },
 }));
 
-import { DashboardService } from './dashboard.service';
+import { DashboardService } from './dashboard.service.js';
 
 const traineeId = 'trainee-1';
 // 2026-10-01 10:00 in India.

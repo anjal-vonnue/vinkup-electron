@@ -1,4 +1,4 @@
-import { env } from '../../config/env';
+import { env } from '../../config/env.js';
 
 export const AUTH_COOKIE_NAME = 'auth_token';
 

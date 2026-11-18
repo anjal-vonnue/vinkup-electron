@@ -5,9 +5,9 @@ import type {
   TaskCodeResponse,
   TaskResponse,
 } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import type { TaskIdParams } from './task.schema';
-import { TaskService } from './task.service';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import type { TaskIdParams } from './task.schema.js';
+import { TaskService } from './task.service.js';
 
 const taskService = new TaskService();
 

@@ -6,8 +6,8 @@ import {
   buildTraineeComparison,
   buildTypingTrend,
   listDates,
-} from './admin.analytics';
-import type { FlagRow, ProgressRow } from './integrity.overall';
+} from './admin.analytics.js';
+import type { FlagRow, ProgressRow } from './integrity.overall.js';
 
 describe('listDates', () => {
   it('lists every day from `from` to `to`, both included', () => {

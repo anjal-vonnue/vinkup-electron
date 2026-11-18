@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { DayJournal, JournalListResponse, SaveJournalRequest } from '@itp/types';
-import type { AuthenticatedRequest } from '../../types/auth.types';
-import { journalService } from './journal.services';
+import type { AuthenticatedRequest } from '../../types/auth.types.js';
+import { journalService } from './journal.services.js';
 
 export const journalController = {
   listJournal: async (req: Request, res: Response<JournalListResponse>, next: NextFunction) => {

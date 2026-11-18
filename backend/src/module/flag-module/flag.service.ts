@@ -1,9 +1,9 @@
-import { flag_event_type } from '../../generated/prisma/enums';
-import type { LogFlagType } from './flag.schema';
-import { FlagRepository } from './flag.repository';
-import { NotFoundError } from '../../errors/AppError';
-import { review_priority } from '../../generated/prisma/enums';
-import { ProgressService } from '../progress-module/progress.service';
+import { flag_event_type } from '../../generated/prisma/enums.js';
+import type { LogFlagType } from './flag.schema.js';
+import { FlagRepository } from './flag.repository.js';
+import { NotFoundError } from '../../errors/AppError.js';
+import { review_priority } from '../../generated/prisma/enums.js';
+import { ProgressService } from '../progress-module/progress.service.js';
 const progressService = new ProgressService();
 
 const DUPLICATE_WINDOW_MS = 2000;

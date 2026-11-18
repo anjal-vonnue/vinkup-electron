@@ -1,26 +1,26 @@
 import { type Express, type Request, type Response } from 'express';
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import { errorHandler } from './middleware/errorHandler';
+import { errorHandler } from './middleware/errorHandler.js';
 import cors from 'cors';
-import { notFoundHandler } from './middleware/notFoundHandler';
-import passport from './module/auth-module/passport';
-import authRoutes from './module/auth-module/auth.routes';
-import desktopAuthRoutes from './module/auth-module/desktop-auth.routes';
-import profileRoutes from './module/profile-module/profile.routes';
-import { requireTrainee, requireAdmin, requireManager } from './middleware/authMiddleware';
-import { dashboardRoutes } from './module/dashboard-module/dashboard.routes';
-import { courseRoutes } from './module/dashboard-module/dashboard.routes';
-import flagRoutes from './module/flag-module/flag.routes';
-import activityRoutes from './module/activity-module/activity.routes';
-import taskRoutes from './module/task-module/task.routes';
-import { traineeReviewRoutes } from './module/review-module/review.routes';
-import typingRoutes from './module/typing-test-module/typing.routes';
-import dayRouter from './module/day-module/day.routes';
-import journalRouter from './module/day-module/journal.routes';
+import { notFoundHandler } from './middleware/notFoundHandler.js';
+import passport from './module/auth-module/passport.js';
+import authRoutes from './module/auth-module/auth.routes.js';
+import desktopAuthRoutes from './module/auth-module/desktop-auth.routes.js';
+import profileRoutes from './module/profile-module/profile.routes.js';
+import { requireTrainee, requireAdmin, requireManager } from './middleware/authMiddleware.js';
+import { dashboardRoutes } from './module/dashboard-module/dashboard.routes.js';
+import { courseRoutes } from './module/dashboard-module/dashboard.routes.js';
+import flagRoutes from './module/flag-module/flag.routes.js';
+import activityRoutes from './module/activity-module/activity.routes.js';
+import taskRoutes from './module/task-module/task.routes.js';
+import { traineeReviewRoutes } from './module/review-module/review.routes.js';
+import typingRoutes from './module/typing-test-module/typing.routes.js';
+import dayRouter from './module/day-module/day.routes.js';
+import journalRouter from './module/day-module/journal.routes.js';
 
-import { adminRoutes } from './module/admin-module/admin.routes';
-import { managerRoutes } from './module/manager-module/manager.routes';
+import { adminRoutes } from './module/admin-module/admin.routes.js';
+import { managerRoutes } from './module/manager-module/manager.routes.js';
 const app: Express = express();
 
 app.use(

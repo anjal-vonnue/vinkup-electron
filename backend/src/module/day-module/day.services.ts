@@ -1,7 +1,7 @@
 import type { CompleteDayResponse, DayContent, DayCurrentStatus } from '@itp/types';
-import { ChecklistIncompleteError, DayLockedError, NotFoundError } from '../../errors/AppError';
-import { getDayAccessStatus } from './day-access.services';
-import { dayAccessRepository } from './day-access.repository';
+import { ChecklistIncompleteError, DayLockedError, NotFoundError } from '../../errors/AppError.js';
+import { getDayAccessStatus } from './day-access.services.js';
+import { dayAccessRepository } from './day-access.repository.js';
 
 export const dayService = {
   async getDayContent(dayId: string): Promise<DayContent> {

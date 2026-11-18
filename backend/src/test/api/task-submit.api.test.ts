@@ -1,8 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DayCurrentStatus, DayTask, SubmitTaskResponse, TaskResponse } from '@itp/types';
-import { db } from './helpers/db';
-import { DAY, TASK, freshTrainees, seedCurriculum, type TestTrainee } from './helpers/fixtures';
-import { api, body, expectError, expectIsoDateTime } from './helpers/http';
+import { db } from './helpers/db.js';
+import { DAY, TASK, freshTrainees, seedCurriculum, type TestTrainee } from './helpers/fixtures.js';
+import { api, body, expectError, expectIsoDateTime } from './helpers/http.js';
 
 let a: TestTrainee;
 let b: TestTrainee;

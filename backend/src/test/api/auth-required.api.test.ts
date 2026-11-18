@@ -1,9 +1,9 @@
 import { beforeAll, describe, it } from 'vitest';
 import request from 'supertest';
-import app from '../../app';
-import { AUTH_COOKIE_NAME } from '../../module/auth-module/auth.constants';
-import { DAY, TASK, seedCurriculum } from './helpers/fixtures';
-import { expectError } from './helpers/http';
+import app from '../../app.js';
+import { AUTH_COOKIE_NAME } from '../../module/auth-module/auth.constants.js';
+import { DAY, TASK, seedCurriculum } from './helpers/fixtures.js';
+import { expectError } from './helpers/http.js';
 
 // Every endpoint that isn't built yet must reject a caller who isn't logged in.
 
