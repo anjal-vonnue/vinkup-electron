@@ -8,7 +8,7 @@ import type {
   WorkspaceOpenInput,
   WorkspaceOpenResult,
 } from '@itp/types';
-import { hostProcessEnv, resolveHostEnvironment } from './env';
+import { hostProcessEnv, resolveHostEnvironment, type HostEnvironment } from './env';
 import {
   cleanupWorkspace,
   materializeWorkspace,
@@ -30,6 +30,7 @@ import {
   type WorkspaceProcess,
 } from './process';
 import { openTerminal, type TerminalProcess } from './pty';
+import { requiresPostgres, resolvePostgresEnvironment, type PostgresEnvironment } from './postgres';
 import { startWorkspaceServer, type WorkspaceStaticServer } from './staticServer';
 
 const MAX_TERMINALS_PER_TASK = 4;
@@ -64,6 +65,8 @@ type WorkspaceSession = {
   servers: Map<number, string>;
   portMonitors: Map<number, ReturnType<typeof setInterval>>;
   pendingPorts: Set<number>;
+  /** Set for Prisma tasks: the course database and the test database URLs. */
+  database: PostgresEnvironment | null;
   closed: boolean;
 };
 
@@ -140,6 +143,13 @@ export class WorkspaceManager {
         const written = await materializeWorkspace(root, input.files);
         if (input.supportFiles) await writeSupportFiles(root, input.supportFiles);
 
+        // PostgreSQL and Prisma tasks need the machine's server; fail with a clear
+        // message before anything is started when it is not ready.
+        const host = await resolveHostEnvironment();
+        const database = requiresPostgres(taskId, input.files)
+          ? await resolvePostgresEnvironment(taskId, host.path)
+          : null;
+
         const watcher = watchWorkspace(root, written, (change) => {
           this.callbacks.emitEvent({
             type: 'file-changed',
@@ -170,6 +180,7 @@ export class WorkspaceManager {
           servers: new Map(),
           portMonitors: new Map(),
           pendingPorts: new Set(),
+          database,
           closed: false,
         };
         this.sessions.set(taskId, session);
@@ -241,7 +252,7 @@ export class WorkspaceManager {
           cwd: session.root,
           command: 'npm',
           args: ['install', '--no-audit', '--no-fund'],
-          env: hostProcessEnv(host),
+          env: this.environmentFor(session, host),
           onOutput: (stream, data) => {
             this.callbacks.emitEvent({ type: 'run-output', taskId, kind: 'install', stream, data });
           },
@@ -305,7 +316,7 @@ export class WorkspaceManager {
         cwd: session.root,
         command: executable,
         args,
-        env: hostProcessEnv(host),
+        env: this.environmentFor(session, host),
         onOutput: (stream, data) => {
           this.callbacks.emitEvent({ type: 'run-output', taskId, kind: 'dev', stream, data });
           scan(stripAnsi(data));
@@ -367,7 +378,7 @@ export class WorkspaceManager {
           id: terminalId,
           cwd: session.root,
           shell: host.shell,
-          env: hostProcessEnv(host),
+          env: this.environmentFor(session, host),
           cols: parsed.cols,
           rows: parsed.rows,
           onData: (data) => {
@@ -501,6 +512,17 @@ export class WorkspaceManager {
     for (const port of ports) {
       this.callbacks.emitEvent({ type: 'server-closed', taskId: session.taskId, port });
     }
+  }
+
+  /** The task's environment, plus its PostgreSQL URLs for Prisma tasks. */
+  private environmentFor(session: WorkspaceSession, host: HostEnvironment): NodeJS.ProcessEnv {
+    const env = hostProcessEnv(host);
+    if (!session.database) return env;
+    return {
+      ...env,
+      DATABASE_URL: session.database.url,
+      VINKUP_TEST_DATABASE_URL: session.database.testUrl,
+    };
   }
 
   private async disposeSession(session: WorkspaceSession): Promise<void> {

@@ -616,7 +616,7 @@ All task routes: `taskId` path param is a string, 1–100 chars, regex `^[a-z0-9
 
 - **Field rules:**
   - `estimatedMinutes`: number or `null`.
-  - `runtime` ∈ `browser | node | sql`. `runCommand`: the run command of a `node` task (`"npm run check"`, `"npm test"` or `"npm run dev"` in the current curriculum), otherwise `null`; the 16 Prisma tasks have none. `setupSql`: SQL string for `sql` tasks or `null`.
+  - `runtime` ∈ `browser | node | sql`. `runCommand`: the run command of a `node` task (`"npm run check"`, `"npm test"` or `"npm run dev"` in the current curriculum), otherwise `null`; PostgreSQL days 1–5 and the 16 Prisma tasks have none (their terminal is the workspace). `setupSql`: SQL string for `sql` tasks or `null`; no current task uses it.
   - `status` is derived (`progressService.taskStatus`): no progress row → `not_started`; row `status = 'completed'` → `completed`; row with `code_updated_at` set or non-null `files` → `in_progress`; otherwise `not_started`.
 - **Errors:** 400; 401; 403 `DAY_LOCKED`; 404 `"Task not found."`.
 

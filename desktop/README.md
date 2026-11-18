@@ -127,6 +127,29 @@ npm run start:desktop
 
 This serves `frontend/dist` from the local server and loads it in Electron.
 
+## PostgreSQL and Prisma tasks
+
+The PostgreSQL and Prisma courses use PostgreSQL installed on this machine, not a
+WebAssembly database. The workspace manager (`src/main/workspace/postgres.ts`)
+finds `psql` on the login-shell PATH, verifies the server, and passes
+`DATABASE_URL` / `VINKUP_TEST_DATABASE_URL` to `npm install`, Run and every
+terminal. Databases are kept when a task closes, because later tasks continue
+from them.
+
+- **PostgreSQL days 1–5** run in the workspace terminal (`runtime: node`, no run
+  command) and use one database, `support_tickets`. The trainee creates it with
+  `createdb` on day 1, so the manager does not create it. Day 6 is a `pg`
+  project; for that task the manager creates `support_tickets` and
+  `support_tickets_test` first.
+- **Prisma** creates `vinkup_prisma` and `vinkup_prisma_test` for every task.
+
+Requirements: PostgreSQL 16 or newer, running, with a role allowed to create
+databases (`createdb`, `prisma migrate dev`'s shadow database). By default the
+app connects over the Unix socket with peer authentication; set
+`VINKUP_DATABASE_URL` for a TCP server or a password. Opening one of these tasks
+fails with an actionable message when the machine is not ready. See
+`docs/postgresql-in-the-workspace.md` and `docs/prisma-in-the-workspace.md`.
+
 ## Checks
 
 ```bash
@@ -150,6 +173,7 @@ release.
 | ---------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `VINKUP_API_URL`                   | `https://vinkup-electron.onrender.com` | Backend the `/api` proxy and desktop sign-in use. Defaults to `http://localhost:3000` when `NODE_ENV=development`.                      |
 | `VINKUP_DESKTOP_PORT`              | `43110`                                | Local renderer port. Changing it changes the renderer origin, which clears stored state.                                                |
+| `VINKUP_DATABASE_URL`              | local socket, peer auth                | PostgreSQL URL for the PostgreSQL and Prisma courses. One database per course (`support_tickets`, `vinkup_prisma`) plus a `_test` one.  |
 | `VINKUP_DISABLE_SCREEN_PROTECTION` | `false`                                | Set to `true` to disable screen protection. Loaded from `desktop/.env.local` in development; packaged runs use the process environment. |
 | `NODE_ENV`                         | unset                                  | `development` loads the Vite dev server and enables DevTools.                                                                           |
 | `VINKUP_OZONE_PLATFORM`            | unset                                  | Set to `wayland` to use native Wayland instead of XWayland on Linux.                                                                    |

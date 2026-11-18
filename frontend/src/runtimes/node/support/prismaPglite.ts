@@ -1,4 +1,4 @@
-// Helper files the workspace writes into a Prisma task's folder.
+// Helper files the workspace writes into a task saved before Prisma moved to local PostgreSQL.
 // They live in .vinkup/, which the workspace ignores: never shown in Files, never saved.
 // Trainees use the npm scripts in the task's package.json; these files do the work behind them.
 //

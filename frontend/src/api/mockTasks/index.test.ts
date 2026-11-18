@@ -48,8 +48,13 @@ describe('task catalog', () => {
     });
     expect(catalogTaskResponse('ts-day-01-t-1', 'not_started')?.runCommand).toBe('npm run check');
     expect(catalogTaskResponse('postgresql-day-01-t-1', 'not_started')).toMatchObject({
-      runtime: 'sql',
+      runtime: 'node',
+      runCommand: null,
       setupSql: null,
+    });
+    expect(catalogTaskResponse('postgresql-day-06-t-1', 'not_started')).toMatchObject({
+      runtime: 'node',
+      runCommand: 'npm test',
     });
     expect(catalogTaskResponse('react-day-07-t-1', 'not_started')?.runCommand).toBe('npm run dev');
   });
