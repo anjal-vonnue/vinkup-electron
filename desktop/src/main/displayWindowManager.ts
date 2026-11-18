@@ -55,6 +55,7 @@ export class DisplayWindowManager {
   private areAlertsOpen = false;
   private isReadyForFocusTracking = false;
   private alertReturnDisplayId: number | null = null;
+  private displayTheme: 'light' | 'dark' = 'light';
 
   constructor(
     mainWindow: BrowserWindow,
@@ -268,6 +269,13 @@ export class DisplayWindowManager {
 
   shouldPreventMinimize(): boolean {
     return this.isProtectionEnabledForCurrentUser();
+  }
+
+  async setDisplayTheme(theme: 'light' | 'dark'): Promise<void> {
+    this.displayTheme = theme;
+    await Promise.all(
+      [...this.overlays.values()].filter(isAlive).map((window) => this.applyDisplayTheme(window))
+    );
   }
 
   private readonly onDisplayAdded = (): void => {
@@ -639,7 +647,7 @@ export class DisplayWindowManager {
         isAlive(this.mainWindow) &&
         !this.isQuitting &&
         !this.isAuthenticationInProgress &&
-        !this.isAdminSession
+        !this.isStaffSession
       ) {
         this.mainWindow.focus();
       }
@@ -715,8 +723,16 @@ export class DisplayWindowManager {
     });
     void window
       .loadFile(path.join(__dirname, 'overlay.html'))
+      .then(() => this.applyDisplayTheme(window))
       .catch((error: unknown) => console.error('[desktop] Failed to load display overlay', error));
     return window;
+  }
+
+  private applyDisplayTheme(window: BrowserWindow): Promise<void> {
+    if (!isAlive(window)) return Promise.resolve();
+    return window.webContents
+      .executeJavaScript(`document.documentElement.dataset.theme = '${this.displayTheme}'`)
+      .then(() => undefined);
   }
 
   private destroyOverlay(id: number, expectedWindow?: BrowserWindow): void {

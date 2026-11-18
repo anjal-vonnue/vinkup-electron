@@ -18,6 +18,7 @@ const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
     options: Record<string, unknown>;
     setFocused: (focused: boolean) => void;
     isFocusable: () => boolean;
+    executeJavaScript: ReturnType<typeof vi.fn>;
   }>,
 }));
 
@@ -29,9 +30,10 @@ vi.mock('electron', () => ({
 import { DisplayWindowManager } from './displayWindowManager.js';
 
 class FakeWindow extends EventEmitter {
-  readonly webContents = Object.assign(new EventEmitter(), {
-    isDestroyed: () => false,
-  });
+  readonly webContents: EventEmitter & {
+    isDestroyed: () => boolean;
+    executeJavaScript: ReturnType<typeof vi.fn>;
+  };
   destroyed = false;
   focused = false;
   visible = false;
@@ -41,6 +43,10 @@ class FakeWindow extends EventEmitter {
 
   constructor(readonly options: Record<string, unknown> = {}) {
     super();
+    this.webContents = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      executeJavaScript: vi.fn(() => Promise.resolve()),
+    });
     this.bounds = {
       x: typeof options.x === 'number' ? options.x : 0,
       y: typeof options.y === 'number' ? options.y : 0,
@@ -137,6 +143,7 @@ describe('DisplayWindowManager focus alerts', () => {
           window.focused = focused;
         },
         isFocusable: () => window.focusable,
+        executeJavaScript: window.webContents.executeJavaScript,
       });
       window.on('closed', () => {
         const record = createdWindows.find((item) => item.options === options);
@@ -196,6 +203,26 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('updates the theme of existing secondary display overlays', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1
+    );
+
+    await manager.start();
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+
+    await manager.setDisplayTheme('dark');
+
+    expect(overlay?.executeJavaScript).toHaveBeenCalledWith(
+      "document.documentElement.dataset.theme = 'dark'"
+    );
+    manager.dispose();
+  });
+
   it.each(['mentor', 'manager'] as const)(
     'disables screen protection for the %s role',
     async (role) => {
@@ -235,6 +262,19 @@ describe('DisplayWindowManager focus alerts', () => {
     expect(manager.isProtectionEnabledForCurrentUser()).toBe(true);
     expect(manager.shouldPreventMinimize()).toBe(true);
     expect(createdWindows.some(({ options }) => options.fullscreen === true)).toBe(true);
+    manager.dispose();
+  });
+
+  it('treats the interactive cover as Vinkup but alerts after focus leaves it', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1
+    );
+
+    await manager.start();
     mainWindow.emit('ready-to-show');
     mainWindow.emit('focus');
 

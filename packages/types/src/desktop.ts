@@ -40,6 +40,7 @@ export interface DesktopApi {
   window: {
     setFullscreen: (value: boolean) => Promise<boolean>;
     isFullscreen: () => Promise<boolean>;
+    setDisplayTheme: (theme: 'light' | 'dark') => Promise<void>;
     beginCertificatePrint: () => Promise<void>;
     endCertificatePrint: () => Promise<void>;
     /** Returns an unsubscribe function. */
@@ -48,7 +49,7 @@ export interface DesktopApi {
 
   certificate: {
     savePdf: (fileName: string) => Promise<boolean>;
-  }
+  };
 
   /**
    * The in-app browser used by the Resources page. Navigation is validated

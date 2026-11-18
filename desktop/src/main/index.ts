@@ -349,6 +349,15 @@ function registerIpcHandlers(): void {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
   });
 
+  ipcMain.handle('window:set-display-theme', (event, theme: unknown) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    if (theme !== 'light' && theme !== 'dark') {
+      throw new Error('Invalid display theme.');
+    }
+    return displayWindowManager?.setDisplayTheme(theme);
+  });
+
   ipcMain.handle('window:begin-certificate-print', (event) => {
     assertTrustedSender(event);
     assertMainWindowSender(event);
