@@ -25,6 +25,31 @@ export type BrowserAvailability = {
   secondaryResourcesActive: boolean;
 };
 
+export interface SecondaryDisplayResourcesApi {
+  getAllowlist: () => Promise<ResourcesAllowlist>;
+  getState: () => Promise<ResourcesBrowserState>;
+  open: (bounds: ResourcesBrowserBounds) => Promise<ResourcesBrowserState>;
+  setBounds: (bounds: ResourcesBrowserBounds) => Promise<void>;
+  close: () => Promise<void>;
+  home: () => Promise<void>;
+  navigate: (input: string) => Promise<ResourcesBrowserState>;
+  goBack: () => Promise<void>;
+  goForward: () => Promise<void>;
+  reload: () => Promise<void>;
+  stop: () => Promise<void>;
+  find: (query: string) => Promise<void>;
+  findNext: (forward: boolean) => Promise<void>;
+  stopFind: () => Promise<void>;
+  zoomIn: () => Promise<void>;
+  zoomOut: () => Promise<void>;
+  zoomReset: () => Promise<void>;
+  onChange: (listener: (state: ResourcesBrowserState) => void) => () => void;
+  onFindResult: (listener: (result: ResourcesFindResult) => void) => () => void;
+  onFocusAddress: (listener: () => void) => () => void;
+  onOpenFind: (listener: () => void) => () => void;
+  onEscape: (listener: () => void) => () => void;
+}
+
 /**
  * Events produced by the main-process workspace for one task. Everything carries the
  * task id so a runtime can ignore events from a workspace that was just closed.

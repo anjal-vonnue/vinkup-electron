@@ -237,9 +237,14 @@ export class DisplayWindowManager {
   }
 
   ownsOverlaySender(sender: WebContents): boolean {
-    return [...this.overlays.values()].some(
-      (window) => isAlive(window) && window.webContents === sender
-    );
+    return this.getOverlayWindowForSender(sender) !== null;
+  }
+
+  getOverlayWindowForSender(sender: WebContents): BrowserWindow | null {
+    for (const window of this.overlays.values()) {
+      if (isAlive(window) && window.webContents === sender) return window;
+    }
+    return null;
   }
 
   setOverlayResourcesActive(sender: WebContents, active: boolean): void {

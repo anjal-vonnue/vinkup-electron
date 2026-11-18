@@ -477,7 +477,7 @@
     if (savedIndex >= 0) openReference(savedIndex, false);
   } else {
     setReferencesActive(false);
-    window.vinkupDisplay?.setResourcesActive(false);
+    window.vinkupDisplay?.setResourcesActive(true);
     persistDisplayState();
   }
 })();

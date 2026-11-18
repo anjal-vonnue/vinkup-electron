@@ -51,7 +51,9 @@ export class ResourcesBrowser {
   private state: ResourcesBrowserState = { ...EMPTY_BROWSER_STATE };
   private lastBounds: ResourcesBrowserBounds | null = null;
   private attached = false;
-  private downloadHandler: ((event: Electron.Event) => void) | null = null;
+  private downloadHandler:
+    | ((event: Electron.Event, item: Electron.DownloadItem, contents: Electron.WebContents) => void)
+    | null = null;
   private lastFindQuery = '';
 
   constructor(
@@ -253,9 +255,11 @@ export class ResourcesBrowser {
     if (!this.view) return;
 
     this.attached = false;
-    this.window.contentView.removeChildView(this.view);
-    this.view.setVisible(false);
-    this.view.webContents.close();
+    if (!this.window.isDestroyed()) {
+      this.window.contentView.removeChildView(this.view);
+      this.view.setVisible(false);
+    }
+    if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
     this.view = null;
 
     if (this.downloadHandler) {
@@ -297,7 +301,8 @@ export class ResourcesBrowser {
       app.userAgentFallback.replace(/\s(?:Electron|Vinkup|vinkup)\/\S+/g, '')
     );
 
-    this.downloadHandler = (event) => {
+    this.downloadHandler = (event, _item, contents) => {
+      if (contents !== this.view?.webContents) return;
       event.preventDefault();
       this.update({
         error: 'Downloads are disabled in the Resources browser.',

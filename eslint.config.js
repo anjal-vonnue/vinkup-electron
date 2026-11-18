@@ -129,7 +129,10 @@ export default tseslint.config(
     rules: {},
   },
   {
-    files: ['desktop/src/main/overlay-references.js'],
+    files: [
+      'desktop/src/main/overlay-references.js',
+      'desktop/src/main/overlay-resources.js',
+    ],
     languageOptions: {
       globals: globals.browser,
     },
