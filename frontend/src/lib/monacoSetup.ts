@@ -53,44 +53,86 @@ const TOKEN_CSS_VARS: Record<string, string> = {
   number: '--color-status-warning',
 };
 
-function readTokens(): MonacoTokens {
-  const styles = getComputedStyle(document.documentElement);
+/**
+ * Reads CSS variables from the root element using the requested theme.
+ *
+ * The application's theme variables are defined on :root[data-theme],
+ * so the theme must be applied to document.documentElement when reading them.
+ */
+function readTokens(theme: 'light' | 'dark'): MonacoTokens {
+  const root = document.documentElement;
+  const previousTheme = root.dataset.theme;
+
+  root.dataset.theme = theme;
+
+  const styles = getComputedStyle(root);
   const tokens: MonacoTokens = {};
+
   for (const [key, cssVar] of Object.entries(TOKEN_CSS_VARS)) {
     tokens[key] = styles.getPropertyValue(cssVar).trim();
   }
+
+  // Restore the application's original theme.
+  if (previousTheme === undefined) {
+    delete root.dataset.theme;
+  } else {
+    root.dataset.theme = previousTheme;
+  }
+
   return tokens;
 }
 
 /**
- * This app's dark palette only exists under `@media (prefers-color-scheme: dark)` —
- * there's no class/attribute toggle — so `getComputedStyle` only ever reflects
- * whichever mode the OS currently reports, never "the other" one. So instead of
- * pre-defining both 'itp-dark' and 'itp-light' once, we (re)define and apply
- * only the theme that matches the current preference, every time it changes.
+ * Registers both Monaco themes using the application's CSS variables.
  */
-function applyCurrentTheme(isDark: boolean): void {
-  const themeName = isDark ? 'itp-dark' : 'itp-light';
-  const tokens = readTokens();
-  monaco.editor.defineTheme(themeName, buildMonacoTheme(tokens, isDark ? 'vs-dark' : 'vs'));
-  monaco.editor.setTheme(themeName);
+function registerMonacoThemes(): void {
+  const lightTokens = readTokens('light');
+  const darkTokens = readTokens('dark');
+
+  monaco.editor.defineTheme('itp-light', buildMonacoTheme(lightTokens, 'vs'));
+
+  monaco.editor.defineTheme('itp-dark', buildMonacoTheme(darkTokens, 'vs-dark'));
 }
 
-const darkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-applyCurrentTheme(darkMediaQuery.matches);
-darkMediaQuery.addEventListener('change', (event) => applyCurrentTheme(event.matches));
+/**
+ * Applies the theme currently selected by the application.
+ */
+function applyCurrentTheme(): void {
+  const isDark = document.documentElement.dataset.theme === 'dark';
+
+  monaco.editor.setTheme(isDark ? 'itp-dark' : 'itp-light');
+}
+
+// Register both themes.
+registerMonacoThemes();
+
+// Apply the initial application theme.
+applyCurrentTheme();
+
+// Observe application theme changes.
+const themeObserver = new MutationObserver(() => {
+  applyCurrentTheme();
+});
+
+themeObserver.observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ['data-theme'],
+});
 
 void document.fonts.ready.then(() => monaco.editor.remeasureFonts());
 
 const SCRIPT_TARGETS: Record<PlainCompilerOptions['target'], number> = {
   ESNext: monaco.typescript.ScriptTarget.ESNext,
 };
+
 const MODULE_KINDS: Record<PlainCompilerOptions['module'], number> = {
   ESNext: monaco.typescript.ModuleKind.ESNext,
 };
+
 const MODULE_RESOLUTIONS: Record<PlainCompilerOptions['moduleResolution'], number> = {
   NodeJs: monaco.typescript.ModuleResolutionKind.NodeJs,
 };
+
 const JSX_EMITS: Record<PlainCompilerOptions['jsx'], number> = {
   ReactJSX: monaco.typescript.JsxEmit.ReactJSX,
 };
@@ -133,6 +175,9 @@ export function applyViewerSettings(): void {
     monaco.typescript.typescriptDefaults,
     monaco.typescript.javascriptDefaults,
   ]) {
-    defaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: true });
+    defaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: true,
+    });
   }
 }
