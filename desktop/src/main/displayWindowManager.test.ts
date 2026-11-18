@@ -269,6 +269,7 @@ describe('DisplayWindowManager focus alerts', () => {
 
   it('keeps secondary displays uncovered during sign-in and restores protection on success', async () => {
     const mainWindow = new FakeWindow();
+    mainWindow.fullscreen = false;
     const manager = new DisplayWindowManager(
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
@@ -290,6 +291,12 @@ describe('DisplayWindowManager focus alerts', () => {
     ).toBe(false);
 
     manager.setProtectionContext(false, 'trainee', true, true);
+    await vi.waitFor(() => {
+      expect(mainWindow.isFullScreen()).toBe(true);
+      expect(
+        createdWindows.some(({ options, destroyed }) => options.fullscreen === true && !destroyed)
+      ).toBe(true);
+    });
     const overlay = createdWindows.find(
       ({ options, destroyed }) => options.fullscreen === true && !destroyed
     );

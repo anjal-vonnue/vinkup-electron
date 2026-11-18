@@ -350,12 +350,10 @@ export class DisplayWindowManager {
 
     if (isAlive(this.mainWindow)) {
       this.appDisplayId = screen.getDisplayMatching(this.mainWindow.getBounds()).id;
-      if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
       this.mainWindow.show();
-      this.keepOnAllWorkspaces(this.mainWindow);
       this.mainWindow.focus();
+      void this.restoreProtectionAfterAuthentication();
     }
-    this.reconcile();
   }
 
   isProtectionEnabledForCurrentUser(): boolean {
@@ -748,6 +746,22 @@ export class DisplayWindowManager {
       }
       window.setFullScreen(fullscreen);
     });
+  }
+
+  private async restoreProtectionAfterAuthentication(): Promise<void> {
+    const window = this.mainWindow;
+    if (!isAlive(window) || this.isQuitting || !this.isOverlayAuthenticated) return;
+
+    try {
+      if (!window.isFullScreen()) await this.setFullscreen(true);
+      if (!isAlive(window) || this.isQuitting || !this.isOverlayAuthenticated) return;
+
+      this.appDisplayId = screen.getDisplayMatching(window.getBounds()).id;
+      this.keepOnAllWorkspaces(window);
+      this.reconcile();
+    } catch (error) {
+      console.error('[desktop] Failed to restore fullscreen after authentication', error);
+    }
   }
 
   private scheduleAppDisplaySync(): void {
