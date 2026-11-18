@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useToast } from '../Toast';
 import { useFlagTracking } from '../../hooks/Useflagtracking';
 import type { ReviewStatus, TaskResponse } from '@itp/types';
-import { getTaskCode, saveTaskCode, submitTask } from '../../api/tasks';
+import { getTaskCode, getTaskReview, saveTaskCode, submitTask } from '../../api/tasks';
 import { applyRuntimeSettings } from '../../lib/monacoSetup';
 import {
   selectFileCount,
@@ -16,6 +16,7 @@ import { useRunner } from '../../runtimes/runnerContext';
 import RuntimeHost from '../../runtimes/RuntimeHost';
 import type { PaneId } from '../../types/workspaceTypes';
 import { useReportActivityMode } from '../../context/useActivity';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import { useTaskActivityMode } from '../../pages/TaskPage/hooks/useTaskActivityMode';
 import { WorkActivityContext } from '../../pages/TaskPage/state/WorkActivityContext';
 import {
@@ -157,6 +158,36 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
       variant: 'success',
     });
   }, [task.id, toast, reviewStatus]);
+
+  /** Re-reads only the review state, so the code in the editor is never replaced. */
+  const refreshReview = useCallback(async () => {
+    try {
+      const review = await getTaskReview(task.id);
+      setReviewStatus(review.reviewStatus);
+    } catch {
+      // Best effort: the next event or the next page load catches up.
+    }
+  }, [task.id]);
+
+  // The mentor's approve / request-rework arrives while this page stays open.
+  useRealtimeEvent((event) => {
+    if (event.type !== 'task.reviewed' || event.taskId !== task.id) return;
+
+    setReviewStatus(event.reviewStatus);
+    toast.show({
+      message:
+        event.decision === 'approved'
+          ? 'Your task was approved.'
+          : 'Your mentor sent this task back for rework. Open the feedback for details.',
+      variant: event.decision === 'approved' ? 'success' : 'warning',
+      durationMs: 8000,
+    });
+  });
+
+  // After a stream reconnect, catch a review that landed while the stream was down.
+  useRealtimeRefresh(() => {
+    void refreshReview();
+  });
 
   const handleTogglePane = useCallback(
     (pane: PaneId) => dispatch({ type: 'paneToggled', pane }),

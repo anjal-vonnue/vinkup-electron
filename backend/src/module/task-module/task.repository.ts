@@ -38,6 +38,15 @@ export class TaskRepository {
     });
   };
 
+  /** The mentor currently assigned to this trainee, or null when nobody is assigned yet. */
+  findMentorId = async (traineeId: string): Promise<string | null> => {
+    const trainee = await prisma.trainee.findUnique({
+      where: { id: traineeId },
+      select: { mentor_id: true },
+    });
+    return trainee?.mentor_id ?? null;
+  };
+
   /**
    * Stores the whole file set. A new row starts as in_progress; an existing row keeps its status,
    * so a completed task stays completed when it is edited again.

@@ -2,6 +2,7 @@ import type { AdminFeedbackEntry, TaskReview, TaskReviewSummary } from '@itp/typ
 import { ConflictError, NotFoundError, TaskNotSubmittedError } from '../../errors/AppError';
 import { ProgressService } from '../progress-module/progress.service';
 import { ReviewRepository } from './review.repository';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 
 const reviewRepository = new ReviewRepository();
 const progressService = new ProgressService();
@@ -144,7 +145,20 @@ export class ReviewService {
     );
 
     const rows = await reviewRepository.listTaskReviews(traineeId, taskId);
-    return toTaskReview(rows[0]);
+    const review = toTaskReview(rows[0]);
+
+    // The trainee's open task page updates without a reload. Sent only to them.
+    realtimeBroker.publish(traineeId, {
+      type: 'task.reviewed',
+      taskId,
+      decision,
+      reviewStatus: decision,
+      submissionNo: review.submissionNo,
+      feedback: review.feedback,
+      reviewedAt: review.reviewedAt,
+    });
+
+    return review;
   }
 
   private assertTraineeAndTask = async (traineeId: string, taskId: string) => {

@@ -19,6 +19,8 @@ import {
   getAdminTraineeFeedback,
 } from '../../api/admin';
 import { ApiError } from '../../api/errors';
+import { RealtimeProvider } from '../../context/RealtimeProvider';
+import { installFakeEventSource } from '../../test/fakeEventSource';
 import { reportDocumentTitle } from '../../lib/printReport';
 import {
   buildAdminFlags,
@@ -146,6 +148,35 @@ describe('AdminTraineePage', () => {
     expect(screen.getByLabelText('Daily training activity')).toBeInTheDocument();
     expect(screen.getByLabelText('Course and day progress')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /^Journal/ })).toBeInTheDocument();
+  });
+
+  it('reloads the trainee when a resubmission arrives over the realtime stream', async () => {
+    const fake = installFakeEventSource();
+
+    render(
+      <MemoryRouter initialEntries={[`/admin/trainees/${traineeId}`]}>
+        <RealtimeProvider enabled>
+          <Routes>
+            <Route path="/admin/trainees/:traineeId" element={<AdminTraineePage />} />
+          </Routes>
+        </RealtimeProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('heading', { level: 1, name: detail.profile.trainee.name });
+    expect(getAdminTrainee).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      fake.source?.emit({
+        type: 'task.submitted',
+        traineeId,
+        taskId: detail.tasks[0]?.taskId ?? 'task-1',
+        submissionCount: 2,
+        submittedAt: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    await waitFor(() => expect(getAdminTrainee).toHaveBeenCalledTimes(2));
   });
 
   it('opens on the task list, with View code for every submitted task', async () => {

@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 
@@ -19,6 +19,8 @@ import { ToastProvider } from '../../components/Toast';
 import { taskFixture, taskCodeFixture } from '../../test/fixtures/task';
 import { saveTaskCode, submitTask } from '../../api/tasks';
 import { ApiError } from '../../api/errors';
+import { RealtimeProvider } from '../../context/RealtimeProvider';
+import { installFakeEventSource } from '../../test/fakeEventSource';
 
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () {
@@ -342,5 +344,48 @@ describe('TaskWorkspace', () => {
         name: /resubmit/i,
       })
     ).toBeInTheDocument();
+  });
+
+  it('shows Approved without a reload when the mentor approves over the realtime stream', async () => {
+    const fake = installFakeEventSource();
+    const pendingTask = {
+      ...taskFixture,
+      status: 'completed' as const,
+      reviewStatus: 'pending' as const,
+    };
+
+    render(
+      <MemoryRouter>
+        <RealtimeProvider enabled>
+          <ToastProvider>
+            <WorkspaceProvider code={taskCodeFixture}>
+              <EditorProvider>
+                <RunnerProvider>
+                  <TaskWorkspace task={pendingTask} />
+                </RunnerProvider>
+              </EditorProvider>
+            </WorkspaceProvider>
+          </ToastProvider>
+        </RealtimeProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Submitted')).toBeInTheDocument();
+
+    act(() =>
+      fake.source?.emit({
+        type: 'task.reviewed',
+        taskId: taskFixture.id,
+        decision: 'approved',
+        reviewStatus: 'approved',
+        submissionNo: 1,
+        feedback: '',
+        reviewedAt: '2026-11-18T10:00:00.000Z',
+      })
+    );
+
+    expect(await screen.findByText('Your task was approved.')).toBeInTheDocument();
+    // The toolbar button turns into the disabled "Approved" state once the task is approved.
+    expect(screen.getByRole('button', { name: /^approved$/i })).toBeDisabled();
   });
 });

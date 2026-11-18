@@ -45,6 +45,10 @@ In every environment the frontend calls a relative `/api` path. Because Netlify 
 4. The route's Zod schema validates params and body; the controller calls a service; the service applies the rules and calls a repository; the repository uses Prisma against Neon.
 5. Errors are thrown as `AppError` subclasses and turned into `{ error: { code, message, details? } }` by the error handler. The Axios interceptor converts them to an `ApiError`; a 401 signs the trainee out.
 
+### Realtime updates
+
+A mentor approving a task and a trainee resubmitting one are pushed, not polled. `GET /api/events` is a Server-Sent Events stream behind the same cookie guard; `RealtimeProvider` (mounted inside `ProtectedRoute`, one connection per tab) hands each event to the page, which re-reads the REST resource it affects (`useRealtimeEvent`). `ReviewService.approve/requestRework` publishes `task.reviewed` to the trainee; `TaskService.submit` publishes `task.submitted` to the trainee's assigned mentor. The broker is in-process, so it fits the single Render instance. Netlify closes the stream after ~26 s, so the client reconnects and refreshes current data (`useRealtimeRefresh`) to recover anything sent during the gap.
+
 ### Sign-in
 
 1. **Continue with Google** sends the browser to `/api/auth/google`; Passport redirects to Google.

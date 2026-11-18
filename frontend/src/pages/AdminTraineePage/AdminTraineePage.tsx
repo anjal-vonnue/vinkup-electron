@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useRef } from 'react';
+import { useCallback, useContext, useMemo, useState, useRef } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, UserX } from 'lucide-react';
 import {
@@ -22,7 +22,9 @@ import StateMessage from '../../components/StateMessage';
 import StatsSummary from '../../components/StatsSummary';
 import PrintReport from '../../components/PrintReport';
 import PrintReportButton from '../../components/PrintReportButton';
+import { ToastContext } from '../../components/Toast';
 import { useAuth } from '../../context/Useauth';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import { usePrintMode } from '../../hooks/usePrintMode';
 import {
   DEFAULT_PRINT_OPTIONS,
@@ -79,6 +81,34 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
   const flags = useAdminResource(loadFlags);
   const code = useAdminResource(loadCode);
   const feedback = useAdminResource(loadFeedback);
+
+  const toast = useContext(ToastContext);
+  const showToast = toast?.show ?? (() => {});
+
+  // The trainee submitted or resubmitted; reload the list instead of waiting for a manual refresh.
+  useRealtimeEvent((event) => {
+    if (event.type !== 'task.submitted' || event.traineeId !== traineeId) return;
+
+    detail.refresh();
+    if (event.taskId === selectedTaskId) code.refresh();
+
+    const taskTitle = detail.data?.tasks.find((task) => task.taskId === event.taskId)?.title;
+    showToast({
+      message: taskTitle
+        ? `${taskTitle} was submitted (attempt #${event.submissionCount}).`
+        : 'A task was submitted for review.',
+      variant: 'info',
+      durationMs: 5000,
+    });
+  });
+
+  // After a stream reconnect, catch a submission that landed while the stream was down.
+  useRealtimeRefresh(() => {
+    detail.refresh();
+    flags.refresh();
+    feedback.refresh();
+    if (selectedTaskId) code.refresh();
+  });
 
   // Where the mentor was in the task list when they clicked "View code".
   const scrollBeforeViewRef = useRef<number | null>(null);

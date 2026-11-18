@@ -3,6 +3,7 @@ import { ConflictError, NotFoundError } from '../../errors/AppError';
 import { ProgressService } from '../progress-module/progress.service';
 import { toTaskFiles } from './task.files';
 import { TaskRepository } from './task.repository';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 
 const taskRepository = new TaskRepository();
 const progressService = new ProgressService();
@@ -80,9 +81,23 @@ export class TaskService {
       );
     }
 
+    const submittedAt = (row.last_submitted_at ?? now).toISOString();
+    const mentorId = await taskRepository.findMentorId(traineeId);
+
+    // The mentor's trainee page refreshes without a reload. Only the assigned mentor is told.
+    if (mentorId) {
+      realtimeBroker.publish(mentorId, {
+        type: 'task.submitted',
+        traineeId,
+        taskId,
+        submissionCount: row.submission_count,
+        submittedAt,
+      });
+    }
+
     return {
       status: 'completed',
-      submittedAt: (row.last_submitted_at ?? now).toISOString(),
+      submittedAt,
       reviewStatus: 'pending',
       submissionCount: row.submission_count,
     };

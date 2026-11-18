@@ -7,6 +7,7 @@ const repo = vi.hoisted(() => ({
   findProgress: vi.fn(),
   saveFiles: vi.fn(),
   markSubmitted: vi.fn(),
+  findMentorId: vi.fn(),
 }));
 const progress = vi.hoisted(() => ({
   assertTaskUnlocked: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('./task.repository', () => ({
     findProgress = repo.findProgress;
     saveFiles = repo.saveFiles;
     markSubmitted = repo.markSubmitted;
+    findMentorId = repo.findMentorId;
   },
 }));
 
@@ -66,6 +68,7 @@ describe('TaskService', () => {
     repo.markSubmitted.mockImplementation((_t: string, _id: string, submittedAt: Date) =>
       Promise.resolve({ last_submitted_at: submittedAt })
     );
+    repo.findMentorId.mockResolvedValue(null);
   });
 
   describe('getTask', () => {

@@ -39,12 +39,17 @@ export default function AdminCodePanel({
   const showToast = toastContext?.show ?? (() => {});
 
   // Optimistic override for the task on screen; a keyed remount handles task changes.
+  // It is tied to the attempt it was made on, so a resubmission (new attempt) shows
+  // the server's `pending` again instead of the old decision.
   const [reviewOverride, setReviewOverride] = useState<{
     taskId: string;
+    submissionCount: number;
     status: ReviewStatus;
   } | null>(null);
   const currentReviewStatus =
-    reviewOverride && reviewOverride.taskId === code?.taskId
+    reviewOverride &&
+    reviewOverride.taskId === code?.taskId &&
+    reviewOverride.submissionCount === code?.submissionCount
       ? reviewOverride.status
       : (code?.reviewStatus ?? null);
   const [isApproving, setIsApproving] = useState(false);
@@ -69,7 +74,11 @@ export default function AdminCodePanel({
     setIsApproving(true);
     try {
       await approveTask(traineeId, code.taskId);
-      setReviewOverride({ taskId: code.taskId, status: 'approved' });
+      setReviewOverride({
+        taskId: code.taskId,
+        submissionCount: code.submissionCount,
+        status: 'approved',
+      });
       showToast({ message: 'Task approved successfully', variant: 'success' });
       onReviewSuccess?.(code.taskId, 'approved');
     } catch (err) {
@@ -100,7 +109,11 @@ export default function AdminCodePanel({
     setReworkError(null);
     try {
       await requestRework(traineeId, code.taskId, feedback);
-      setReviewOverride({ taskId: code.taskId, status: 'rework' });
+      setReviewOverride({
+        taskId: code.taskId,
+        submissionCount: code.submissionCount,
+        status: 'rework',
+      });
       setIsReworkModalOpen(false);
       showToast({ message: 'Rework requested with feedback', variant: 'success' });
       onReviewSuccess?.(code.taskId, 'rework');
