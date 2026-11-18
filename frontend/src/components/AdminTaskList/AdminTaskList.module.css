@@ -35,6 +35,19 @@
   border-color: var(--color-accent-purple);
 }
 
+.download {
+  margin-left: auto;
+  color: var(--color-accent-text);
+  background: var(--color-accent-tint);
+  border-color: var(--color-accent-purple);
+  border-radius: 8px;
+}
+
+.download:hover {
+  color: var(--color-text-on-accent);
+  background: var(--color-accent-purple);
+}
+
 .filter[aria-pressed='true'] {
   color: var(--color-text-on-accent);
   background: var(--color-accent-purple);

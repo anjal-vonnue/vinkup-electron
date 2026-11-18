@@ -163,7 +163,7 @@ export default function AdminTaskList({
           })}
           <button
             type="button"
-            className={styles.filter}
+            className={`${styles.filter} ${styles.download}`}
             onClick={() => {
               setDownloadError(null);
               setDownloadFilters([filter]);
