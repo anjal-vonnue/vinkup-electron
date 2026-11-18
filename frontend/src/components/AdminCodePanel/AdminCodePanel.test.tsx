@@ -15,6 +15,8 @@ vi.mock('../../api/admin', () => ({
 const code: AdminTaskCode = {
   taskId: 't1',
   title: 'Profile page',
+  sequenceOrder: 1,
+  instructionsMarkdown: 'Build a profile page.',
   status: 'in_progress',
   reviewStatus: null,
   submissionCount: 0,

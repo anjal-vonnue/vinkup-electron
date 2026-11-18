@@ -6,6 +6,7 @@ function buildTask(overrides: Partial<AdminTaskRow>): AdminTaskRow {
   return {
     taskId: 't1',
     title: 'Task',
+    sequenceOrder: 1,
     dayId: 'day-1',
     isStretchGoal: false,
     status: 'completed',

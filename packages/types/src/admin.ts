@@ -44,6 +44,7 @@ export type AdminDay = {
 export type AdminTaskRow = {
   taskId: string;
   title: string;
+  sequenceOrder: number;
   dayId: string;
   isStretchGoal: boolean;
   status: TaskStatus;
@@ -93,6 +94,8 @@ export type AdminFlagEvent = {
 export type AdminTaskCode = {
   taskId: string;
   title: string;
+  sequenceOrder: number;
+  instructionsMarkdown: string;
   status: TaskStatus;
   isStarterCode: boolean; // true = never saved; files are the task's starter files
   reviewStatus: ReviewStatus | null;

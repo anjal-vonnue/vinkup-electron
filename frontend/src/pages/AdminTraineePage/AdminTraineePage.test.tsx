@@ -250,6 +250,8 @@ describe('AdminTraineePage', () => {
     vi.mocked(getAdminTaskCode).mockResolvedValue({
       taskId: task.taskId,
       title: task.title,
+      sequenceOrder: task.sequenceOrder,
+      instructionsMarkdown: 'Complete the task.',
       status: 'in_progress',
       reviewStatus: null,
       submissionCount: 0,

@@ -188,7 +188,15 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
   const handlePrint = async (options: PrintReportOptions) => {
     const desktopReport = window.desktop?.report;
     if (!desktopReport) {
-      print(options);
+      try {
+        await print(options);
+      } catch (printError: unknown) {
+        setPdfError(
+          printError instanceof Error
+            ? `Unable to open print dialog: ${printError.message}`
+            : 'Unable to open print dialog. Please try again.'
+        );
+      }
       return;
     }
 
@@ -301,6 +309,8 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                   onViewCode={handleViewCode}
                   filter={taskFilter}
                   onFilterChange={setTaskFilter}
+                  traineeId={traineeId}
+                  traineeName={profile.trainee.name}
                 />
               </>
             )}
