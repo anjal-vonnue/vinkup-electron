@@ -24,6 +24,7 @@ import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager'
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
 import { DisplayWindowManager } from './displayWindowManager';
+import { startOverlayServer, type OverlayServer } from './overlayServer';
 import { getScreenProtectionDisabled } from './screenProtectionConfig';
 import { BUNDLED_ALLOWLIST } from './resources/allowlist';
 import { loadResourcesAllowlist } from './resources/allowlist-source';
@@ -43,6 +44,7 @@ const DISABLE_SCREEN_PROTECTION = getScreenProtectionDisabled();
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
+let overlayServer: OverlayServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
 let displayWindowManager: DisplayWindowManager | null = null;
@@ -86,6 +88,7 @@ async function bootstrap(): Promise<void> {
     localServer = await startLocalServer();
     trustedOrigin = new URL(localServer.url).origin;
   }
+  overlayServer = await startOverlayServer(__dirname);
 
   authManager = createDesktopAuthManager();
   authManager.onChange(broadcastAuthState);
@@ -102,12 +105,7 @@ async function bootstrap(): Promise<void> {
   const window = createMainWindow();
   mainWindow = window;
   const primaryDisplay = screen.getPrimaryDisplay();
-  displayWindowManager = new DisplayWindowManager(
-    window,
-    handleExitChoice,
-    !DISABLE_SCREEN_PROTECTION,
-    primaryDisplay.id
-  );
+  displayWindowManager = createDisplayWindowManager(window, primaryDisplay.id);
   updateProtectionContext(authManager.getState());
   await displayWindowManager.start();
 
@@ -143,6 +141,25 @@ function createResourcesBrowser(window: BrowserWindow): ResourcesBrowser {
       mainWindow.webContents.send('resources:escape');
     },
   });
+}
+
+function createDisplayWindowManager(
+  window: BrowserWindow,
+  initialDisplayId: number
+): DisplayWindowManager {
+  if (!overlayServer) throw new Error('The display overlay server is not available.');
+  return new DisplayWindowManager(
+    window,
+    handleExitChoice,
+    !DISABLE_SCREEN_PROTECTION,
+    initialDisplayId,
+    overlayServer.url,
+    (isFocused) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('window:reference-screen-focus-changed', isFocused);
+      }
+    }
+  );
 }
 
 async function refreshResourcesAllowlist(): Promise<void> {
@@ -211,7 +228,6 @@ function broadcastAuthState(state: DesktopAuthState): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
 }
-
 
 function updateProtectionContext(state: DesktopAuthState): void {
   displayWindowManager?.setProtectionContext(
@@ -384,6 +400,12 @@ function registerIpcHandlers(): void {
     return displayWindowManager?.setDisplayTheme(theme);
   });
 
+  ipcMain.handle('window:is-reference-screen-focused', (event) => {
+    assertTrustedSender(event);
+    assertMainWindowSender(event);
+    return displayWindowManager?.isReferenceScreenFocused() ?? false;
+  });
+
   ipcMain.handle('window:begin-certificate-print', (event) => {
     assertTrustedSender(event);
     assertMainWindowSender(event);
@@ -452,6 +474,11 @@ function registerIpcHandlers(): void {
     const manager = displayWindowManager;
     if (!manager?.ownsAlertSender(event.sender)) return;
     manager.handleAlertChoice(choice);
+  });
+
+  ipcMain.on('display-overlay:references-active', (event, active: unknown) => {
+    if (typeof active !== 'boolean') return;
+    displayWindowManager?.setOverlayReferencesActive(event.sender, active);
   });
 
   ipcMain.handle('resources:get-allowlist', (event) => {
@@ -719,14 +746,14 @@ function installMenu(): void {
         { role: 'togglefullscreen' },
         ...(isDev
           ? [
-            { type: 'separator' as const },
-            {
-              label: 'Toggle Developer Tools',
-              click: (_item: Electron.MenuItem, window: Electron.BaseWindow | undefined) => {
-                if (window instanceof BrowserWindow) window.webContents.toggleDevTools();
+              { type: 'separator' as const },
+              {
+                label: 'Toggle Developer Tools',
+                click: (_item: Electron.MenuItem, window: Electron.BaseWindow | undefined) => {
+                  if (window instanceof BrowserWindow) window.webContents.toggleDevTools();
+                },
               },
-            },
-          ]
+            ]
           : []),
       ],
     },
@@ -753,12 +780,7 @@ app.on('activate', () => {
   const window = createMainWindow();
   mainWindow = window;
   const primaryDisplay = screen.getPrimaryDisplay();
-  displayWindowManager = new DisplayWindowManager(
-    window,
-    handleExitChoice,
-    !DISABLE_SCREEN_PROTECTION,
-    primaryDisplay.id
-  );
+  displayWindowManager = createDisplayWindowManager(window, primaryDisplay.id);
   updateProtectionContext(getAuthManager().getState());
   resourcesBrowser = createResourcesBrowser(window);
   void refreshResourcesAllowlist();
@@ -785,15 +807,18 @@ app.on('before-quit', (event) => {
 
   const manager = workspaceManager;
   const server = localServer;
+  const displayServer = overlayServer;
 
   void settleWithin(
     Promise.allSettled([
       manager ? manager.closeAll() : Promise.resolve(),
       server ? server.close() : Promise.resolve(),
+      displayServer ? displayServer.close() : Promise.resolve(),
     ]),
     SHUTDOWN_CLEANUP_TIMEOUT_MS
   ).then(() => {
     localServer = null;
+    overlayServer = null;
     isQuitReady = true;
     app.quit();
   });

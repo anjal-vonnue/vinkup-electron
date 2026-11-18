@@ -44,6 +44,11 @@ await Promise.all([
     outfile: 'dist/preload/alert.js',
   }),
   build({
+    ...shared,
+    entryPoints: ['src/preload/overlay.ts'],
+    outfile: 'dist/preload/overlay.js',
+  }),
+  build({
     entryPoints: ['../frontend/src/content/data/secondaryDisplayReferences.ts'],
     outfile: 'dist/main/reference-data.js',
     bundle: true,

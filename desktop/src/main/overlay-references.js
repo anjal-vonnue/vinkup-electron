@@ -1,4 +1,5 @@
 (() => {
+  const DISPLAY_STATE_KEY = 'vinkup.secondary-display.state';
   const references = window.SecondaryDisplayReferenceData?.secondaryDisplayReferences;
   const tabs = [...document.querySelectorAll('[role="tab"]')];
   const panels = [...document.querySelectorAll('[role="tabpanel"]')];
@@ -15,12 +16,65 @@
   const nextButton = document.getElementById('reference-next');
   const footerPreviousButton = document.getElementById('reference-footer-previous');
   const footerNextButton = document.getElementById('reference-footer-next');
+  const savedState = readDisplayState();
   let selectedIndex = -1;
+  let selectedReferenceId = null;
+  let activeTab = 'resources';
+
+  function readDisplayState() {
+    try {
+      const state = JSON.parse(localStorage.getItem(DISPLAY_STATE_KEY) || '{}');
+      return {
+        activeTab: state.activeTab === 'references' ? 'references' : 'resources',
+        referenceId: typeof state.referenceId === 'string' ? state.referenceId : null,
+        search: typeof state.search === 'string' ? state.search : '',
+      };
+    } catch (error) {
+      console.warn('[display] Could not restore the reference view', error);
+      return { activeTab: 'resources', referenceId: null, search: '' };
+    }
+  }
+
+  function persistDisplayState() {
+    try {
+      localStorage.setItem(
+        DISPLAY_STATE_KEY,
+        JSON.stringify({
+          activeTab,
+          referenceId: selectedReferenceId,
+          search: searchInput.value,
+        })
+      );
+    } catch (error) {
+      console.warn('[display] Could not save the reference view', error);
+    }
+  }
+
+  function setReferencesActive(active) {
+    window.vinkupDisplay?.setReferencesActive(active);
+  }
 
   function element(tagName, className, text) {
     const node = document.createElement(tagName);
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function inlineElement(tagName, className, text) {
+    const node = element(tagName, className);
+    const pattern = /`([^`]+)`/g;
+    let offset = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > offset) {
+        node.append(document.createTextNode(text.slice(offset, match.index)));
+      }
+      const code = element('code', 'inline-code', match[1]);
+      node.append(code);
+      offset = pattern.lastIndex;
+    }
+    if (offset < text.length) node.append(document.createTextNode(text.slice(offset)));
     return node;
   }
 
@@ -35,7 +89,11 @@
       panel.hidden = panel.id !== selectedTab.getAttribute('aria-controls');
     }
 
-    if (selectedTab.id === 'references-tab') showList();
+    activeTab = selectedTab.id === 'references-tab' ? 'references' : 'resources';
+    setReferencesActive(activeTab === 'references');
+    if (activeTab === 'references') showList();
+    else selectedReferenceId = null;
+    persistDisplayState();
     if (moveFocus) selectedTab.focus();
   }
 
@@ -74,7 +132,7 @@
     for (const [courseId, group] of groupReferences(matching)) {
       const section = element('section', 'reference-group');
       section.setAttribute('aria-labelledby', `course-${courseId}`);
-      const heading = element('h2', 'group-title', group.label);
+      const heading = inlineElement('h2', 'group-title', group.label);
       heading.id = `course-${courseId}`;
       const items = element('div', 'reference-group-items');
       for (const reference of group.references) {
@@ -83,7 +141,7 @@
         button.type = 'button';
         button.dataset.referenceIndex = String(index);
         button.append(
-          element('span', 'reference-card-title', reference.title),
+          inlineElement('span', 'reference-card-title', reference.title),
           element(
             'span',
             'reference-card-meta',
@@ -103,10 +161,10 @@
       let node;
       switch (block.type) {
         case 'paragraph':
-          node = element('p', 'paragraph', block.text);
+          node = inlineElement('p', 'paragraph', block.text);
           break;
         case 'subheading':
-          node = element(`h${block.level}`, 'subheading', block.text);
+          node = inlineElement(`h${block.level}`, 'subheading', block.text);
           break;
         case 'image': {
           node = element('figure', 'image-figure');
@@ -115,7 +173,7 @@
           image.alt = block.alt;
           image.loading = 'lazy';
           node.append(image);
-          if (block.alt) node.append(element('figcaption', 'image-caption', block.alt));
+          if (block.alt) node.append(inlineElement('figcaption', 'image-caption', block.alt));
           break;
         }
         case 'code': {
@@ -133,7 +191,7 @@
         case 'list': {
           node = element(block.ordered ? 'ol' : 'ul', 'content-list');
           if (block.ordered && block.start !== undefined) node.start = block.start;
-          for (const item of block.items) node.append(element('li', '', item));
+          for (const item of block.items) node.append(inlineElement('li', '', item));
           break;
         }
         case 'definitions': {
@@ -141,8 +199,8 @@
           for (const item of block.items) {
             const wrapper = element('div', 'definition-item');
             wrapper.append(
-              element('dt', 'definition-term', item.term),
-              element('dd', 'definition-description', item.description)
+              inlineElement('dt', 'definition-term', item.term),
+              inlineElement('dd', 'definition-description', item.description)
             );
             node.append(wrapper);
           }
@@ -153,12 +211,12 @@
           const table = element('table', 'content-table');
           const head = element('thead');
           const headerRow = element('tr');
-          for (const header of block.headers) headerRow.append(element('th', '', header));
+          for (const header of block.headers) headerRow.append(inlineElement('th', '', header));
           head.append(headerRow);
           const body = element('tbody');
           for (const row of block.rows) {
             const tableRow = element('tr');
-            for (const cell of row) tableRow.append(element('td', '', cell));
+            for (const cell of row) tableRow.append(inlineElement('td', '', cell));
             body.append(tableRow);
           }
           table.append(head, body);
@@ -173,8 +231,8 @@
         case 'callout':
           node = element('aside', `callout ${block.callout.variant}`);
           node.append(
-            element('strong', 'callout-title', block.callout.title),
-            element('p', 'paragraph', block.callout.body)
+            inlineElement('strong', 'callout-title', block.callout.title),
+            inlineElement('p', 'paragraph', block.callout.body)
           );
           break;
         default:
@@ -208,7 +266,7 @@
 
   function renderTopic(section) {
     const article = element('article', 'reference-section');
-    article.append(element('h2', 'section-title', `${section.number}. ${section.heading}`));
+    article.append(inlineElement('h2', 'section-title', `${section.number}. ${section.heading}`));
     if (
       ![
         'nodefspromises',
@@ -225,7 +283,7 @@
     article.append(renderBlocks(grouped.intro));
     for (const group of grouped.groups) {
       const details = element('details', 'topic-accordion');
-      details.append(element('summary', 'accordion-summary', group.title));
+      details.append(inlineElement('summary', 'accordion-summary', group.title));
       details.append(renderBlocks(group.blocks));
       article.append(details);
     }
@@ -237,13 +295,17 @@
     section.append(element('h2', 'section-title', 'Video'));
     for (const video of videos) {
       const card = element('div', 'video-card');
-      card.append(element('h3', 'video-title', video.title));
+      card.append(inlineElement('h3', 'video-title', video.title));
       const frame = element('iframe', 'video-frame');
-      frame.src = video.embedUrl;
+      const embedUrl = new URL(video.embedUrl);
+      if (embedUrl.hostname === 'www.youtube.com' && window.location.origin !== 'null') {
+        embedUrl.searchParams.set('origin', window.location.origin);
+      }
+      frame.src = embedUrl.toString();
       frame.title = video.title;
       frame.allow =
         'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-      frame.referrerPolicy = 'strict-origin-when-cross-origin';
+      frame.referrerPolicy = 'origin';
       frame.allowFullscreen = true;
       frame.loading = 'lazy';
       card.append(frame);
@@ -260,7 +322,7 @@
     );
     const list = element('div', 'prerequisite-list');
     for (const prerequisite of content.prerequisiteLinks) {
-      const button = element('button', 'prerequisite-button', prerequisite.label);
+      const button = inlineElement('button', 'prerequisite-button', prerequisite.label);
       button.type = 'button';
       button.dataset.referenceId = prerequisite.dayId;
       list.append(button);
@@ -280,11 +342,12 @@
     if (!Array.isArray(references) || index < 0 || index >= references.length) return;
     selectedIndex = index;
     const reference = references[index];
+    selectedReferenceId = reference.id;
     readerContent.replaceChildren();
-    readerTitle.textContent = reference.title;
+    readerTitle.replaceChildren(inlineElement('span', '', reference.title));
 
     if (reference.instruction) {
-      readerContent.append(element('aside', 'instruction', reference.instruction));
+      readerContent.append(inlineElement('aside', 'instruction', reference.instruction));
     }
     const prerequisites = addPrerequisites(reference);
     if (prerequisites) readerContent.append(prerequisites);
@@ -310,14 +373,17 @@
     main.scrollTop = 0;
     readerToolbar.scrollTop = 0;
     if (focusTitle) readerTitle.focus({ preventScroll: true });
+    persistDisplayState();
   }
 
   function showList() {
     selectedIndex = -1;
+    selectedReferenceId = null;
     listView.hidden = false;
     readerView.hidden = true;
     renderList();
     main.scrollTop = 0;
+    persistDisplayState();
   }
 
   function navigateBy(offset) {
@@ -357,12 +423,24 @@
     const index = references.findIndex((reference) => reference.id === button.dataset.referenceId);
     if (index >= 0) openReference(index);
   });
-  searchInput.addEventListener('input', renderList);
+  searchInput.addEventListener('input', () => {
+    renderList();
+    persistDisplayState();
+  });
   backButton.addEventListener('click', showList);
   previousButton.addEventListener('click', () => navigateBy(-1));
   nextButton.addEventListener('click', () => navigateBy(1));
   footerPreviousButton.addEventListener('click', () => navigateBy(-1));
   footerNextButton.addEventListener('click', () => navigateBy(1));
 
+  searchInput.value = savedState.search;
   renderList();
+  if (savedState.activeTab === 'references') {
+    selectTab(document.getElementById('references-tab'));
+    const savedIndex = references?.findIndex(({ id }) => id === savedState.referenceId) ?? -1;
+    if (savedIndex >= 0) openReference(savedIndex, false);
+  } else {
+    setReferencesActive(false);
+    persistDisplayState();
+  }
 })();

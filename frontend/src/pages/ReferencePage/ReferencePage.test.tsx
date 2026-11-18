@@ -86,6 +86,26 @@ describe('ReferencePage', () => {
     expect(screen.getByText('React is used to build user interfaces.')).toBeInTheDocument();
   });
 
+  it('renders inline backtick code without the delimiters', () => {
+    mockedGetDayReference.mockReturnValue({
+      courseId: 'react',
+      dayNumber: 1,
+      sections: [
+        {
+          id: 'inline-code',
+          heading: 'Inline code',
+          number: 1,
+          blocks: [{ type: 'paragraph', text: 'Call `map()` to transform each item.' }],
+        },
+      ],
+    });
+
+    const { container } = renderPage();
+
+    expect(container.querySelector('p')).toHaveTextContent('Call map() to transform each item.');
+    expect(container.querySelector('p code')).toHaveTextContent('map()');
+  });
+
   it('renders subheadings', () => {
     mockedGetDayReference.mockReturnValue({
       courseId: 'react',
@@ -413,10 +433,12 @@ describe('ReferencePage', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: 'Video' })).toBeInTheDocument();
-    expect(screen.getByTitle('React Tutorial')).toHaveAttribute(
-      'src',
-      'https://www.youtube.com/embed/example'
-    );
+    const frame = screen.getByTitle('React Tutorial');
+    const frameUrl = new URL(frame.getAttribute('src') ?? '');
+    expect(frameUrl.origin).toBe('https://www.youtube.com');
+    expect(frameUrl.pathname).toBe('/embed/example');
+    expect(frameUrl.searchParams.get('origin')).toBe(window.location.origin);
+    expect(frame).toHaveAttribute('referrerpolicy', 'origin');
   });
 
   it('renders a video after the configured topic', () => {

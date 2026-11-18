@@ -34,8 +34,11 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
     let windowBlurTimeout: ReturnType<typeof setTimeout> | undefined;
 
     let activeFlag: ActiveFlag | null = null;
+    let isReferenceScreenFocused = false;
+    let focusStateVersion = 0;
+    let skipNextReturnWarning = false;
     function startFlag(type: FlagEventType) {
-      if (activeFlag) return;
+      if (activeFlag || isReferenceScreenFocused) return;
 
       activeFlag = {
         type,
@@ -59,27 +62,65 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       }).catch(() => {});
     }
 
+    function handleReferenceFocusChange(isFocused: boolean) {
+      focusStateVersion += 1;
+      isReferenceScreenFocused = isFocused;
+      if (!isFocused) return;
+
+      if (activeFlag?.type === 'TAB_SWITCH' || document.visibilityState === 'hidden') {
+        skipNextReturnWarning = true;
+      }
+      activeFlag = null;
+      isUnfocused = false;
+    }
+
+    const desktopWindow = window.desktop?.window;
+    const removeReferenceFocusListener = desktopWindow?.onReferenceScreenFocusChange(
+      handleReferenceFocusChange
+    );
+    if (desktopWindow) {
+      const initialFocusStateVersion = focusStateVersion;
+      void desktopWindow
+        .isReferenceScreenFocused()
+        .then((isFocused) => {
+          if (focusStateVersion === initialFocusStateVersion) {
+            handleReferenceFocusChange(isFocused);
+          }
+        })
+        .catch((error: unknown) => {
+          console.error('[activity] Failed to read secondary reference focus state', error);
+        });
+    }
+
     function handleVisibilityChange() {
       if (document.visibilityState === 'hidden') {
         if (isAway) return; // already logged this hidden period
         isAway = true;
-        if (isFullscreenActive()) {
+        if (isReferenceScreenFocused) {
+          skipNextReturnWarning = true;
+          activeFlag = null;
+        } else if (isFullscreenActive()) {
           startFlag('TAB_SWITCH');
         }
       } else if (isAway) {
         isAway = false;
         if (isFullscreenActive()) {
           endFlag();
-          onWarningRef.current(LEFT_WORKSPACE_WARNING);
+          if (!isReferenceScreenFocused && !skipNextReturnWarning) {
+            onWarningRef.current(LEFT_WORKSPACE_WARNING);
+          }
         }
+        skipNextReturnWarning = false;
       }
     }
 
     function handleFullscreenChange() {
       const isFullscreen = isFullscreenActive();
       if (wasFullscreen && !isFullscreen) {
-        startFlag('FULLSCREEN_EXIT');
-        onWarningRef.current(LEFT_WORKSPACE_WARNING);
+        if (!isReferenceScreenFocused) {
+          startFlag('FULLSCREEN_EXIT');
+          onWarningRef.current(LEFT_WORKSPACE_WARNING);
+        }
       }
       if (!wasFullscreen && isFullscreen) {
         if (activeFlag?.type === 'FULLSCREEN_EXIT') {
@@ -99,6 +140,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       windowBlurTimeout = setTimeout(() => {
         if (!isFullscreenActive()) return;
         if (document.visibilityState === 'hidden') return;
+        if (isReferenceScreenFocused) return;
 
         // Focus just moved into our own preview iframe, not out of the window
         if (document.hasFocus()) return;
@@ -109,6 +151,11 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       }, 500);
     }
     function handleWindowFocus() {
+      if (isReferenceScreenFocused) {
+        isUnfocused = false;
+        activeFlag = null;
+        return;
+      }
       if (!isFullscreenActive()) {
         isUnfocused = false;
         return;
@@ -146,6 +193,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('blur', handleWindowBlur); // NEW
       window.removeEventListener('focus', handleWindowFocus); // NEW
+      removeReferenceFocusListener?.();
       if (resizeTimeout) {
         clearTimeout(resizeTimeout);
       }
