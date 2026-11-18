@@ -481,6 +481,28 @@ function registerIpcHandlers(): void {
     displayWindowManager?.setOverlayReferencesActive(event.sender, active);
   });
 
+  ipcMain.on('display-overlay:resources-active', (event, active: unknown) => {
+    if (typeof active !== 'boolean' || event.senderFrame !== event.sender.mainFrame) return;
+    displayWindowManager?.setOverlayResourcesActive(event.sender, active);
+  });
+
+  ipcMain.handle('browser:get-availability', (event) => {
+    const manager = displayWindowManager;
+    if (manager?.ownsOverlaySender(event.sender)) {
+      if (event.senderFrame !== event.sender.mainFrame) {
+        throw new Error('IPC request is not from the display overlay main frame.');
+      }
+      return manager.getBrowserAvailability();
+    }
+    assertTrustedSender(event);
+    return (
+      manager?.getBrowserAvailability() ?? {
+        mainResourcesActive: false,
+        secondaryResourcesActive: false,
+      }
+    );
+  });
+
   ipcMain.handle('resources:get-allowlist', (event) => {
     assertTrustedSender(event);
     return getResourcesBrowser().getAllowlist();
@@ -493,7 +515,9 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('resources:open', (event, bounds: unknown) => {
     assertTrustedSender(event);
-    return getResourcesBrowser().open(parseBrowserBounds(bounds));
+    const state = getResourcesBrowser().open(parseBrowserBounds(bounds));
+    displayWindowManager?.setMainResourcesActive(true);
+    return state;
   });
 
   ipcMain.handle('resources:set-bounds', (event, bounds: unknown) => {
@@ -504,6 +528,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('resources:close', (event) => {
     assertTrustedSender(event);
     getResourcesBrowser().close();
+    displayWindowManager?.setMainResourcesActive(false);
   });
 
   ipcMain.handle('resources:home', (event) => {

@@ -89,6 +89,15 @@
         color: var(--text);
       }
 
+      .tab:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      .tab:disabled:hover {
+        color: var(--text-secondary);
+      }
+
       .tab[aria-selected='true'] {
         background: var(--surface);
         border-color: var(--border);

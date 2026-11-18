@@ -20,6 +20,11 @@ export type WorkspaceConsoleLevel = 'log' | 'info' | 'warn' | 'error';
 
 export type WorkspaceRunKind = 'install' | 'dev';
 
+export type BrowserAvailability = {
+  mainResourcesActive: boolean;
+  secondaryResourcesActive: boolean;
+};
+
 /**
  * Events produced by the main-process workspace for one task. Everything carries the
  * task id so a runtime can ignore events from a workspace that was just closed.
@@ -147,6 +152,11 @@ export interface DesktopApi {
     isReferenceScreenFocused: () => Promise<boolean>;
     /** Returns an unsubscribe function. */
     onReferenceScreenFocusChange: (listener: (isFocused: boolean) => void) => () => void;
+    getBrowserAvailability: () => Promise<BrowserAvailability>;
+    /** Returns an unsubscribe function. */
+    onBrowserAvailabilityChange: (
+      listener: (availability: BrowserAvailability) => void
+    ) => () => void;
     beginCertificatePrint: () => Promise<void>;
     endCertificatePrint: () => Promise<void>;
     /** Returns an unsubscribe function. */

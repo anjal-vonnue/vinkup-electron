@@ -36,6 +36,7 @@ class FakeWindow extends EventEmitter {
   readonly webContents: EventEmitter & {
     isDestroyed: () => boolean;
     executeJavaScript: ReturnType<typeof vi.fn>;
+    send: ReturnType<typeof vi.fn>;
   };
   destroyed = false;
   focused = false;
@@ -49,6 +50,7 @@ class FakeWindow extends EventEmitter {
     this.webContents = Object.assign(new EventEmitter(), {
       isDestroyed: () => false,
       executeJavaScript: vi.fn(() => Promise.resolve()),
+      send: vi.fn(),
     });
     this.bounds = {
       x: typeof options.x === 'number' ? options.x : 0,
@@ -261,6 +263,55 @@ describe('DisplayWindowManager focus alerts', () => {
     overlay?.setFocused(false);
     expect(manager.isReferenceScreenFocused()).toBe(false);
     expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+    manager.dispose();
+  });
+
+  it('keeps main and secondary Resources activity mutually exclusive', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+    const overlayContents = overlay?.webContents as unknown as WebContents;
+
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: false,
+    });
+
+    manager.setOverlayResourcesActive(overlayContents, true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: true,
+    });
+
+    manager.setMainResourcesActive(true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: true,
+      secondaryResourcesActive: false,
+    });
+    manager.setOverlayResourcesActive(overlayContents, true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: true,
+      secondaryResourcesActive: false,
+    });
+
+    manager.setMainResourcesActive(false);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: false,
+    });
+    manager.setOverlayResourcesActive(overlayContents, true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: true,
+    });
     manager.dispose();
   });
 

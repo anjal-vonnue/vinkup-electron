@@ -1,5 +1,5 @@
 import { BrowserWindow, screen, type Display, type WebContents } from 'electron';
-import type { UserRole } from '@itp/types';
+import type { BrowserAvailability, UserRole } from '@itp/types';
 import path from 'node:path';
 
 const OVERLAY_COLOR = '#10131f';
@@ -33,6 +33,7 @@ function sameBounds(left: Electron.Rectangle, right: Electron.Rectangle): boolea
 export class DisplayWindowManager {
   private readonly overlays = new Map<number, BrowserWindow>();
   private readonly overlayReferencesActive = new Map<number, boolean>();
+  private readonly overlayResourcesActive = new Map<number, boolean>();
   private readonly alerts = new Map<number, BrowserWindow>();
   private readonly closeAuthorized = new WeakSet<BrowserWindow>();
   private readonly mainWindow: BrowserWindow;
@@ -61,6 +62,7 @@ export class DisplayWindowManager {
   private focusedOverlayId: number | null = null;
   private referenceScreenFocused = false;
   private displayTheme: 'light' | 'dark' = 'light';
+  private mainResourcesActive = false;
 
   constructor(
     mainWindow: BrowserWindow,
@@ -232,6 +234,45 @@ export class DisplayWindowManager {
       this.updateReferenceScreenFocus();
       return;
     }
+  }
+
+  ownsOverlaySender(sender: WebContents): boolean {
+    return [...this.overlays.values()].some(
+      (window) => isAlive(window) && window.webContents === sender
+    );
+  }
+
+  setOverlayResourcesActive(sender: WebContents, active: boolean): void {
+    for (const [id, window] of this.overlays) {
+      if (!isAlive(window) || window.webContents !== sender) continue;
+      if (!this.mainResourcesActive) {
+        if (active) {
+          for (const overlayId of this.overlayResourcesActive.keys()) {
+            this.overlayResourcesActive.set(overlayId, false);
+          }
+        }
+        this.overlayResourcesActive.set(id, active);
+      }
+      this.broadcastBrowserAvailability();
+      return;
+    }
+  }
+
+  setMainResourcesActive(active: boolean): void {
+    this.mainResourcesActive = active;
+    if (active) {
+      for (const id of this.overlayResourcesActive.keys()) {
+        this.overlayResourcesActive.set(id, false);
+      }
+    }
+    this.broadcastBrowserAvailability();
+  }
+
+  getBrowserAvailability(): BrowserAvailability {
+    return {
+      mainResourcesActive: this.mainResourcesActive,
+      secondaryResourcesActive: [...this.overlayResourcesActive.values()].some(Boolean),
+    };
   }
 
   isReferenceScreenFocused(): boolean {
@@ -725,6 +766,7 @@ export class DisplayWindowManager {
 
     this.overlays.set(display.id, window);
     this.overlayReferencesActive.set(display.id, false);
+    this.overlayResourcesActive.set(display.id, false);
     this.configureWindow(window, true);
     window.on('will-move', (event) => event.preventDefault());
     window.on('move', () => this.placeWindow(window, display.bounds));
@@ -744,8 +786,10 @@ export class DisplayWindowManager {
       if (this.overlays.get(display.id) !== window) return;
       this.overlays.delete(display.id);
       this.overlayReferencesActive.delete(display.id);
+      this.overlayResourcesActive.delete(display.id);
       if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
       this.updateReferenceScreenFocus();
+      this.broadcastBrowserAvailability();
     });
     window.once('ready-to-show', () => {
       if (!isAlive(window) || this.isQuitting) return;
@@ -758,6 +802,7 @@ export class DisplayWindowManager {
     void window
       .loadURL(new URL('overlay.html', `${this.overlayUrl.replace(/\/$/, '')}/`).toString())
       .then(() => this.applyDisplayTheme(window))
+      .then(() => this.sendBrowserAvailability(window))
       .catch((error: unknown) => console.error('[desktop] Failed to load display overlay', error));
     return window;
   }
@@ -778,13 +823,30 @@ export class DisplayWindowManager {
       .then(() => undefined);
   }
 
+  private sendBrowserAvailability(window: BrowserWindow): void {
+    if (!isAlive(window) || window.webContents.isDestroyed()) return;
+    window.webContents.send('browser:availability-changed', this.getBrowserAvailability());
+  }
+
+  private broadcastBrowserAvailability(): void {
+    if (isAlive(this.mainWindow) && !this.mainWindow.webContents.isDestroyed()) {
+      this.mainWindow.webContents.send(
+        'browser:availability-changed',
+        this.getBrowserAvailability()
+      );
+    }
+    for (const window of this.overlays.values()) this.sendBrowserAvailability(window);
+  }
+
   private destroyOverlay(id: number, expectedWindow?: BrowserWindow): void {
     const window = this.overlays.get(id);
     if (!window || (expectedWindow && expectedWindow !== window)) return;
     this.overlays.delete(id);
     this.overlayReferencesActive.delete(id);
+    this.overlayResourcesActive.delete(id);
     if (this.focusedOverlayId === id) this.focusedOverlayId = null;
     this.updateReferenceScreenFocus();
+    this.broadcastBrowserAvailability();
     this.closeOwnedWindow(window);
   }
 

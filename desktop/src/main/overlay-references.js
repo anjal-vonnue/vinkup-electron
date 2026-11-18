@@ -16,10 +16,25 @@
   const nextButton = document.getElementById('reference-next');
   const footerPreviousButton = document.getElementById('reference-footer-previous');
   const footerNextButton = document.getElementById('reference-footer-next');
+  const resourcesTab = document.getElementById('resources-tab');
+  const referencesTab = document.getElementById('references-tab');
   const savedState = readDisplayState();
   let selectedIndex = -1;
   let selectedReferenceId = null;
   let activeTab = 'resources';
+  let mainResourcesActive = false;
+  let availabilityRevision = 0;
+
+  function updateBrowserAvailability(availability) {
+    mainResourcesActive = availability.mainResourcesActive;
+    resourcesTab.disabled = mainResourcesActive;
+    resourcesTab.title = mainResourcesActive
+      ? 'Resources are active in the main app'
+      : '';
+    if (mainResourcesActive && activeTab === 'resources') {
+      selectTab(referencesTab, false, false);
+    }
+  }
 
   function readDisplayState() {
     try {
@@ -54,6 +69,20 @@
     window.vinkupDisplay?.setReferencesActive(active);
   }
 
+  window.vinkupDisplay?.onBrowserAvailabilityChange((availability) => {
+    availabilityRevision += 1;
+    updateBrowserAvailability(availability);
+  });
+  const requestedAvailabilityRevision = availabilityRevision;
+  void window.vinkupDisplay
+    ?.getBrowserAvailability()
+    .then((availability) => {
+      if (availabilityRevision === requestedAvailabilityRevision) {
+        updateBrowserAvailability(availability);
+      }
+    })
+    .catch((error) => console.error('[display] Could not read browser availability', error));
+
   function element(tagName, className, text) {
     const node = document.createElement(tagName);
     if (className) node.className = className;
@@ -78,7 +107,9 @@
     return node;
   }
 
-  function selectTab(selectedTab, moveFocus = false) {
+  function selectTab(selectedTab, moveFocus = false, notifyActivity = true) {
+    if (selectedTab.disabled) return;
+
     for (const tab of tabs) {
       const selected = tab === selectedTab;
       tab.setAttribute('aria-selected', String(selected));
@@ -91,6 +122,7 @@
 
     activeTab = selectedTab.id === 'references-tab' ? 'references' : 'resources';
     setReferencesActive(activeTab === 'references');
+    if (notifyActivity) window.vinkupDisplay?.setResourcesActive(activeTab === 'resources');
     if (activeTab === 'references') showList();
     else selectedReferenceId = null;
     persistDisplayState();
@@ -406,7 +438,7 @@
     });
   }
 
-  document.getElementById('resources-tab').addEventListener('click', () => {
+  resourcesTab.addEventListener('click', () => {
     listView.hidden = false;
     readerView.hidden = true;
   });
@@ -440,11 +472,12 @@
   searchInput.value = savedState.search;
   renderList();
   if (savedState.activeTab === 'references') {
-    selectTab(document.getElementById('references-tab'));
+    selectTab(referencesTab, false, false);
     const savedIndex = references?.findIndex(({ id }) => id === savedState.referenceId) ?? -1;
     if (savedIndex >= 0) openReference(savedIndex, false);
   } else {
     setReferencesActive(false);
+    window.vinkupDisplay?.setResourcesActive(false);
     persistDisplayState();
   }
 })();

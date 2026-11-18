@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/Useauth';
 import styles from './Header.module.css';
 import { useActivity } from '../../context/useActivity';
@@ -12,6 +12,11 @@ type HeaderProps = {
   leading?: ReactNode;
   /** Shown just before the nav links. The task page's session timer goes here later. */
   status?: ReactNode;
+};
+
+type BrowserAvailability = {
+  mainResourcesActive: boolean;
+  secondaryResourcesActive: boolean;
 };
 
 function HomeIcon() {
@@ -131,6 +136,38 @@ export default function Header({ leading, status }: HeaderProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [browserAvailability, setBrowserAvailability] = useState<BrowserAvailability>({
+    mainResourcesActive: false,
+    secondaryResourcesActive: false,
+  });
+
+  useEffect(() => {
+    const desktopWindow = window.desktop?.window;
+    if (!desktopWindow) return;
+
+    let active = true;
+    let availabilityRevision = 0;
+    const unsubscribe = desktopWindow.onBrowserAvailabilityChange((availability) => {
+      availabilityRevision += 1;
+      setBrowserAvailability(availability);
+    });
+    const requestedAvailabilityRevision = availabilityRevision;
+    void desktopWindow
+      .getBrowserAvailability()
+      .then((availability) => {
+        if (active && availabilityRevision === requestedAvailabilityRevision) {
+          setBrowserAvailability(availability);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('[header] Failed to read browser availability', error);
+      });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const openConfirm = () => {
     setLogoutError(null);
@@ -201,7 +238,21 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/resources"
             end
-            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+            aria-disabled={browserAvailability.secondaryResourcesActive}
+            tabIndex={browserAvailability.secondaryResourcesActive ? -1 : undefined}
+            title={
+              browserAvailability.secondaryResourcesActive
+                ? 'Resources are active on the secondary display'
+                : undefined
+            }
+            onClick={(event) => {
+              if (browserAvailability.secondaryResourcesActive) event.preventDefault();
+            }}
+            className={({ isActive }) =>
+              `${styles.link} ${isActive ? styles.active : ''} ${
+                browserAvailability.secondaryResourcesActive ? styles.linkDisabled : ''
+              }`
+            }
           >
             <ResourcesIcon />
             <NavLabel text="Resources" />
