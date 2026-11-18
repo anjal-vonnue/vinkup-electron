@@ -54,6 +54,7 @@ let resourcesBrowser: ResourcesBrowser | null = null;
 const secondaryResourcesBrowsers = new Map<BrowserWindow, ResourcesBrowser>();
 let workspaceManager: WorkspaceManager | null = null;
 let activeResourcesAllowlist: ResourcesAllowlist = BUNDLED_ALLOWLIST;
+let loginPendingForOverlayTransition = false;
 
 /** Quitting waits for workspace folders to be removed, but never longer than this. */
 const SHUTDOWN_CLEANUP_TIMEOUT_MS = 5_000;
@@ -222,15 +223,23 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
-  updateProtectionContext(state);
+  if (state.status === 'pending') loginPendingForOverlayTransition = true;
+  const shouldTransitionOverlay =
+    state.status === 'authenticated' && loginPendingForOverlayTransition;
+  updateProtectionContext(state, shouldTransitionOverlay);
+  if (state.status === 'authenticated' || state.status === 'unauthenticated') {
+    loginPendingForOverlayTransition = false;
+  }
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
 }
 
-function updateProtectionContext(state: DesktopAuthState): void {
+function updateProtectionContext(state: DesktopAuthState, animateLogin = false): void {
   displayWindowManager?.setProtectionContext(
     state.status === 'loading' || state.status === 'pending',
-    state.status === 'authenticated' ? (state.user?.role ?? null) : null
+    state.status === 'authenticated' ? (state.user?.role ?? null) : null,
+    state.status === 'authenticated',
+    animateLogin
   );
 }
 function sendToRenderer(channel: string, payload: unknown): void {

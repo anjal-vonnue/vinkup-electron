@@ -19,6 +19,7 @@ const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
     setFocused: (focused: boolean) => void;
     isFocusable: () => boolean;
     executeJavaScript: ReturnType<typeof vi.fn>;
+    send: ReturnType<typeof vi.fn>;
     webContents: EventEmitter;
   }>,
 }));
@@ -155,6 +156,7 @@ describe('DisplayWindowManager focus alerts', () => {
         },
         isFocusable: () => window.focusable,
         executeJavaScript: window.webContents.executeJavaScript,
+        send: window.webContents.send,
         webContents: window.webContents,
       });
       window.on('closed', () => {
@@ -234,6 +236,40 @@ describe('DisplayWindowManager focus alerts', () => {
     expect(overlay?.executeJavaScript).toHaveBeenCalledWith(
       "document.documentElement.dataset.theme = 'dark'"
     );
+    manager.dispose();
+  });
+
+  it('keeps secondary displays uncovered during sign-in and restores protection on success', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    manager.setProtectionContext(false, null, false);
+    await manager.start();
+    expect(
+      createdWindows.some(({ options, destroyed }) => options.fullscreen === true && !destroyed)
+    ).toBe(false);
+    expect(manager.isProtectionEnabledForCurrentUser()).toBe(false);
+
+    manager.setProtectionContext(true, null, false);
+    expect(
+      createdWindows.some(({ options, destroyed }) => options.fullscreen === true && !destroyed)
+    ).toBe(false);
+
+    manager.setProtectionContext(false, 'trainee', true, true);
+    const overlay = createdWindows.find(
+      ({ options, destroyed }) => options.fullscreen === true && !destroyed
+    );
+    expect(overlay).toBeDefined();
+    await vi.waitFor(() =>
+      expect(overlay?.send).toHaveBeenCalledWith('display-overlay:auth-state', true, true)
+    );
+    expect(manager.isProtectionEnabledForCurrentUser()).toBe(true);
     manager.dispose();
   });
 

@@ -79,5 +79,14 @@ contextBridge.exposeInMainWorld('vinkupDisplay', {
       ipcRenderer.removeListener('browser:availability-changed', handler);
     };
   },
+  onAuthenticationChange: (listener: (authenticated: boolean, animate: boolean) => void) => {
+    const handler = (_event: IpcRendererEvent, authenticated: boolean, animate: boolean): void => {
+      listener(authenticated, animate);
+    };
+    ipcRenderer.on('display-overlay:auth-state', handler);
+    return () => {
+      ipcRenderer.removeListener('display-overlay:auth-state', handler);
+    };
+  },
   resources,
 });

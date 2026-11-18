@@ -22,6 +22,7 @@
   let selectedIndex = -1;
   let selectedReferenceId = null;
   let activeTab = 'resources';
+  let authenticated = document.body.classList.contains('is-authenticated');
   let mainResourcesActive = false;
   let availabilityRevision = 0;
 
@@ -66,8 +67,19 @@
   }
 
   function setReferencesActive(active) {
-    window.vinkupDisplay?.setReferencesActive(active);
+    if (authenticated) window.vinkupDisplay?.setReferencesActive(active);
   }
+
+  window.vinkupDisplay?.onAuthenticationChange((isAuthenticated) => {
+    authenticated = isAuthenticated;
+    if (authenticated) {
+      setReferencesActive(activeTab === 'references');
+      window.vinkupDisplay?.setResourcesActive(activeTab === 'resources');
+    } else {
+      window.vinkupDisplay?.setReferencesActive(false);
+      window.vinkupDisplay?.setResourcesActive(false);
+    }
+  });
 
   window.vinkupDisplay?.onBrowserAvailabilityChange((availability) => {
     availabilityRevision += 1;
@@ -122,7 +134,9 @@
 
     activeTab = selectedTab.id === 'references-tab' ? 'references' : 'resources';
     setReferencesActive(activeTab === 'references');
-    if (notifyActivity) window.vinkupDisplay?.setResourcesActive(activeTab === 'resources');
+    if (notifyActivity && authenticated) {
+      window.vinkupDisplay?.setResourcesActive(activeTab === 'resources');
+    }
     if (activeTab === 'references') showList();
     else selectedReferenceId = null;
     persistDisplayState();
@@ -477,7 +491,6 @@
     if (savedIndex >= 0) openReference(savedIndex, false);
   } else {
     setReferencesActive(false);
-    window.vinkupDisplay?.setResourcesActive(true);
     persistDisplayState();
   }
 })();

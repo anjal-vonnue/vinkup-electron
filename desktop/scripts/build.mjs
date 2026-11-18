@@ -65,6 +65,7 @@ await Promise.all([
 await mkdir('dist/main', { recursive: true });
 await Promise.all([
   cp('src/main/overlay.html', 'dist/main/overlay.html'),
+  cp('src/main/overlay-auth.js', 'dist/main/overlay-auth.js'),
   cp('src/main/overlay-resources.js', 'dist/main/overlay-resources.js'),
   cp('src/main/overlay-references.js', 'dist/main/overlay-references.js'),
   cp('src/main/alert.html', 'dist/main/alert.html'),

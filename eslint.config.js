@@ -132,6 +132,7 @@ export default tseslint.config(
     files: [
       'desktop/src/main/overlay-references.js',
       'desktop/src/main/overlay-resources.js',
+      'desktop/src/main/overlay-auth.js',
     ],
     languageOptions: {
       globals: globals.browser,

@@ -14,6 +14,7 @@
   const findResult = document.getElementById('browser-find-result');
   let browserState = null;
   let active = false;
+  let authenticated = document.body.classList.contains('is-authenticated');
   let boundsFrame = 0;
   let findOpen = false;
   let addressDirty = false;
@@ -257,12 +258,22 @@
     if (findOpen) closeFind();
     else if (browserState?.isLoading) run(() => api.stop(), 'Could not stop loading.');
   });
+  window.vinkupDisplay?.onAuthenticationChange((isAuthenticated) => {
+    authenticated = isAuthenticated;
+    if (authenticated && resourcesTab.getAttribute('aria-selected') === 'true') {
+      void activate();
+    } else {
+      deactivate();
+    }
+  });
 
   void Promise.all([api.getAllowlist(), api.getState()])
     .then(([allowlist, state]) => {
       renderAllowlist(allowlist);
       renderState(state);
-      if (resourcesTab.getAttribute('aria-selected') === 'true') void activate();
+      if (authenticated && resourcesTab.getAttribute('aria-selected') === 'true') {
+        void activate();
+      }
     })
     .catch((error) => {
       setStatus('Approved learning sites could not be loaded.', true);
