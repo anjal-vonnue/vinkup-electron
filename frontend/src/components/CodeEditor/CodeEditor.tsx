@@ -17,19 +17,26 @@ type CodeEditorProps = {
   onRun: () => void;
 };
 
-function usePrefersDark(): boolean {
-  const [prefersDark, setPrefersDark] = useState(
-    () => window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
+/**
+ * Reads the application's current theme and listens for theme changes.
+ */
+function useAppTheme(): boolean {
+  const [isDark, setIsDark] = useState(() => document.documentElement.dataset.theme === 'dark');
 
   useEffect(() => {
-    const query = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (event: MediaQueryListEvent) => setPrefersDark(event.matches);
-    query.addEventListener('change', handleChange);
-    return () => query.removeEventListener('change', handleChange);
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.dataset.theme === 'dark');
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+
+    return () => observer.disconnect();
   }, []);
 
-  return prefersDark;
+  return isDark;
 }
 
 export default function CodeEditor({
@@ -41,7 +48,8 @@ export default function CodeEditor({
   onRun,
 }: CodeEditorProps) {
   const editorRef = useEditorRef();
-  const isDark = usePrefersDark();
+  const isDark = useAppTheme();
+
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [editorInstance, setEditorInstance] = useState<editor.IStandaloneCodeEditor | null>(null);
 
@@ -58,7 +66,12 @@ export default function CodeEditor({
   });
 
   const reportBlockedPaste = useBlockedPasteReporter(taskId, 'editor');
-  usePasteBlock({ editor: editorInstance, container, onBlocked: reportBlockedPaste });
+
+  usePasteBlock({
+    editor: editorInstance,
+    container,
+    onBlocked: reportBlockedPaste,
+  });
 
   function handleMount(
     instance: editor.IStandaloneCodeEditor,
@@ -68,6 +81,7 @@ export default function CodeEditor({
     setEditorInstance(instance);
 
     instance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => onSaveRef.current());
+
     instance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onRunRef.current());
 
     instance.onDidChangeCursorPosition((event) => {

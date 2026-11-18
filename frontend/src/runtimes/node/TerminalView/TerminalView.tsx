@@ -14,10 +14,13 @@ type TerminalViewProps = {
   onResize: (cols: number, rows: number) => void;
 };
 
-/** xterm draws on a canvas, so it needs real colours: read them from the CSS tokens, like Monaco. */
+/**
+ * Reads terminal colors from the application's active theme.
+ */
 function readTheme(): ITheme {
   const css = getComputedStyle(document.documentElement);
   const token = (name: string) => css.getPropertyValue(name).trim() || undefined;
+
   return {
     background: token('--color-bg-base'),
     foreground: token('--color-text-primary'),
@@ -32,16 +35,19 @@ export default function TerminalView({ taskId, isVisible, onReady, onResize }: T
   const fitRef = useRef<FitAddon | null>(null);
 
   const report = useBlockedPasteReporter(taskId, 'terminal');
+
   // The terminal is created once; these refs let it call the latest callbacks.
   const reportRef = useRef(report);
   const onReadyRef = useRef(onReady);
   const onResizeRef = useRef(onResize);
+
   useEffect(() => {
     reportRef.current = report;
     onReadyRef.current = onReady;
     onResizeRef.current = onResize;
   });
 
+  // Create the terminal.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -55,9 +61,12 @@ export default function TerminalView({ taskId, isVisible, onReady, onResize }: T
       scrollback: 5000,
       theme: readTheme(),
     });
+
     const fit = new FitAddon();
+
     terminal.loadAddon(fit);
     terminal.open(container);
+
     terminalRef.current = terminal;
     fitRef.current = fit;
 
@@ -67,36 +76,70 @@ export default function TerminalView({ taskId, isVisible, onReady, onResize }: T
         reportRef.current();
         return false;
       }
+
       return true;
     });
+
     const removePasteBlock = blockPasteEvents(container, () => reportRef.current());
 
     const fitAndReport = () => {
-      // Measured while hidden, the terminal would get 0 columns: only fit a visible container.
+      // Measured while hidden, the terminal would get 0 columns.
+      // Only fit a visible container.
       if (container.clientWidth === 0 || container.clientHeight === 0) return;
+
       fit.fit();
       onResizeRef.current(terminal.cols, terminal.rows);
     };
+
     fitAndReport();
-    const observer = new ResizeObserver(fitAndReport);
-    observer.observe(container);
+
+    const resizeObserver = new ResizeObserver(fitAndReport);
+    resizeObserver.observe(container);
 
     onReadyRef.current(terminal);
 
     return () => {
-      observer.disconnect();
+      resizeObserver.disconnect();
       removePasteBlock();
       terminal.dispose();
+
       terminalRef.current = null;
       fitRef.current = null;
     };
+  }, []);
+
+  // Update terminal colors whenever the application theme changes.
+  useEffect(() => {
+    const updateTerminalTheme = () => {
+      const terminal = terminalRef.current;
+
+      if (!terminal) return;
+
+      terminal.options.theme = readTheme();
+    };
+
+    // Apply the current theme.
+    updateTerminalTheme();
+
+    const themeObserver = new MutationObserver(updateTerminalTheme);
+
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+
+    return () => themeObserver.disconnect();
   }, []);
 
   // Shown again after being hidden: the size may have changed meanwhile.
   useEffect(() => {
     const container = containerRef.current;
     const terminal = terminalRef.current;
-    if (!isVisible || !container || !terminal || container.clientWidth === 0) return;
+
+    if (!isVisible || !container || !terminal || container.clientWidth === 0) {
+      return;
+    }
+
     fitRef.current?.fit();
     onResizeRef.current(terminal.cols, terminal.rows);
   }, [isVisible]);

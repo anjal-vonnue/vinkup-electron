@@ -24,21 +24,41 @@ export const fakeEditor = {
 export const fakeMonaco = {
   KeyMod: { CtrlCmd: 2048, Shift: 1024, Alt: 512, WinCtrl: 256 },
   KeyCode: { Enter: 3, KeyS: 49 },
-  editor: { setModelMarkers: vi.fn() },
+  editor: {
+    setModelMarkers: vi.fn(),
+    remeasureFonts: vi.fn(),
+  },
 };
+
+if (!document.fonts) {
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: {
+      ready: Promise.resolve(),
+    },
+  });
+}
 
 vi.mock('@monaco-editor/react', () => ({
   __esModule: true,
   fakeEditor,
   fakeMonaco,
+
+  loader: {
+    config: vi.fn(),
+  },
+
   useMonaco: () => null,
+
   default: function Editor({
     path,
+    theme,
     options,
     onMount,
     onChange,
   }: {
     path?: string;
+    theme?: string;
     options?: { ariaLabel?: string };
     onMount?: (editor: typeof fakeEditor, monaco: typeof fakeMonaco) => void;
     onChange?: (value: string) => void;
@@ -51,12 +71,13 @@ vi.mock('@monaco-editor/react', () => ({
     return createElement('textarea', {
       'aria-label': options?.ariaLabel,
       'data-path': path,
+      'data-theme': theme,
       onChange: (event: ChangeEvent<HTMLTextAreaElement>) => onChange?.(event.target.value),
     });
   },
 }));
 
-vi.mock('/src/lib/monacoSetup', () => ({
+vi.mock('../lib/monacoSetup', () => ({
   applyRuntimeSettings: vi.fn(),
   applyViewerSettings: vi.fn(),
 }));
