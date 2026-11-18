@@ -284,8 +284,12 @@ describe('AdminTaskList', () => {
 
     await user.click(screen.getByRole('button', { name: /Download tasks/ }));
     await user.selectOptions(screen.getByLabelText('Scope'), 'task');
+    await user.selectOptions(screen.getByLabelText('Course'), 'html');
+    await user.selectOptions(screen.getByLabelText('Day'), 'html-2');
     await user.click(screen.getByRole('checkbox', { name: 'All statuses' }));
     await user.click(screen.getByRole('checkbox', { name: 'Rework' }));
+    expect(screen.getByRole('option', { name: 'Task 2 · Rework task' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Profile page/ })).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Task'), 'r');
 
     expect(screen.getByRole('button', { name: 'Download ZIP (1)' })).toBeEnabled();

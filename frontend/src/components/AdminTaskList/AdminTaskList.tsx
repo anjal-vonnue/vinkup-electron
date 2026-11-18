@@ -227,6 +227,47 @@ export default function AdminTaskList({
                 </label>
               ))}
             </fieldset>
+            {(downloadScope === 'task' ||
+              downloadScope === 'course' ||
+              downloadScope === 'day') && (
+              <label>
+                Course
+                <select
+                  value={selectedCourse?.id ?? ''}
+                  disabled={isDownloading}
+                  onChange={(event) => {
+                    setCourseId(event.target.value);
+                    setDayId('');
+                    setDownloadTaskId('');
+                  }}
+                >
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {(downloadScope === 'task' || downloadScope === 'day') && selectedCourse && (
+              <label>
+                Day
+                <select
+                  value={selectedDayId}
+                  disabled={isDownloading}
+                  onChange={(event) => {
+                    setDayId(event.target.value);
+                    setDownloadTaskId('');
+                  }}
+                >
+                  {selectedCourse.days.map((day) => (
+                    <option key={day.id} value={day.id}>
+                      Day {day.dayNumber} · {day.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {downloadScope === 'task' && (
               <label>
                 Task
@@ -239,56 +280,15 @@ export default function AdminTaskList({
                   {eligibleTasks
                     .filter(
                       (task) =>
-                        downloadFilters.includes('all') ||
-                        downloadFilters.includes(getTaskReviewState(task))
+                        task.dayId === selectedDayId &&
+                        (downloadFilters.includes('all') ||
+                          downloadFilters.includes(getTaskReviewState(task)))
                     )
-                    .map((task) => {
-                      const course = courses.find((item) =>
-                        item.days.some((day) => day.id === task.dayId)
-                      );
-                      const day = course?.days.find((item) => item.id === task.dayId);
-                      return (
-                        <option key={task.taskId} value={task.taskId}>
-                          {course?.title ?? 'Course'} · Day {day?.dayNumber ?? '?'} · Task{' '}
-                          {task.sequenceOrder} · {task.title}
-                        </option>
-                      );
-                    })}
-                </select>
-              </label>
-            )}
-            {(downloadScope === 'course' || downloadScope === 'day') && (
-              <label>
-                Course
-                <select
-                  value={selectedCourse?.id ?? ''}
-                  disabled={isDownloading}
-                  onChange={(event) => {
-                    setCourseId(event.target.value);
-                    setDayId('');
-                  }}
-                >
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {downloadScope === 'day' && selectedCourse && (
-              <label>
-                Day
-                <select
-                  value={selectedDayId}
-                  disabled={isDownloading}
-                  onChange={(event) => setDayId(event.target.value)}
-                >
-                  {selectedCourse.days.map((day) => (
-                    <option key={day.id} value={day.id}>
-                      Day {day.dayNumber} · {day.title}
-                    </option>
-                  ))}
+                    .map((task) => (
+                      <option key={task.taskId} value={task.taskId}>
+                        Task {task.sequenceOrder} · {task.title}
+                      </option>
+                    ))}
                 </select>
               </label>
             )}
