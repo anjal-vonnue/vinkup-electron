@@ -142,6 +142,7 @@
         button.dataset.referenceIndex = String(index);
         button.append(
           inlineElement('span', 'reference-card-title', reference.title),
+          element('span', 'reference-card-day', `Day ${reference.dayNumber}`),
           element(
             'span',
             'reference-card-meta',
@@ -344,7 +345,10 @@
     const reference = references[index];
     selectedReferenceId = reference.id;
     readerContent.replaceChildren();
-    readerTitle.replaceChildren(inlineElement('span', '', reference.title));
+    readerTitle.replaceChildren(
+      element('span', 'reader-day-indicator', `Day ${reference.dayNumber}`),
+      inlineElement('span', 'reader-reference-title', reference.title)
+    );
 
     if (reference.instruction) {
       readerContent.append(inlineElement('aside', 'instruction', reference.instruction));
