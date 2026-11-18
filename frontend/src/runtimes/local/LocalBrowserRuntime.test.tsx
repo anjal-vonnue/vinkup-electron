@@ -60,6 +60,32 @@ const auditFixture = {
   ],
 } satisfies LighthouseAuditResult;
 
+/**
+ * Builds a result with exactly the audits a test cares about. `category`, `group` and
+ * `groupTitle` are what the main process can send along; they are optional, so tests
+ * can leave them out to exercise the built-in fallback table.
+ */
+type RawAudit = {
+  id: string;
+  title: string;
+  score: number | null;
+  category?: string;
+  group?: string;
+  groupTitle?: string;
+};
+
+function auditWith(...audits: RawAudit[]): LighthouseAuditResult {
+  return {
+    ...auditFixture,
+    audits: audits.map((audit) => ({
+      displayValue: '',
+      scoreDisplayMode: audit.score === null ? 'informative' : 'binary',
+      description: `About ${audit.title}.`,
+      ...audit,
+    })),
+  };
+}
+
 function RunnerProbe() {
   const { canRun, label, run } = useRunner();
 
@@ -107,6 +133,31 @@ async function runLighthouseAudit(user: ReturnType<typeof userEvent.setup>) {
     screen.getByRole('button', {
       name: 'Run Lighthouse audit',
     })
+  );
+}
+
+/** Renders the runtime, runs the audit with `result`, and waits for the results view. */
+async function showAudit(user: ReturnType<typeof userEvent.setup>, result: LighthouseAuditResult) {
+  auditRun.mockResolvedValueOnce(result);
+
+  renderRuntime();
+
+  await waitForPreview();
+  await runLighthouseAudit(user);
+
+  await screen.findByRole('heading', { name: 'Lighthouse results' });
+}
+
+/** The category headings inside "Needs attention", in display order. */
+function categoryHeadings(): string[] {
+  return screen.queryAllByRole('heading', { level: 6 }).map((heading) => heading.textContent ?? '');
+}
+
+/** Finding ids in the order they are rendered. */
+function findingIds(): string[] {
+  // Rows carry their Lighthouse id as data-audit-id; there is no role to query them by.
+  return Array.from(document.querySelectorAll('details[data-audit-id]')).map(
+    (row) => row.getAttribute('data-audit-id') ?? ''
   );
 }
 
@@ -488,5 +539,235 @@ describe('LocalBrowserRuntime', () => {
     await runLighthouseAudit(user);
 
     expect(await screen.findByText('No audit findings available.')).toBeInTheDocument();
+  });
+
+  it('shows how many findings need attention in the section heading', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(user, auditFixture);
+
+    // color-contrast (0.78) and uses-https (0.45) are below the 0.9 pass mark.
+    expect(screen.getByRole('heading', { name: 'Needs attention 2' })).toBeInTheDocument();
+  });
+
+  it('treats a score of 0.9 as passed, matching Lighthouse', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(user, auditWith({ id: 'doctype', title: 'Has a doctype', score: 0.9 }));
+
+    expect(screen.queryByRole('heading', { name: /^Needs attention/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Passed')).toBeInTheDocument();
+  });
+
+  it('exposes the Lighthouse id on each finding row', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(user, auditFixture);
+
+    expect(findingIds()).toEqual(
+      expect.arrayContaining(['color-contrast', 'uses-https', 'first-contentful-paint'])
+    );
+  });
+});
+
+describe('LocalBrowserRuntime Lighthouse grouping', () => {
+  it('groups failing audits under category and group headings when the data has neither', async () => {
+    const user = userEvent.setup();
+
+    // Same shape the main process sends today: no category or group fields.
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'errors-in-console', title: 'Browser errors were logged to the console', score: 0 },
+        { id: 'meta-description', title: 'Document does not have a meta description', score: 0 },
+        { id: 'landmark-one-main', title: 'Document does not have a main landmark.', score: 0 }
+      )
+    );
+
+    expect(categoryHeadings()).toEqual(['Accessibility', 'Best Practices', 'SEO']);
+
+    expect(screen.getByText('Best practices')).toBeInTheDocument(); // Accessibility group
+    expect(screen.getByText('General')).toBeInTheDocument(); // Best Practices group
+    expect(screen.getByText('Content Best Practices')).toBeInTheDocument(); // SEO group
+  });
+
+  it('uses Chrome-style group titles for accessibility audits', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'button-name', title: 'Buttons do not have an accessible name', score: 0 },
+        { id: 'color-contrast', title: 'Low contrast text', score: 0 },
+        { id: 'html-has-lang', title: '<html> element does not have a [lang] attribute', score: 0 }
+      )
+    );
+
+    expect(categoryHeadings()).toEqual(['Accessibility']);
+
+    expect(screen.getByText('Names and labels')).toBeInTheDocument();
+    expect(screen.getByText('Contrast')).toBeInTheDocument();
+    expect(screen.getByText('Internationalization and localization')).toBeInTheDocument();
+  });
+
+  it('prefers category and group sent by the main process over the built-in table', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith({
+        // color-contrast is an accessibility audit in the table; the data says otherwise.
+        id: 'color-contrast',
+        title: 'Low contrast text',
+        score: 0,
+        category: 'seo',
+        group: 'seo-content',
+        groupTitle: 'Content from the data',
+      })
+    );
+
+    expect(categoryHeadings()).toEqual(['SEO']);
+    expect(screen.getByText('Content from the data')).toBeInTheDocument();
+    expect(screen.queryByText('Contrast')).not.toBeInTheDocument();
+  });
+
+  it('places audits the table does not know in a group the main process names', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith({
+        id: 'brand-new-audit',
+        title: 'A check added in a newer Lighthouse',
+        score: 0,
+        category: 'best-practices',
+        group: 'brand-new-group',
+        groupTitle: 'Brand new group',
+      })
+    );
+
+    expect(categoryHeadings()).toEqual(['Best Practices']);
+    expect(screen.getByText('Brand new group')).toBeInTheDocument();
+  });
+
+  it('titles an unknown group from its id when no title is sent', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith({
+        id: 'brand-new-audit',
+        title: 'A check added in a newer Lighthouse',
+        score: 0,
+        category: 'accessibility',
+        group: 'a11y-new-things',
+      })
+    );
+
+    expect(screen.getByText('New things')).toBeInTheDocument();
+  });
+
+  it('puts performance insight audits under Performance > Insights', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'render-blocking-insight', title: 'Render-blocking requests', score: 0.5 },
+        { id: 'unminified-javascript', title: 'Minify JavaScript', score: 0.4 }
+      )
+    );
+
+    expect(categoryHeadings()).toEqual(['Performance']);
+
+    expect(screen.getByText('Insights')).toBeInTheDocument();
+    expect(screen.getByText('Diagnostics')).toBeInTheDocument();
+  });
+
+  it('orders categories as Performance, Accessibility, Best Practices, SEO', async () => {
+    const user = userEvent.setup();
+
+    // Deliberately given in the wrong order.
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'meta-description', title: 'No meta description', score: 0 },
+        { id: 'errors-in-console', title: 'Console errors', score: 0 },
+        { id: 'color-contrast', title: 'Low contrast', score: 0 },
+        { id: 'unminified-javascript', title: 'Minify JavaScript', score: 0.4 }
+      )
+    );
+
+    expect(categoryHeadings()).toEqual(['Performance', 'Accessibility', 'Best Practices', 'SEO']);
+  });
+
+  it('shows the worst finding first inside a group', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'image-alt', title: 'Images lack alt text', score: 0.6 },
+        { id: 'button-name', title: 'Buttons lack a name', score: 0 },
+        { id: 'link-name', title: 'Links lack a name', score: 0.3 }
+      )
+    );
+
+    // All three are "Names and labels".
+    expect(findingIds()).toEqual(['button-name', 'link-name', 'image-alt']);
+  });
+
+  it('puts audits it cannot place under Other, after the known categories', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'something-unmapped', title: 'Something unmapped', score: 0 },
+        { id: 'errors-in-console', title: 'Console errors', score: 0 }
+      )
+    );
+
+    expect(categoryHeadings()).toEqual(['Best Practices', 'Other']);
+    expect(screen.getByText('Something unmapped')).toBeInTheDocument();
+  });
+
+  it('keeps a flat list, without category headings, when nothing can be placed', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'unmapped-one', title: 'Unmapped one', score: 0 },
+        { id: 'unmapped-two', title: 'Unmapped two', score: 0.2 }
+      )
+    );
+
+    expect(categoryHeadings()).toEqual([]);
+    expect(screen.getByText('Unmapped one')).toBeInTheDocument();
+    expect(screen.getByText('Unmapped two')).toBeInTheDocument();
+  });
+
+  it('does not group passed or informational findings', async () => {
+    const user = userEvent.setup();
+
+    await showAudit(
+      user,
+      auditWith(
+        { id: 'color-contrast', title: 'Low contrast', score: 0 },
+        { id: 'doctype', title: 'Has a doctype', score: 1 },
+        { id: 'robots-txt', title: 'robots.txt is valid', score: null }
+      )
+    );
+
+    // Only the one failing audit creates a category heading.
+    expect(categoryHeadings()).toEqual(['Accessibility']);
+
+    await user.click(screen.getByText('Passed'));
+    await user.click(screen.getByText('Information'));
+
+    expect(screen.getByText('Has a doctype')).toBeInTheDocument();
+    expect(screen.getByText('robots.txt is valid')).toBeInTheDocument();
+    expect(categoryHeadings()).toEqual(['Accessibility']);
   });
 });

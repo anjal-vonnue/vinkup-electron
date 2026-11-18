@@ -67,6 +67,336 @@ function toneOf(score: number | null): Tone {
   return 'poor';
 }
 
+/**
+ * Lighthouse puts every audit in a category and, usually, a group inside it
+ * (for example Accessibility > "Names and labels"). The main process passes
+ * these through; older results without them fall back to one flat list.
+ */
+type GroupedAudit = Audit & {
+  category?: string | null;
+  group?: string | null;
+  groupTitle?: string | null;
+};
+
+type AttentionGroup = { id: string; title: string | null; audits: GroupedAudit[] };
+type AttentionCategory = { key: string; label: string | null; groups: AttentionGroup[] };
+
+function prettifyGroupId(id: string): string {
+  const text = id.replace(/^a11y-/, '').replace(/-/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Where Lighthouse puts each audit, mirroring Chrome's report headings.
+ * Used when an audit arrives without `category`/`group` from the main process;
+ * if those fields are present they win. Group order here is display order.
+ */
+type GroupDef = { category: string; title: string; ids: string[] };
+
+const GROUPS: Record<string, GroupDef> = {
+  metrics: {
+    category: 'performance',
+    title: 'Metrics',
+    ids: [
+      'first-contentful-paint',
+      'largest-contentful-paint',
+      'total-blocking-time',
+      'cumulative-layout-shift',
+      'speed-index',
+      'interactive',
+      'max-potential-fid',
+    ],
+  },
+  insights: { category: 'performance', title: 'Insights', ids: [] },
+  diagnostics: {
+    category: 'performance',
+    title: 'Diagnostics',
+    ids: [
+      'unminified-javascript',
+      'unminified-css',
+      'unused-css-rules',
+      'unused-javascript',
+      'uses-long-cache-ttl',
+      'total-byte-weight',
+      'dom-size',
+      'duplicated-javascript',
+      'legacy-javascript',
+      'font-display',
+      'bootup-time',
+      'mainthread-work-breakdown',
+      'third-party-summary',
+      'third-party-facades',
+      'long-tasks',
+      'non-composited-animations',
+      'unsized-images',
+      'prioritize-lcp-image',
+      'redirects',
+      'uses-optimized-images',
+      'uses-responsive-images',
+      'uses-text-compression',
+      'uses-rel-preconnect',
+      'efficient-animated-content',
+      'modern-image-formats',
+      'offscreen-images',
+      'render-blocking-resources',
+      'server-response-time',
+      'critical-request-chains',
+      'layout-shifts',
+      'lcp-lazy-loaded',
+      'network-requests',
+      'network-rtt',
+      'network-server-latency',
+      'main-thread-tasks',
+    ],
+  },
+  'a11y-color-contrast': {
+    category: 'accessibility',
+    title: 'Contrast',
+    ids: ['color-contrast', 'link-in-text-block'],
+  },
+  'a11y-names-labels': {
+    category: 'accessibility',
+    title: 'Names and labels',
+    ids: [
+      'button-name',
+      'document-title',
+      'form-field-multiple-labels',
+      'frame-title',
+      'image-alt',
+      'image-redundant-alt',
+      'input-button-name',
+      'input-image-alt',
+      'label',
+      'link-name',
+      'object-alt',
+      'select-name',
+      'summary-name',
+      'custom-controls-labels',
+      'custom-controls-roles',
+    ],
+  },
+  'a11y-navigation': {
+    category: 'accessibility',
+    title: 'Navigation',
+    ids: [
+      'accesskeys',
+      'bypass',
+      'heading-order',
+      'tabindex',
+      'skip-link',
+      'focus-traps',
+      'focusable-controls',
+      'interactive-element-affordance',
+      'logical-tab-order',
+      'managed-focus',
+      'offscreen-content-hidden',
+      'use-landmarks',
+      'visual-order-follows-dom',
+    ],
+  },
+  'a11y-aria': {
+    category: 'accessibility',
+    title: 'ARIA',
+    ids: [
+      'aria-allowed-attr',
+      'aria-allowed-role',
+      'aria-command-name',
+      'aria-conditional-attr',
+      'aria-deprecated-role',
+      'aria-dialog-name',
+      'aria-hidden-body',
+      'aria-hidden-focus',
+      'aria-input-field-name',
+      'aria-meter-name',
+      'aria-progressbar-name',
+      'aria-prohibited-attr',
+      'aria-required-attr',
+      'aria-required-children',
+      'aria-required-parent',
+      'aria-roles',
+      'aria-text',
+      'aria-toggle-field-name',
+      'aria-tooltip-name',
+      'aria-treeitem-name',
+      'aria-valid-attr-value',
+      'aria-valid-attr',
+    ],
+  },
+  'a11y-language': {
+    category: 'accessibility',
+    title: 'Internationalization and localization',
+    ids: ['html-has-lang', 'html-lang-valid', 'html-xml-lang-mismatch', 'valid-lang'],
+  },
+  'a11y-audio-video': {
+    category: 'accessibility',
+    title: 'Audio and video',
+    ids: ['audio-caption', 'video-caption'],
+  },
+  'a11y-tables-lists': {
+    category: 'accessibility',
+    title: 'Tables and lists',
+    ids: [
+      'definition-list',
+      'dlitem',
+      'list',
+      'listitem',
+      'td-headers-attr',
+      'th-has-data-cells',
+      'td-has-header',
+      'table-duplicate-name',
+      'table-fake-caption',
+    ],
+  },
+  'a11y-best-practices': {
+    category: 'accessibility',
+    title: 'Best practices',
+    ids: [
+      'meta-viewport',
+      'landmark-one-main',
+      'target-size',
+      'identical-links-same-purpose',
+      'label-content-name-mismatch',
+      'empty-heading',
+      'duplicate-id-aria',
+      'duplicate-id-active',
+      'duplicate-id',
+    ],
+  },
+  'trust-safety': {
+    category: 'best-practices',
+    title: 'Trust and Safety',
+    ids: [
+      'is-on-https',
+      'csp-xss',
+      'has-hsts',
+      'origin-isolation',
+      'clickjacking-mitigation',
+      'trusted-types-xss',
+    ],
+  },
+  ux: {
+    category: 'best-practices',
+    title: 'User Experience',
+    ids: [
+      'geolocation-on-start',
+      'notification-on-start',
+      'paste-preventing-inputs',
+      'image-aspect-ratio',
+      'image-size-responsive',
+    ],
+  },
+  'browser-compat': {
+    category: 'best-practices',
+    title: 'Browser Compatibility',
+    ids: ['doctype', 'charset'],
+  },
+  general: {
+    category: 'best-practices',
+    title: 'General',
+    ids: [
+      'js-libraries',
+      'deprecations',
+      'errors-in-console',
+      'inspector-issues',
+      'valid-source-maps',
+      'third-party-cookies',
+      'bf-cache',
+    ],
+  },
+  'seo-mobile': { category: 'seo', title: 'Mobile Friendly', ids: ['viewport', 'font-size'] },
+  'seo-content': {
+    category: 'seo',
+    title: 'Content Best Practices',
+    ids: ['meta-description', 'link-text', 'hreflang', 'canonical', 'structured-data'],
+  },
+  'seo-crawl': {
+    category: 'seo',
+    title: 'Crawling and Indexing',
+    ids: ['http-status-code', 'is-crawlable', 'robots-txt', 'crawlable-anchors'],
+  },
+};
+
+const GROUP_ORDER = Object.keys(GROUPS);
+
+const PLACEMENT = new Map<string, string>();
+for (const [groupId, def] of Object.entries(GROUPS)) {
+  for (const id of def.ids) PLACEMENT.set(id, groupId);
+}
+
+function placementOf(audit: GroupedAudit): {
+  category: string | null;
+  groupId: string;
+  title: string | null;
+} {
+  // Data from the main process wins.
+  if (audit.category) {
+    const groupId = audit.group ?? '';
+    return {
+      category: audit.category,
+      groupId,
+      title: groupId
+        ? (audit.groupTitle ?? GROUPS[groupId]?.title ?? prettifyGroupId(groupId))
+        : null,
+    };
+  }
+
+  const groupId = PLACEMENT.get(audit.id) ?? (audit.id.endsWith('-insight') ? 'insights' : '');
+  const def = GROUPS[groupId];
+
+  return { category: def?.category ?? null, groupId, title: def?.title ?? null };
+}
+
+function buildAttentionTree(audits: GroupedAudit[]): AttentionCategory[] {
+  const categoryOrder: string[] = AUDIT_CATEGORIES.map((category) => category.key);
+  const categories = new Map<string, AttentionCategory>();
+
+  for (const audit of audits) {
+    const placement = placementOf(audit);
+    const key =
+      placement.category && categoryOrder.includes(placement.category)
+        ? placement.category
+        : 'other';
+
+    let category = categories.get(key);
+    if (!category) {
+      category = {
+        key,
+        label: AUDIT_CATEGORIES.find((item) => item.key === key)?.label ?? null,
+        groups: [],
+      };
+      categories.set(key, category);
+    }
+
+    let group = category.groups.find((item) => item.id === placement.groupId);
+    if (!group) {
+      group = { id: placement.groupId, title: placement.title, audits: [] };
+      category.groups.push(group);
+    }
+
+    group.audits.push(audit);
+  }
+
+  const rankCategory = (key: string) =>
+    categoryOrder.includes(key) ? categoryOrder.indexOf(key) : 99;
+  const rankGroup = (id: string) => {
+    const index = GROUP_ORDER.indexOf(id);
+    return index === -1 ? 999 : index;
+  };
+
+  const tree = [...categories.values()].sort((a, b) => rankCategory(a.key) - rankCategory(b.key));
+
+  for (const category of tree) {
+    category.groups.sort((a, b) => rankGroup(a.id) - rankGroup(b.id));
+
+    // Worst first inside each group.
+    for (const group of category.groups) {
+      group.audits.sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+    }
+  }
+
+  return tree;
+}
+
 function AuditRow({ audit }: { audit: Audit }) {
   const tone = toneOf(audit.score);
   const Icon =
@@ -81,7 +411,7 @@ function AuditRow({ audit }: { audit: Audit }) {
     audit.score === null ? 'Information' : audit.score >= PASS_SCORE ? 'Passed' : 'Needs attention';
 
   return (
-    <details className={styles.lhRow}>
+    <details className={styles.lhRow} data-audit-id={audit.id}>
       <summary className={styles.lhRowSummary}>
         <Icon size={16} aria-hidden="true" className={`${styles.lhRowIcon} ${TONE_CLASS[tone]}`} />
         <span className={styles.lhSrOnly}>{statusText}: </span>
@@ -149,13 +479,17 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
     const audits = auditResult?.audits ?? [];
 
     return {
-      attention: audits
-        .filter((audit) => audit.score !== null && audit.score < PASS_SCORE)
-        .sort((a, b) => (a.score ?? 0) - (b.score ?? 0)),
+      attention: audits.filter((audit) => audit.score !== null && audit.score < PASS_SCORE),
       passed: audits.filter((audit) => audit.score !== null && audit.score >= PASS_SCORE),
       info: audits.filter((audit) => audit.score === null),
     };
   }, [auditResult]);
+
+  const attentionTree = useMemo(
+    () => buildAttentionTree(findings.attention as GroupedAudit[]),
+    [findings.attention]
+  );
+  const showCategoryHeadings = attentionTree.some((category) => category.label !== null);
 
   // Flush pending editor changes so a Run never serves the previous keystrokes.
   const flush = workspace.flush;
@@ -436,11 +770,28 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
                       <h5 className={styles.lhGroupTitle}>
                         Needs attention <span>{findings.attention.length}</span>
                       </h5>
-                      <div className={styles.lhGroup}>
-                        {findings.attention.map((audit) => (
-                          <AuditRow key={audit.id} audit={audit} />
-                        ))}
-                      </div>
+                      {attentionTree.map((category) => (
+                        <div className={styles.lhCategory} key={category.key}>
+                          {showCategoryHeadings && (
+                            <h6 className={styles.lhCategoryTitle}>{category.label ?? 'Other'}</h6>
+                          )}
+
+                          {category.groups.map((group) => (
+                            <div className={styles.lhSubgroup} key={group.id || 'ungrouped'}>
+                              {group.title && (
+                                <p className={styles.lhSubgroupTitle}>
+                                  {group.title} <span>{group.audits.length}</span>
+                                </p>
+                              )}
+                              <div className={styles.lhGroup}>
+                                {group.audits.map((audit) => (
+                                  <AuditRow key={audit.id} audit={audit} />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
                     </section>
                   )}
 

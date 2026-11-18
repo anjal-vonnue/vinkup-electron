@@ -428,6 +428,13 @@ export function startWorkspaceServer(options: {
     try {
       info = await stat(target);
     } catch {
+      // Browsers ask for /favicon.ico on their own. A 404 here is logged by Chrome as a
+      // console error, which Lighthouse counts against the learner's Best Practices score.
+      if (relativePath === 'favicon.ico') {
+        res.writeHead(204, { 'Cache-Control': 'no-store' });
+        res.end();
+        return;
+      }
       return sendError(res, 404, 'Not found');
     }
 

@@ -113,6 +113,11 @@ export async function runLighthouseAudit(url: string): Promise<LighthouseAuditRe
       throw new Error('Lighthouse did not return an audit report.');
     }
 
+    // temporary: remove once we know the cause
+    console.log(
+      JSON.stringify((lhr.audits['errors-in-console'] as { details?: unknown }).details, null, 2)
+    );
+
     return {
       url: lhr.finalDisplayedUrl,
       fetchedAt: new Date().toISOString(),
