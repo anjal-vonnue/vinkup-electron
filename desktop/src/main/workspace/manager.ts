@@ -184,6 +184,17 @@ export class WorkspaceManager {
     });
   }
 
+  getPreviewUrl(taskIdValue: unknown): string {
+    const taskId = assertTaskId(taskIdValue);
+    const session = this.requireSession(taskId);
+
+    if (session.closed) {
+      throw new Error('The workspace is closed.');
+    }
+
+    return session.server.url;
+  }
+
   async sync(
     taskIdValue: unknown,
     files: Record<string, string>,

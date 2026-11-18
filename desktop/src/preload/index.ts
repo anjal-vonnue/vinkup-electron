@@ -3,6 +3,7 @@ import type {
   DesktopApi,
   DesktopAppInfo,
   DesktopAuthState,
+  LighthouseAuditResult,
   ResourcesAllowlist,
   ResourcesBrowserState,
   ResourcesFindResult,
@@ -106,6 +107,10 @@ const api: DesktopApi = {
         ipcRenderer.removeListener('terminal:exit', handler);
       };
     },
+  },
+  audit: {
+    run: (taskId: string) =>
+      ipcRenderer.invoke('lighthouse:run', taskId) as Promise<LighthouseAuditResult>,
   },
   run: {
     install: (taskId: string) => ipcRenderer.invoke('run:install', taskId) as Promise<void>,

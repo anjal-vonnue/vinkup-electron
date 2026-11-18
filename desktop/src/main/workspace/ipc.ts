@@ -3,6 +3,7 @@ import { ipcMain } from 'electron';
 import type { WorkspaceOpenResult } from '@itp/types';
 import { MAX_FILES, MAX_FILE_CHARS, MAX_PATH_CHARS } from './paths';
 import { WorkspaceManager, assertTaskId } from './manager';
+import { runLighthouseAudit } from '../lighthouse';
 
 const MAX_TOTAL_FILES_CHARS = 5_000_000;
 
@@ -113,6 +114,13 @@ export function registerWorkspaceIpc({ manager, assertTrustedSender }: Workspace
   ipcMain.handle('terminal:close', async (event, terminalId: unknown) => {
     assertTrustedSender(event);
     await manager.closeTerminal(terminalId);
+  });
+
+  ipcMain.handle('lighthouse:run', async (event, taskId: unknown) => {
+    assertTrustedSender(event);
+
+    const previewUrl = manager.getPreviewUrl(taskId);
+    return runLighthouseAudit(previewUrl);
   });
 
   ipcMain.handle('run:install', async (event, taskId: unknown) => {
