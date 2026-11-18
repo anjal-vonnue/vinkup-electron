@@ -128,6 +128,13 @@ export default tseslint.config(
     },
     rules: {},
   },
+  {
+    files: ['desktop/src/main/overlay-references.js'],
+    languageOptions: {
+      globals: globals.browser,
+    },
+    rules: {},
+  },
 
   eslintConfigPrettier
 );
