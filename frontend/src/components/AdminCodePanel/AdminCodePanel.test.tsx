@@ -79,6 +79,21 @@ describe('AdminCodePanel', () => {
     expect(screen.getByRole('note')).toHaveTextContent(/hasn.t saved any work/);
   });
 
+  it('says when the code is an unsubmitted draft, and offers no review buttons', () => {
+    renderPanel();
+
+    expect(screen.getByRole('note')).toHaveTextContent(/hasn.t submitted this task yet/);
+    expect(screen.queryByRole('button', { name: /approve|rework/i })).not.toBeInTheDocument();
+  });
+
+  it('shows no draft note for a submitted task', () => {
+    renderPanel({
+      code: { ...code, status: 'completed', reviewStatus: 'pending', submissionCount: 1 },
+    });
+
+    expect(screen.queryByText(/hasn.t submitted this task yet/)).not.toBeInTheDocument();
+  });
+
   it('shows a loader while loading', () => {
     renderPanel({ code: null, isLoading: true });
 

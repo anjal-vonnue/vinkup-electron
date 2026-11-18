@@ -22,8 +22,7 @@ export default function NodePreview({ url, port }: NodePreviewProps) {
           <RefreshCw size={14} aria-hidden="true" />
         </button>
       </div>
-      {/* WebContainer serves this URL from its own origin, already separate from the platform,
-          so it needs no sandbox (unlike the browser runtime's srcdoc preview). */}
+      {/* The dev server is a separate origin (loopback + its own port), so it needs no sandbox. */}
       <iframe
         key={reloadKey}
         className={styles.frame}

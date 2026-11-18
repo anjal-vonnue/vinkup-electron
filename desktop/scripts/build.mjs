@@ -7,7 +7,7 @@ const shared = {
   target: 'node22',
   format: 'cjs',
   sourcemap: true,
-  external: ['electron'],
+  external: ['electron', 'esbuild', 'node-pty'],
   logLevel: 'info',
 };
 

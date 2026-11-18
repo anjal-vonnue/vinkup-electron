@@ -1,14 +1,14 @@
-// Helper files the workspace writes into WebContainer for Prisma tasks that use prisma-pglite.
+// Helper files the workspace writes into a Prisma task's folder.
 // They live in .vinkup/, which the workspace ignores: never shown in Files, never saved.
 // Trainees use the npm scripts in the task's package.json; these files do the work behind them.
 //
 // Why they exist (see docs/prisma-in-the-workspace.md):
-// - The Prisma CLI tries to download its native schema engine, which can't run in the browser.
+// - The Prisma CLI tries to download its native schema engine, which prisma-pglite doesn't use.
 //   PRISMA_SCHEMA_ENGINE_BINARY pointing at an empty placeholder file stops that.
-// - prisma-pglite's own CLI (bin.js) crashes in WebContainer, so its functions are called directly.
+// - prisma-pglite is driven through its functions rather than its own bin.js.
 // - Its adapter only creates tables on a NEW database, so the database is recreated when
 //   schema.prisma changes, like the SQL runtime does when a task's setup changes.
-// The dev database (.vinkup/db/dev) is saved in the browser by databaseSnapshots.ts.
+// The dev database (.vinkup/db/dev) is kept on disk and preserved across task reopens.
 
 const engine = `// Points PRISMA_SCHEMA_ENGINE_BINARY at an empty placeholder file, so the Prisma CLI doesn't try
 // to download its native schema engine (it can't run in the browser).
@@ -24,7 +24,7 @@ export function useEnginePlaceholder() {
 }
 `;
 
-const adapter = `// The database for Prisma tasks: PostgreSQL (PGlite) running inside the browser tab.
+const adapter = `// The database for Prisma tasks: PostgreSQL (PGlite) running inside the task's Node process.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -59,7 +59,7 @@ export async function createAdapter() {
   try {
     return await open();
   } catch (error) {
-    // A database saved in the browser (databaseSnapshots.ts) can in rare cases be cut off mid-write.
+    // A saved database can in rare cases be cut off mid-write.
     if (name === 'test' || !existsSync(dir)) throw error;
     console.log("[database] The saved database couldn't be opened, so a fresh one was created.");
     rmSync(dir, { recursive: true, force: true });
@@ -173,9 +173,6 @@ const adapterTypes = `// The value is passed to new PrismaClient({ adapter }).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createAdapter(): Promise<any>;
 `;
-
-/** The dev database and its schema marker (adapter.mjs); the test database isn't kept. */
-export const PRISMA_SAVED_DATABASE = ['.vinkup/db/dev', '.vinkup/db/dev.schema-hash'];
 
 export const PRISMA_PGLITE_SUPPORT_FILES: Record<string, string> = {
   '.vinkup/prisma/engine.mjs': engine,

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { Ban, DatabaseZap } from 'lucide-react';
-import type { ConsoleEntry, ConsoleLevel } from '../usePreview';
+import type { ConsoleEntry, ConsoleLevel } from '../../previewConsole';
 import { formatTimestamp } from './formatTimestamp';
 import styles from './ConsolePanel.module.css';
 

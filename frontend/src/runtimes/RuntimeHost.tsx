@@ -1,6 +1,6 @@
 import type { TaskResponse } from '@itp/types';
-import BrowserRuntime from './browser/BrowserRuntime';
-import NodeRuntime from './node/NodeRuntime';
+import LocalBrowserRuntime from './local/LocalBrowserRuntime';
+import LocalNodeRuntime from './local/LocalNodeRuntime';
 import SqlRuntime from './sql/SqlRuntime';
 
 type RuntimeHostProps = {
@@ -12,9 +12,9 @@ type RuntimeHostProps = {
 export default function RuntimeHost({ task, isVisible }: RuntimeHostProps) {
   switch (task.runtime) {
     case 'browser':
-      return <BrowserRuntime task={task} isVisible={isVisible} />;
+      return <LocalBrowserRuntime task={task} isVisible={isVisible} />;
     case 'node':
-      return <NodeRuntime task={task} isVisible={isVisible} />;
+      return <LocalNodeRuntime task={task} isVisible={isVisible} />;
     case 'sql':
       return <SqlRuntime task={task} isVisible={isVisible} />;
   }

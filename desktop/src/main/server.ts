@@ -32,11 +32,7 @@ const MIME_TYPES: Record<string, string> = {
   '.webmanifest': 'application/manifest+json',
 };
 
-function setIsolationHeaders(res: http.ServerResponse): void {
-  // WebContainer needs a cross-origin isolated document. These headers must be
-  // on the first page load, not only on task pages.
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+function setSecurityHeaders(res: http.ServerResponse): void {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
 }
@@ -179,7 +175,7 @@ export function startLocalServer(): Promise<LocalServer> {
       return;
     }
 
-    setIsolationHeaders(res);
+    setSecurityHeaders(res);
     void serveStatic(req, res, frontendDir);
   });
 

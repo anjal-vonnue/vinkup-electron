@@ -6,6 +6,13 @@ import type {
   ResourcesAllowlist,
   ResourcesBrowserState,
   ResourcesFindResult,
+  TerminalDataEvent,
+  TerminalExitEvent,
+  WorkspaceEnvironment,
+  WorkspaceEvent,
+  WorkspaceOpenInput,
+  WorkspaceOpenResult,
+  WorkspaceSyncInput,
 } from '@itp/types';
 
 const api: DesktopApi = {
@@ -53,6 +60,59 @@ const api: DesktopApi = {
       ipcRenderer.invoke('certificate:save-pdf', fileName) as Promise<boolean>,
   },
 
+  workspace: {
+    open: (input: WorkspaceOpenInput) =>
+      ipcRenderer.invoke('workspace:open', input) as Promise<WorkspaceOpenResult>,
+    sync: (input: WorkspaceSyncInput) =>
+      ipcRenderer.invoke('workspace:sync', input) as Promise<void>,
+    reload: (taskId: string) =>
+      ipcRenderer.invoke('workspace:reload', taskId) as Promise<Record<string, string>>,
+    close: (taskId: string) => ipcRenderer.invoke('workspace:close', taskId) as Promise<void>,
+    getEnvironment: () =>
+      ipcRenderer.invoke('workspace:get-environment') as Promise<WorkspaceEnvironment>,
+    onEvent: (listener: (event: WorkspaceEvent) => void) => {
+      const handler = (_event: IpcRendererEvent, payload: WorkspaceEvent): void => {
+        listener(payload);
+      };
+      ipcRenderer.on('workspace:event', handler);
+      return () => {
+        ipcRenderer.removeListener('workspace:event', handler);
+      };
+    },
+  },
+  terminal: {
+    open: (input) => ipcRenderer.invoke('terminal:open', input) as Promise<{ terminalId: string }>,
+    write: (terminalId: string, data: string) =>
+      ipcRenderer.invoke('terminal:write', terminalId, data) as Promise<void>,
+    resize: (terminalId: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('terminal:resize', terminalId, cols, rows) as Promise<void>,
+    close: (terminalId: string) =>
+      ipcRenderer.invoke('terminal:close', terminalId) as Promise<void>,
+    onData: (listener: (event: TerminalDataEvent) => void) => {
+      const handler = (_event: IpcRendererEvent, payload: TerminalDataEvent): void => {
+        listener(payload);
+      };
+      ipcRenderer.on('terminal:data', handler);
+      return () => {
+        ipcRenderer.removeListener('terminal:data', handler);
+      };
+    },
+    onExit: (listener: (event: TerminalExitEvent) => void) => {
+      const handler = (_event: IpcRendererEvent, payload: TerminalExitEvent): void => {
+        listener(payload);
+      };
+      ipcRenderer.on('terminal:exit', handler);
+      return () => {
+        ipcRenderer.removeListener('terminal:exit', handler);
+      };
+    },
+  },
+  run: {
+    install: (taskId: string) => ipcRenderer.invoke('run:install', taskId) as Promise<void>,
+    dev: (taskId: string, command: string) =>
+      ipcRenderer.invoke('run:dev', taskId, command) as Promise<void>,
+    stop: (taskId: string) => ipcRenderer.invoke('run:stop', taskId) as Promise<void>,
+  },
   resources: {
     getAllowlist: () =>
       ipcRenderer.invoke('resources:get-allowlist') as Promise<ResourcesAllowlist>,

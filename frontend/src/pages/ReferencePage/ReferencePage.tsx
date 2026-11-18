@@ -272,7 +272,6 @@ const renderVideos = (videos: { title: string; embedUrl: string }[]) => (
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
-          {...{ credentialless: 'true' }}
         />
       </div>
     ))}
