@@ -164,6 +164,9 @@ export interface DesktopApi {
     setFullscreen: (value: boolean) => Promise<boolean>;
     isFullscreen: () => Promise<boolean>;
     setDisplayTheme: (theme: 'light' | 'dark') => Promise<void>;
+    isReferenceScreenFocused: () => Promise<boolean>;
+    /** Returns an unsubscribe function. */
+    onReferenceScreenFocusChange: (listener: (isFocused: boolean) => void) => () => void;
     beginCertificatePrint: () => Promise<void>;
     endCertificatePrint: () => Promise<void>;
     /** Returns an unsubscribe function. */

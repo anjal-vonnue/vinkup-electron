@@ -33,6 +33,7 @@
         width: 100%;
         height: 100%;
         margin: 0;
+        overflow: hidden;
         background: var(--background);
         color: var(--text);
       }
@@ -102,28 +103,431 @@
 
       main {
         flex: 1;
-        display: grid;
-        place-items: center;
         min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
+      #resources-panel {
+        display: grid;
+        min-height: 100%;
+        place-items: center;
         padding: 32px;
         text-align: center;
       }
 
-      section {
-        max-width: 560px;
-      }
-
       h1 {
-        margin: 0 0 12px;
+        margin: 0;
+        color: var(--text);
+        font-size: clamp(1.35rem, 3vw, 2rem);
+        line-height: 1.3;
       }
 
       p {
-        margin: 0;
+        margin: 0 0 16px;
         color: var(--text-secondary);
+        line-height: 1.7;
       }
 
       [hidden] {
         display: none !important;
+      }
+
+      .reference-list-view {
+        width: min(100% - 48px, 1120px);
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      .list-heading {
+        margin-bottom: 22px;
+      }
+
+      .list-heading p {
+        margin: 8px 0 0;
+      }
+
+      .reference-search {
+        width: min(100%, 440px);
+        min-height: 42px;
+        margin: 0 0 32px;
+        padding: 0 14px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+      }
+
+      .reference-search:focus-visible,
+      .reference-card:focus-visible,
+      .reader-toolbar button:focus-visible,
+      .reader-footer button:focus-visible,
+      .prerequisite-button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .reference-group + .reference-group {
+        margin-top: 30px;
+      }
+
+      .group-title {
+        margin: 0 0 12px;
+        color: var(--text);
+        font-size: 1.1rem;
+      }
+
+      .reference-group-items {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+        gap: 12px;
+      }
+
+      .reference-card {
+        display: flex;
+        min-height: 76px;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 6px;
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+        transition:
+          border-color 150ms ease,
+          transform 150ms ease,
+          background-color 150ms ease;
+      }
+
+      .reference-card:hover {
+        transform: translateY(-1px);
+        border-color: var(--accent);
+      }
+
+      .reference-card-title {
+        font-weight: 650;
+        line-height: 1.4;
+      }
+
+      .reference-card-day {
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .reference-card-meta,
+      .empty-state {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+      }
+
+      .reader-toolbar {
+        position: sticky;
+        z-index: 3;
+        top: 0;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 16px;
+        padding: 14px max(24px, calc((100% - 1120px) / 2));
+        border-bottom: 1px solid var(--border);
+        background: var(--background);
+      }
+
+      .reader-toolbar h1 {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        align-items: flex-start;
+        overflow: hidden;
+      }
+
+      .reader-day-indicator {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 650;
+        line-height: 1.2;
+        text-transform: uppercase;
+      }
+
+      .reader-reference-title {
+        width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .reader-toolbar-actions,
+      .reader-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .reader-button,
+      .prerequisite-button {
+        display: inline-flex;
+        min-height: 38px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 13px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+
+      .reader-button:hover:not(:disabled),
+      .prerequisite-button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .reader-button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .reader-content {
+        width: min(100% - 48px, 920px);
+        margin: 26px auto 0;
+        padding: 28px clamp(18px, 4vw, 48px);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+
+      .reference-section + .reference-section,
+      .video-section,
+      .prerequisites {
+        margin-top: 42px;
+      }
+
+      .section-title {
+        margin: 0 0 18px;
+        color: var(--text);
+        font-size: clamp(1.1rem, 2.4vw, 1.4rem);
+        line-height: 1.4;
+      }
+
+      .paragraph,
+      .definition-description,
+      .content-list,
+      .instruction {
+        color: var(--text-secondary);
+        line-height: 1.75;
+      }
+
+      .inline-code {
+        padding: 0.1em 0.35em;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--panel);
+        color: var(--text);
+        font:
+          0.9em ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+      }
+
+      .subheading {
+        margin: 28px 0 12px;
+        color: var(--text);
+        font-size: 1.05rem;
+      }
+
+      .content-list {
+        padding-left: 24px;
+      }
+
+      .content-list li + li {
+        margin-top: 6px;
+      }
+
+      .definitions {
+        margin: 22px 0;
+      }
+
+      .definition-item + .definition-item {
+        margin-top: 18px;
+      }
+
+      .definition-term {
+        margin-bottom: 5px;
+        color: var(--text);
+        font-weight: 650;
+      }
+
+      .definition-description {
+        margin: 0;
+      }
+
+      .table-wrapper,
+      .html-table {
+        max-width: 100%;
+        margin: 22px 0;
+        overflow-x: auto;
+      }
+
+      .content-table {
+        width: 100%;
+        border-collapse: collapse;
+        color: var(--text-secondary);
+      }
+
+      .content-table th,
+      .content-table td,
+      .html-table th,
+      .html-table td {
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+        line-height: 1.6;
+      }
+
+      .content-table th,
+      .html-table th {
+        background: var(--panel);
+        color: var(--text);
+      }
+
+      .code-block {
+        margin: 22px 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--background);
+      }
+
+      .code-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 13px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+      }
+
+      .code-pre {
+        max-width: 100%;
+        margin: 0;
+        padding: 16px;
+        overflow-x: auto;
+        color: var(--text);
+        font:
+          0.86rem/1.65 ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+        tab-size: 2;
+      }
+
+      .image-figure {
+        margin: 22px 0;
+      }
+
+      .content-image {
+        display: block;
+        max-width: 100%;
+        max-height: 560px;
+        margin: 0 auto;
+        object-fit: contain;
+      }
+
+      .image-caption {
+        margin-top: 8px;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        text-align: center;
+      }
+
+      .callout,
+      .instruction {
+        margin: 18px 0;
+        padding: 15px 18px;
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--accent);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .callout.warning {
+        border-left-color: #d97706;
+      }
+
+      .callout-title {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--text);
+      }
+
+      .callout .paragraph {
+        margin: 0;
+      }
+
+      .topic-accordion {
+        margin: 12px 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .accordion-summary {
+        padding: 12px 14px;
+        color: var(--text);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .topic-accordion > :not(summary) {
+        margin-right: 14px;
+        margin-left: 14px;
+      }
+
+      .video-card {
+        margin: 18px 0;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--background);
+      }
+
+      .video-title {
+        margin: 0 0 12px;
+        color: var(--text);
+        font-size: 1rem;
+      }
+
+      .video-frame {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 0;
+        border-radius: 6px;
+        background: #000;
+      }
+
+      .prerequisite-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .reader-footer {
+        width: min(100% - 48px, 920px);
+        margin: 16px auto 40px;
       }
 
       @media (max-width: 480px) {
@@ -142,7 +546,42 @@
           padding: 0 10px;
         }
 
-        main {
+        .reference-list-view {
+          width: calc(100% - 28px);
+          padding-top: 20px;
+        }
+
+        .reader-toolbar {
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 10px;
+          padding: 10px 14px;
+        }
+
+        .reader-toolbar-actions {
+          grid-column: 1 / -1;
+          justify-content: flex-end;
+        }
+
+        .reader-toolbar h1 {
+          font-size: 1.15rem;
+        }
+
+        .reader-content,
+        .reader-footer {
+          width: calc(100% - 28px);
+        }
+
+        .reader-content {
+          margin-top: 14px;
+          padding: 20px 16px;
+        }
+
+        .reader-button {
+          min-height: 36px;
+          padding: 0 10px;
+        }
+
+        #resources-panel {
           padding: 24px 16px;
         }
       }
@@ -208,40 +647,43 @@
         <p>Learning resources will be available here.</p>
       </section>
       <section id="references-panel" role="tabpanel" aria-labelledby="references-tab" hidden>
-        <h1>References</h1>
-        <p>Learning references will be available here.</p>
+        <div id="reference-list-view" class="reference-list-view">
+          <div class="list-heading">
+            <h1>References</h1>
+            <p>Choose a day to browse its reference material.</p>
+          </div>
+          <input
+            id="reference-search"
+            class="reference-search"
+            type="search"
+            aria-label="Search references"
+            placeholder="Search subjects or days"
+            autocomplete="off"
+          />
+          <div id="reference-list" aria-live="polite"></div>
+        </div>
+        <div id="reference-reader-view" hidden>
+          <div id="reader-toolbar" class="reader-toolbar">
+            <button id="reference-back" class="reader-button" type="button">Back to list</button>
+            <h1 id="reference-title" tabindex="-1"></h1>
+            <div class="reader-toolbar-actions">
+              <button id="reference-previous" class="reader-button" type="button">Previous</button>
+              <button id="reference-next" class="reader-button" type="button">Next</button>
+            </div>
+          </div>
+          <div id="reference-content" class="reader-content"></div>
+          <div class="reader-footer">
+            <button id="reference-footer-previous" class="reader-button" type="button">
+              Previous reference
+            </button>
+            <button id="reference-footer-next" class="reader-button" type="button">
+              Next reference
+            </button>
+          </div>
+        </div>
       </section>
     </main>
-    <script>
-      const tabs = [...document.querySelectorAll('[role="tab"]')];
-      const panels = [...document.querySelectorAll('[role="tabpanel"]')];
-
-      function selectTab(selectedTab, moveFocus = false) {
-        for (const tab of tabs) {
-          const isSelected = tab === selectedTab;
-          tab.setAttribute('aria-selected', String(isSelected));
-          tab.tabIndex = isSelected ? 0 : -1;
-          if (isSelected) {
-            const panel = document.getElementById(tab.getAttribute('aria-controls'));
-            if (panel) panel.hidden = false;
-          }
-        }
-        for (const panel of panels) {
-          if (panel.id !== selectedTab.getAttribute('aria-controls')) panel.hidden = true;
-        }
-        if (moveFocus) selectedTab.focus();
-      }
-
-      for (const [index, tab] of tabs.entries()) {
-        tab.addEventListener('click', () => selectTab(tab));
-        tab.addEventListener('keydown', (event) => {
-          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-          event.preventDefault();
-          const step = event.key === 'ArrowRight' ? 1 : -1;
-          const nextTab = tabs[(index + step + tabs.length) % tabs.length];
-          if (nextTab) selectTab(nextTab, true);
-        });
-      }
-    </script>
+    <script src="./reference-data.js"></script>
+    <script src="./overlay-references.js"></script>
   </body>
 </html>

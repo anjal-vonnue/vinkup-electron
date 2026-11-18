@@ -146,14 +146,14 @@ release.
 
 ## Environment variables
 
-| Variable                           | Default                               | Purpose                                                                                                                                 |
-| ---------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `VINKUP_API_URL`                   | `https://vinkup-backend.onrender.com` | Backend the `/api` proxy and desktop sign-in use. Defaults to `http://localhost:3000` when `NODE_ENV=development`.                      |
-| `VINKUP_DESKTOP_PORT`              | `43110`                               | Local renderer port. Changing it changes the renderer origin, which clears stored state.                                                |
-| `VINKUP_DISABLE_SCREEN_PROTECTION` | `false`                               | Set to `true` to disable screen protection. Loaded from `desktop/.env.local` in development; packaged runs use the process environment. |
-| `NODE_ENV`                         | unset                                 | `development` loads the Vite dev server and enables DevTools.                                                                           |
-| `VINKUP_OZONE_PLATFORM`          | unset                                 | Set to `wayland` to use native Wayland instead of XWayland on Linux.                                               |
-| `VINKUP_RESOURCES_ALLOWLIST_URL` | API URL + `/api/resources/allowlist`  | Centrally hosted Resources allowlist JSON. An empty string disables remote updates.                                |
+| Variable                           | Default                                | Purpose                                                                                                                                 |
+| ---------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `VINKUP_API_URL`                   | `https://vinkup-electron.onrender.com` | Backend the `/api` proxy and desktop sign-in use. Defaults to `http://localhost:3000` when `NODE_ENV=development`.                      |
+| `VINKUP_DESKTOP_PORT`              | `43110`                                | Local renderer port. Changing it changes the renderer origin, which clears stored state.                                                |
+| `VINKUP_DISABLE_SCREEN_PROTECTION` | `false`                                | Set to `true` to disable screen protection. Loaded from `desktop/.env.local` in development; packaged runs use the process environment. |
+| `NODE_ENV`                         | unset                                  | `development` loads the Vite dev server and enables DevTools.                                                                           |
+| `VINKUP_OZONE_PLATFORM`            | unset                                  | Set to `wayland` to use native Wayland instead of XWayland on Linux.                                                                    |
+| `VINKUP_RESOURCES_ALLOWLIST_URL`   | API URL + `/api/resources/allowlist`   | Centrally hosted Resources allowlist JSON. An empty string disables remote updates.                                                     |
 
 ## Linux troubleshooting
 

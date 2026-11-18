@@ -104,6 +104,16 @@
   line-height: 1.7;
 }
 
+.inlineCode {
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--color-border-card);
+  border-radius: 4px;
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
 .subheading {
   margin: 28px 0 12px;
   color: var(--color-text-primary);
