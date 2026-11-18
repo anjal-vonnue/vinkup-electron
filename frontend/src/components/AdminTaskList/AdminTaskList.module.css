@@ -3,6 +3,65 @@
   gap: 24px;
 }
 
+/* "All · Pending review · Approved · Rework · In progress" filter buttons. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.filter:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent-purple);
+}
+
+.filter[aria-pressed='true'] {
+  color: var(--color-text-on-accent);
+  background: var(--color-accent-purple);
+  border-color: var(--color-accent-purple);
+}
+
+.filter:focus-visible {
+  outline: 2px solid var(--color-accent-purple);
+  outline-offset: 2px;
+}
+
+/* The number inside each filter button. */
+.filterCount {
+  min-width: 20px;
+  padding: 0 6px;
+
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+  background: var(--color-bg-pill-inactive);
+  border-radius: 999px;
+}
+
+.filter[aria-pressed='true'] .filterCount {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .empty {
   padding: 32px 24px;
   text-align: center;

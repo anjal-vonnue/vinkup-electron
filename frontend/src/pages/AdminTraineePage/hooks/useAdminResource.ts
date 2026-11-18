@@ -10,6 +10,8 @@ export type Resource<T> = {
   error: ApiError | null;
   isLoading: boolean;
   retry: () => void;
+  /** Loads again but keeps showing the current data until the new data arrives (no loader). */
+  refresh: () => void;
 };
 
 function toApiError(error: unknown): ApiError {
@@ -52,6 +54,11 @@ export function useAdminResource<T>(fetcher: Fetcher<T> | null): Resource<T> {
     setAttempt((count) => count + 1);
   }, []);
 
+  // Same as retry, but the old data stays on screen, so the page does not flash a loader.
+  const refresh = useCallback(() => {
+    setAttempt((count) => count + 1);
+  }, []);
+
   const current =
     fetcher !== null && settled !== null && settled.fetcher === fetcher ? settled : null;
 
@@ -60,5 +67,6 @@ export function useAdminResource<T>(fetcher: Fetcher<T> | null): Resource<T> {
     error: current?.error ?? null,
     isLoading: fetcher !== null && current === null,
     retry,
+    refresh,
   };
 }

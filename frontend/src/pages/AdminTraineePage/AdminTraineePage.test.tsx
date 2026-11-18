@@ -2,10 +2,16 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
-import type { AdminFeedbackEntry, AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
+import type {
+  AdminFeedbackEntry,
+  AdminFlagEvent,
+  AdminTraineeDetail,
+  TaskReview,
+} from '@itp/types';
 
 import AdminTraineePage from './AdminTraineePage';
 import {
+  approveTask,
   getAdminFlags,
   getAdminTaskCode,
   getAdminTaskReviews,
@@ -142,13 +148,15 @@ describe('AdminTraineePage', () => {
     expect(screen.getByRole('tab', { name: /^Journal/ })).toBeInTheDocument();
   });
 
-  it('opens on the task list, with every submitted task shown', async () => {
+  it('opens on the task list, with View code for every submitted task', async () => {
     renderPage();
 
     const panel = await screen.findByRole('tabpanel');
     expect(screen.getByRole('tab', { name: /^Tasks/ })).toHaveAttribute('aria-selected', 'true');
+    // In-progress tasks are listed, but their unfinished code cannot be opened.
+    const submitted = detail.tasks.filter((task) => task.status === 'completed');
     expect(within(panel).getAllByRole('button', { name: /^View code for/ }).length).toBe(
-      detail.tasks.length
+      submitted.length
     );
   });
 
@@ -238,7 +246,7 @@ describe('AdminTraineePage', () => {
 
   it('says when an opened task still has only starter code', async () => {
     const user = userEvent.setup();
-    const task = detail.tasks[0];
+    const task = detail.tasks.find((row) => row.status === 'completed') ?? detail.tasks[0];
     vi.mocked(getAdminTaskCode).mockResolvedValue({
       taskId: task.taskId,
       title: task.title,
@@ -260,7 +268,7 @@ describe('AdminTraineePage', () => {
   it('closes the code viewer', async () => {
     const user = userEvent.setup();
     renderPage();
-    const task = detail.tasks[0];
+    const task = detail.tasks.find((row) => row.status === 'completed') ?? detail.tasks[0];
 
     await user.click(
       await screen.findByRole('button', {
@@ -270,6 +278,58 @@ describe('AdminTraineePage', () => {
     await user.click(await screen.findByRole('button', { name: 'Close code viewer' }));
 
     expect(screen.queryByRole('region', { name: task.title })).not.toBeInTheDocument();
+  });
+
+  it('closes the code viewer after the mentor approves the task', async () => {
+    const user = userEvent.setup();
+    vi.mocked(approveTask).mockResolvedValue({} as TaskReview);
+    renderPage();
+    const task = detail.tasks.find((row) => row.status === 'completed') ?? detail.tasks[0];
+
+    await user.click(await screen.findByRole('button', { name: `View code for ${task.title}` }));
+    await user.click(await screen.findByRole('button', { name: 'Approve' }));
+
+    expect(approveTask).toHaveBeenCalledWith(traineeId, task.taskId);
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Close code viewer' })).not.toBeInTheDocument()
+    );
+  });
+
+  it('goes back to the same place in the list after an approval, without a loader', async () => {
+    const user = userEvent.setup();
+    vi.mocked(approveTask).mockResolvedValue({} as TaskReview);
+    vi.spyOn(window, 'scrollY', 'get').mockReturnValue(800);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    renderPage();
+    const task = detail.tasks.find((row) => row.status === 'completed') ?? detail.tasks[0];
+
+    await user.click(await screen.findByRole('button', { name: `View code for ${task.title}` }));
+    // The reload after the approval never finishes, so a loader would stay on screen.
+    vi.mocked(getAdminTrainee).mockReturnValue(new Promise(() => {}));
+    await user.click(await screen.findByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 800 }));
+    expect(screen.queryByText('Loading trainee…')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `View code for ${task.title}` })).toBeInTheDocument();
+  });
+
+  it('keeps the chosen task filter after a review reloads the page', async () => {
+    const user = userEvent.setup();
+    vi.mocked(approveTask).mockResolvedValue({} as TaskReview);
+    renderPage();
+    const task = detail.tasks.find((row) => row.status === 'completed') ?? detail.tasks[0];
+
+    await user.click(await screen.findByRole('button', { name: /^Pending review \(/ }));
+    await user.click(await screen.findByRole('button', { name: `View code for ${task.title}` }));
+    await user.click(await screen.findByRole('button', { name: 'Approve' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Close code viewer' })).not.toBeInTheDocument()
+    );
+    expect(await screen.findByRole('button', { name: /^Pending review \(/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
   });
 
   it.each([

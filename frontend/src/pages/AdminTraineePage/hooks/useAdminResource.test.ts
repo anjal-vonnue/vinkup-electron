@@ -43,6 +43,29 @@ describe('useAdminResource', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('refresh loads again but keeps the old data until the new data arrives', async () => {
+    let resolveSecond: (value: string) => void = () => {};
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce('old')
+      .mockReturnValueOnce(
+        new Promise<string>((resolve) => {
+          resolveSecond = resolve;
+        })
+      );
+    const { result } = renderHook(() => useAdminResource(fetcher));
+    await waitFor(() => expect(result.current.data).toBe('old'));
+
+    act(() => result.current.refresh());
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.current.data).toBe('old');
+    expect(result.current.isLoading).toBe(false);
+
+    act(() => resolveSecond('new'));
+    await waitFor(() => expect(result.current.data).toBe('new'));
+  });
+
   it("never shows the previous fetcher's data after the fetcher changes", async () => {
     let resolveSecond: (value: string) => void = () => {};
     const first = vi.fn().mockResolvedValue('first');

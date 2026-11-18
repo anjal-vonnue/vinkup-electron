@@ -222,11 +222,11 @@ describe('GET /api/admin/trainees/:traineeId', () => {
     expect(courses[0].days[1].completedAt).toBeNull();
   });
 
-  it("returns only the completed tasks, and nothing of another trainee's", async () => {
+  it("returns completed and in-progress tasks, and nothing of another trainee's", async () => {
     // markDayCompleted completes the day's required task (html1Main), not its stretch task.
     await markDayCompleted(a.id, DAY.html1);
 
-    // This task is in progress and should NOT be returned by the admin API.
+    // This task is in progress: it is listed too, so the mentor can see what the trainee is on.
     await db.task_progress.create({
       data: {
         trainee_id: a.id,
@@ -248,7 +248,7 @@ describe('GET /api/admin/trainees/:traineeId', () => {
     const detailA = await getAs<AdminTraineeDetail>(`/api/admin/trainees/${a.id}`, admin.cookie);
     const detailB = await getAs<AdminTraineeDetail>(`/api/admin/trainees/${b.id}`, admin.cookie);
 
-    // Only the completed task should be returned.
+    // The completed task and the in-progress task, in curriculum order.
     expect(detailA.tasks).toEqual([
       expect.objectContaining({
         taskId: TASK.html1Main,
@@ -257,12 +257,15 @@ describe('GET /api/admin/trainees/:traineeId', () => {
         isStretchGoal: false,
         status: 'completed',
       }),
+      expect.objectContaining({
+        taskId: TASK.html2First,
+        dayId: DAY.html2,
+        status: 'in_progress',
+        lastSubmittedAt: null,
+      }),
     ]);
 
     expectIsoDateTime(detailA.tasks[0].lastSubmittedAt);
-
-    // The in-progress task should not be returned.
-    expect(detailA.tasks.some((task) => task.taskId === TASK.html2First)).toBe(false);
 
     expect(detailA.journal).toEqual([
       expect.objectContaining({

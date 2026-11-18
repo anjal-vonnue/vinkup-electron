@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useRef } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, UserX } from 'lucide-react';
 import {
@@ -29,6 +29,7 @@ import {
   reportDocumentTitle,
   type PrintReportOptions,
 } from '../../lib/printReport';
+import type { TaskReviewFilter } from '../../lib/taskReview';
 import { useAdminResource } from './hooks/useAdminResource';
 import styles from './AdminTraineePage.module.css';
 
@@ -52,6 +53,8 @@ function BackLink() {
 function TraineeDetail({ traineeId }: { traineeId: string }) {
   const [activeTab, setActiveTab] = useState<TabId>('tasks');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // Kept here, not in AdminTaskList, so it survives the reload after Approve / Request rework.
+  const [taskFilter, setTaskFilter] = useState<TaskReviewFilter>('all');
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [isSavingPdf, setIsSavingPdf] = useState(false);
 
@@ -77,13 +80,34 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
   const code = useAdminResource(loadCode);
   const feedback = useAdminResource(loadFeedback);
 
-  const handleCloseCode = useCallback(() => setSelectedTaskId(null), []);
+  // Where the mentor was in the task list when they clicked "View code".
+  const scrollBeforeViewRef = useRef<number | null>(null);
 
+  const handleViewCode = useCallback((taskId: string) => {
+    // Remember the place only for the first task opened, not when switching between tasks.
+    if (scrollBeforeViewRef.current === null) {
+      scrollBeforeViewRef.current = window.scrollY;
+    }
+    setSelectedTaskId(taskId);
+  }, []);
+
+  // Close the code viewer and take the mentor back to where they were in the list.
+  const handleCloseCode = useCallback(() => {
+    setSelectedTaskId(null);
+    const savedScroll = scrollBeforeViewRef.current;
+    scrollBeforeViewRef.current = null;
+    if (savedScroll !== null) {
+      // Wait one frame, so the page has removed the viewer before scrolling.
+      requestAnimationFrame(() => window.scrollTo({ top: savedScroll }));
+    }
+  }, []);
+
+  // After Approve or Request rework: close the viewer, then quietly reload the list and feedback.
   const handleReviewSuccess = useCallback(() => {
-    detail.retry();
-    code.retry();
-    feedback.retry();
-  }, [detail, code, feedback]);
+    handleCloseCode();
+    detail.refresh();
+    feedback.refresh();
+  }, [handleCloseCode, detail, feedback]);
 
   const { user } = useAuth();
   const traineeName = detail.data?.profile.trainee.name ?? 'Trainee';
@@ -274,7 +298,9 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
                   tasks={tasks}
                   courses={courses}
                   selectedTaskId={selectedTaskId}
-                  onViewCode={setSelectedTaskId}
+                  onViewCode={handleViewCode}
+                  filter={taskFilter}
+                  onFilterChange={setTaskFilter}
                 />
               </>
             )}

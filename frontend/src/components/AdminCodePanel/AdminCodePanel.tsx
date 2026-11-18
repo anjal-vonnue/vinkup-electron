@@ -268,6 +268,13 @@ export default function AdminCodePanel({
         </p>
       )}
 
+      {code && !code.isStarterCode && code.status === 'in_progress' && (
+        <p className={styles.starter} role="note">
+          Draft: the trainee hasn&rsquo;t submitted this task yet. Approve and Rework appear once
+          they submit.
+        </p>
+      )}
+
       <div className={styles.body}>
         {isLoading && <LoaderOverlay label="Loading code…" />}
 
