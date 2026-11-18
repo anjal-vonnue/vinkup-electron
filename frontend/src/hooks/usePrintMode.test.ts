@@ -51,7 +51,8 @@ function installDesktopPrintApi(begin: () => Promise<void> = () => Promise.resol
     errorKind: null,
     zoom: 100,
   };
-  const desktopApi: DesktopApi = {
+  // Only the print-related surface is needed here; the rest of the API is irrelevant.
+  const desktopApi = {
     app: {
       getInfo: () => Promise.resolve({ version: '0.0.0', platform: 'linux', isPackaged: false }),
     },
@@ -125,8 +126,8 @@ function installDesktopPrintApi(begin: () => Promise<void> = () => Promise.resol
     report: {
       savePdf: () => Promise.resolve(false),
     },
-  };
-  window.desktop = desktopApi;
+  } satisfies Partial<DesktopApi>;
+  window.desktop = desktopApi as unknown as DesktopApi;
   return { end };
 }
 

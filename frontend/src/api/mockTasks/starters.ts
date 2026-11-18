@@ -147,12 +147,16 @@ const TSCONFIG = json({
 const TSCONFIG_DOM = json({
   compilerOptions: {
     target: 'ES2022',
-    module: 'ESNext',
-    moduleResolution: 'Bundler',
+    // CommonJS so a plain `tsc` write can be run with `node dist/index.js`, which is what the
+    // TypeScript lessons do. `npm run check` still type-checks only, with `tsc --noEmit`.
+    module: 'commonjs',
     lib: ['ES2022', 'DOM', 'DOM.Iterable'],
     strict: true,
-    noEmit: true,
+    esModuleInterop: true,
     skipLibCheck: true,
+    // Emitted files land in dist/, which the workspace ignores (never shown, never saved).
+    rootDir: './src',
+    outDir: './dist',
   },
   include: ['src'],
 });
@@ -266,8 +270,8 @@ function nodeStarter(task: CatalogTask, flavour: NodeFlavour): TaskFile[] {
 
 // Prisma runs on PGlite (PostgreSQL in WebAssembly) through the prisma-pglite package. Because the
 // task depends on prisma-pglite, the workspace adds hidden helper files in .vinkup/ that the db:*
-// scripts and src/db.ts use (runtimes/node/support/prismaPglite.ts), and saves the database in
-// the browser (runtimes/node/databaseSnapshots.ts).
+// scripts and src/db.ts use (runtimes/node/support/prismaPglite.ts); the database itself lives in
+// .vinkup/db and is preserved between visits.
 const PRISMA_CLI = 'node .vinkup/prisma/cli.mjs';
 
 function prismaStarter(task: CatalogTask): TaskFile[] {

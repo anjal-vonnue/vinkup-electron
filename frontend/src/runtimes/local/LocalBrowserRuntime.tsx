@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { CircleAlert, Eye, FileCode2, Lock, RefreshCw, SquareTerminal } from 'lucide-react';
 import type { TaskResponse } from '@itp/types';
 import ResultPaneFrame from '../../components/ResultPaneFrame';
@@ -6,59 +6,38 @@ import { isIgnoredPath } from '../../lib/workspaceIgnore';
 import { selectHtmlEntry } from '../../pages/TaskPage/state/selectors';
 import { useWorkspaceState } from '../../pages/TaskPage/state/WorkspaceContext';
 import { useRegisterRunner } from '../runnerContext';
-import { NO_ENTRY_MESSAGE, type PreviewBuild } from './buildPreviewDocument';
-import ConsolePanel from './ConsolePanel';
-import PreviewFrame from './PreviewFrame';
-import { PREVIEW_URL_PREFIX } from './previewPolicy';
-import { usePreview } from './usePreview';
-import styles from './BrowserRuntime.module.css';
+import ConsolePanel from '../browser/ConsolePanel';
+import PreviewFrame from '../browser/PreviewFrame';
+import { useLocalPreview } from './useLocalPreview';
+import { useLocalWorkspace } from './useLocalWorkspace';
+import styles from './LocalBrowserRuntime.module.css';
 
-type BrowserRuntimeProps = { task: TaskResponse; isVisible: boolean };
+type LocalBrowserRuntimeProps = { task: TaskResponse; isVisible: boolean };
 
-type GoodBuild = Extract<PreviewBuild, { ok: true }>;
+const NO_ENTRY_MESSAGE = 'Add an .html file to preview your work.';
 
-function statusText(build: PreviewBuild | null, isRunning: boolean): string {
-  if (isRunning) return 'Building…';
-  if (!build) return 'Waiting for the first run.';
-  if (!build.ok)
-    return build.reason === 'NO_ENTRY' ? NO_ENTRY_MESSAGE : 'Build failed — see Console';
-  const count = build.inlined.length;
-  return `Build complete: ${count} ${count === 1 ? 'file' : 'files'} bundled (${build.durationMs} ms).`;
-}
-
-export default function BrowserRuntime({ task, isVisible }: BrowserRuntimeProps) {
+export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRuntimeProps) {
   const state = useWorkspaceState();
+  const workspace = useLocalWorkspace(task.id);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const {
-    build,
-    entryPath,
-    entries,
-    errorCount,
-    isDomReady,
-    isRunning,
-    run,
-    setEntryPath,
-    clearConsole,
-    resetStorage,
-  } = usePreview({
-    taskId: task.id,
-    files: state.files,
-    defaultEntry: selectHtmlEntry(state),
-    isVisible,
-    iframeRef,
-  });
-
+  const [chosenEntry, setChosenEntry] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('result');
-  const [seenBuild, setSeenBuild] = useState<PreviewBuild | null>(null);
-  const [lastGoodBuild, setLastGoodBuild] = useState<GoodBuild | null>(null);
 
-  // React to each new build once, during render (no effect needed): remember the last good
-  // preview, and show the Console when a build fails.
-  if (build !== seenBuild) {
-    setSeenBuild(build);
-    if (build?.ok) setLastGoodBuild(build);
-    else if (build?.reason === 'BUILD_ERROR') setActiveTab('console');
-  }
+  const defaultEntry = useMemo(() => selectHtmlEntry(state), [state]);
+  const entryPath = chosenEntry !== null && chosenEntry in state.files ? chosenEntry : defaultEntry;
+  const setEntryPath = useCallback((path: string) => setChosenEntry(path), []);
+
+  const { run, entries, errorCount, isDomReady, isRunning, start, clearConsole, resetStorage } =
+    useLocalPreview({
+      taskId: task.id,
+      files: state.files,
+      entryPath,
+      setEntryPath,
+      isVisible,
+      previewUrl: workspace.previewUrl,
+      isReady: workspace.status === 'ready',
+      iframeRef,
+    });
 
   const htmlPaths = useMemo(
     () =>
@@ -68,17 +47,36 @@ export default function BrowserRuntime({ task, isVisible }: BrowserRuntimeProps)
     [state.files]
   );
 
-  const canRun = entryPath !== null && !isRunning;
+  const canRun = workspace.status === 'ready' && entryPath !== null;
+
+  // Flush pending editor changes so a Run never serves the previous keystrokes.
+  const flush = workspace.flush;
+  const startRun = useCallback(
+    (target?: string) => {
+      void flush()
+        .catch(() => undefined)
+        .then(() => (target === undefined ? start() : start(target)));
+    },
+    [flush, start]
+  );
 
   useRegisterRunner({
     canRun,
     label: 'Run',
     title: entryPath ? 'Run (Ctrl+Enter)' : 'Add an .html file to run',
-    isRunning,
-    run,
+    isRunning: workspace.status === 'opening' || isRunning,
+    run: startRun,
   });
 
-  const isBuildError = build?.ok === false && build.reason === 'BUILD_ERROR';
+  const status = (() => {
+    if (workspace.status === 'opening') return 'Preparing your workspace…';
+    if (workspace.status === 'error') return workspace.error ?? 'The workspace could not start.';
+    if (isRunning) return 'Loading your page…';
+    if (!run) return 'Press Run to see your page.';
+    return `Serving ${run.entryPath} from your computer.`;
+  })();
+
+  const isError = workspace.status === 'error';
 
   const toolbarEnd = (
     <div className={styles.toolbar}>
@@ -91,13 +89,13 @@ export default function BrowserRuntime({ task, isVisible }: BrowserRuntimeProps)
           disabled={htmlPaths.length === 0}
           onChange={(event) => {
             setEntryPath(event.target.value);
-            run();
+            startRun(event.target.value);
           }}
         >
-          {htmlPaths.length === 0 && <option value="">{PREVIEW_URL_PREFIX}</option>}
+          {htmlPaths.length === 0 && <option value="">localhost</option>}
           {htmlPaths.map((path) => (
             <option key={path} value={path}>
-              {PREVIEW_URL_PREFIX + path}
+              {workspace.previewUrl ? `${workspace.previewUrl}/${path}` : path}
             </option>
           ))}
         </select>
@@ -108,7 +106,7 @@ export default function BrowserRuntime({ task, isVisible }: BrowserRuntimeProps)
         aria-label="Reload preview"
         title="Reload preview"
         disabled={!canRun}
-        onClick={run}
+        onClick={() => startRun()}
       >
         <RefreshCw size={14} aria-hidden="true" />
       </button>
@@ -117,10 +115,10 @@ export default function BrowserRuntime({ task, isVisible }: BrowserRuntimeProps)
 
   const footer = (
     <div className={styles.footer}>
-      <span className={isBuildError ? `${styles.status} ${styles.statusError}` : styles.status}>
-        <span className={styles.systemTag}>[System]</span> {statusText(build, isRunning)}
+      <span className={isError ? `${styles.status} ${styles.statusError}` : styles.status}>
+        <span className={styles.systemTag}>[System]</span> {status}
       </span>
-      {build?.ok && (
+      {run && (
         <span className={isDomReady ? `${styles.ready} ${styles.readyDone}` : styles.ready}>
           <span className={styles.dot} aria-hidden="true" />
           {isDomReady ? 'DOM Ready' : 'Loading…'}
@@ -145,7 +143,6 @@ export default function BrowserRuntime({ task, isVisible }: BrowserRuntimeProps)
       toolbarEnd={toolbarEnd}
       footer={footer}
     >
-      {/* Both views stay mounted so switching tabs doesn't reload the preview. */}
       <div
         className={styles.view}
         role="tabpanel"
@@ -159,25 +156,29 @@ export default function BrowserRuntime({ task, isVisible }: BrowserRuntimeProps)
           </div>
         ) : (
           <>
-            {isBuildError && (
+            {isError && (
               <div className={styles.banner}>
                 <CircleAlert size={14} aria-hidden="true" />
-                Build failed — see Console for details.
+                {workspace.error}
               </div>
             )}
-            {lastGoodBuild ? (
+            {run ? (
               <div className={styles.frameArea}>
                 <PreviewFrame
-                  srcdoc={lastGoodBuild.srcdoc}
-                  runId={lastGoodBuild.runId}
-                  entryPath={lastGoodBuild.entryPath}
+                  src={run.url}
+                  runId={run.runId}
+                  entryPath={run.entryPath}
                   iframeRef={iframeRef}
                 />
               </div>
             ) : (
-              !isBuildError && (
+              !isError && (
                 <div className={styles.empty}>
-                  <p>{isRunning ? 'Building your page…' : 'Press Run to see your page.'}</p>
+                  <p>
+                    {workspace.status === 'opening'
+                      ? 'Preparing your workspace…'
+                      : 'Press Run to see your page.'}
+                  </p>
                 </div>
               )
             )}
