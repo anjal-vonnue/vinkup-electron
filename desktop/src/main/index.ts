@@ -13,9 +13,11 @@ import {
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
+  BrowserAvailability,
   DesktopAppInfo,
   DesktopAuthState,
   DesktopPlatform,
+  ResourcesAllowlist,
   ResourcesBrowserBounds,
 } from '@itp/types';
 import { APP_NAME, DEV_RENDERER_URL, getApiUrl, getResourcesAllowlistUrl } from './config';
@@ -49,7 +51,10 @@ let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
 let displayWindowManager: DisplayWindowManager | null = null;
 let resourcesBrowser: ResourcesBrowser | null = null;
+const secondaryResourcesBrowsers = new Map<BrowserWindow, ResourcesBrowser>();
 let workspaceManager: WorkspaceManager | null = null;
+let activeResourcesAllowlist: ResourcesAllowlist = BUNDLED_ALLOWLIST;
+let loginPendingForOverlayTransition = false;
 
 /** Quitting waits for workspace folders to be removed, but never longer than this. */
 const SHUTDOWN_CLEANUP_TIMEOUT_MS = 5_000;
@@ -118,28 +123,20 @@ async function bootstrap(): Promise<void> {
   await loadRenderer(window);
 }
 
-function createResourcesBrowser(window: BrowserWindow): ResourcesBrowser {
-  return new ResourcesBrowser(window, BUNDLED_ALLOWLIST, {
-    onState: (state) => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.send('resources:state-changed', state);
-    },
-    onFocusAddress: () => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.send('resources:focus-address');
-    },
-    onOpenFind: () => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.send('resources:open-find');
-    },
-    onFindResult: (result) => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.send('resources:find-result', result);
-    },
-    onEscape: () => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      mainWindow.webContents.send('resources:escape');
-    },
+function createResourcesBrowser(
+  window: BrowserWindow,
+  sendEvent: (channel: string, payload?: unknown) => void = (channel, payload) => {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+      window.webContents.send(channel, payload);
+    }
+  }
+): ResourcesBrowser {
+  return new ResourcesBrowser(window, activeResourcesAllowlist, {
+    onState: (state) => sendEvent('resources:state-changed', state),
+    onFocusAddress: () => sendEvent('resources:focus-address'),
+    onOpenFind: () => sendEvent('resources:open-find'),
+    onFindResult: (result) => sendEvent('resources:find-result', result),
+    onEscape: () => sendEvent('resources:escape'),
   });
 }
 
@@ -169,7 +166,9 @@ async function refreshResourcesAllowlist(): Promise<void> {
       remoteUrl: getResourcesAllowlistUrl(),
       cacheFile: path.join(app.getPath('userData'), 'resources', 'allowlist.json'),
     });
+    activeResourcesAllowlist = allowlist;
     resourcesBrowser?.setAllowlist(allowlist);
+    for (const browser of secondaryResourcesBrowsers.values()) browser.setAllowlist(allowlist);
     if (source !== 'bundled') {
       console.info(`[resources] Using the ${source} allowlist (v${allowlist.version}).`);
     }
@@ -224,15 +223,23 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
-  updateProtectionContext(state);
+  if (state.status === 'pending') loginPendingForOverlayTransition = true;
+  const shouldTransitionOverlay =
+    state.status === 'authenticated' && loginPendingForOverlayTransition;
+  updateProtectionContext(state, shouldTransitionOverlay);
+  if (state.status === 'authenticated' || state.status === 'unauthenticated') {
+    loginPendingForOverlayTransition = false;
+  }
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('auth:state-changed', state);
 }
 
-function updateProtectionContext(state: DesktopAuthState): void {
+function updateProtectionContext(state: DesktopAuthState, animateLogin = false): void {
   displayWindowManager?.setProtectionContext(
     state.status === 'loading' || state.status === 'pending',
-    state.status === 'authenticated' ? (state.user?.role ?? null) : null
+    state.status === 'authenticated' ? (state.user?.role ?? null) : null,
+    state.status === 'authenticated',
+    animateLogin
   );
 }
 function sendToRenderer(channel: string, payload: unknown): void {
@@ -481,6 +488,37 @@ function registerIpcHandlers(): void {
     displayWindowManager?.setOverlayReferencesActive(event.sender, active);
   });
 
+  ipcMain.on('display-overlay:resources-active', (event, active: unknown) => {
+    if (typeof active !== 'boolean' || event.senderFrame !== event.sender.mainFrame) return;
+    const overlayWindow = displayWindowManager?.getOverlayWindowForSender(event.sender);
+    if (!overlayWindow) return;
+    if (active) {
+      resourcesBrowser?.close();
+      for (const [window, browser] of secondaryResourcesBrowsers) {
+        if (window !== overlayWindow) browser.close();
+      }
+      displayWindowManager?.setMainResourcesActive(false);
+    } else {
+      secondaryResourcesBrowsers.get(overlayWindow)?.close();
+    }
+    displayWindowManager?.setOverlayResourcesActive(event.sender, active);
+  });
+
+  ipcMain.handle('browser:get-availability', (event) => {
+    const manager = displayWindowManager;
+    if (!manager) throw new Error('The display window manager is not ready.');
+    if (manager.ownsOverlaySender(event.sender)) {
+      if (event.senderFrame !== event.sender.mainFrame) {
+        throw new Error('IPC request is not from the display overlay main frame.');
+      }
+      const availability: BrowserAvailability = manager.getBrowserAvailability();
+      return availability;
+    }
+    assertTrustedSender(event);
+    const availability: BrowserAvailability = manager.getBrowserAvailability();
+    return availability;
+  });
+
   ipcMain.handle('resources:get-allowlist', (event) => {
     assertTrustedSender(event);
     return getResourcesBrowser().getAllowlist();
@@ -493,7 +531,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('resources:open', (event, bounds: unknown) => {
     assertTrustedSender(event);
-    return getResourcesBrowser().open(parseBrowserBounds(bounds));
+    closeSecondaryResourcesBrowsers();
+    const state = getResourcesBrowser().open(parseBrowserBounds(bounds));
+    displayWindowManager?.setMainResourcesActive(true);
+    return state;
   });
 
   ipcMain.handle('resources:set-bounds', (event, bounds: unknown) => {
@@ -504,6 +545,86 @@ function registerIpcHandlers(): void {
   ipcMain.handle('resources:close', (event) => {
     assertTrustedSender(event);
     getResourcesBrowser().close();
+    displayWindowManager?.setMainResourcesActive(false);
+  });
+
+  ipcMain.handle('secondary-resources:get-allowlist', (event) => {
+    return getSecondaryResourcesBrowser(event).getAllowlist();
+  });
+
+  ipcMain.handle('secondary-resources:get-state', (event) => {
+    return getSecondaryResourcesBrowser(event).getState();
+  });
+
+  ipcMain.handle('secondary-resources:open', (event, bounds: unknown) => {
+    const overlay = getSecondaryOverlayWindow(event);
+    resourcesBrowser?.close();
+    for (const [window, browser] of secondaryResourcesBrowsers) {
+      if (window !== overlay) browser.close();
+    }
+    displayWindowManager?.setMainResourcesActive(false);
+    displayWindowManager?.setOverlayResourcesActive(event.sender, true);
+    return getSecondaryResourcesBrowser(event).open(parseBrowserBounds(bounds));
+  });
+
+  ipcMain.handle('secondary-resources:set-bounds', (event, bounds: unknown) => {
+    getSecondaryResourcesBrowser(event).setBounds(parseBrowserBounds(bounds));
+  });
+
+  ipcMain.handle('secondary-resources:close', (event) => {
+    const overlay = getSecondaryOverlayWindow(event);
+    secondaryResourcesBrowsers.get(overlay)?.close();
+    displayWindowManager?.setOverlayResourcesActive(event.sender, false);
+  });
+
+  ipcMain.handle('secondary-resources:home', (event) => {
+    getSecondaryResourcesBrowser(event).home();
+  });
+
+  ipcMain.handle('secondary-resources:navigate', (event, input: unknown) => {
+    if (typeof input !== 'string') throw new Error('Invalid navigation input.');
+    return getSecondaryResourcesBrowser(event).navigate(input);
+  });
+
+  ipcMain.handle('secondary-resources:back', (event) => {
+    getSecondaryResourcesBrowser(event).goBack();
+  });
+
+  ipcMain.handle('secondary-resources:forward', (event) => {
+    getSecondaryResourcesBrowser(event).goForward();
+  });
+
+  ipcMain.handle('secondary-resources:reload', (event) => {
+    getSecondaryResourcesBrowser(event).reload();
+  });
+
+  ipcMain.handle('secondary-resources:stop', (event) => {
+    getSecondaryResourcesBrowser(event).stop();
+  });
+
+  ipcMain.handle('secondary-resources:find', (event, query: unknown) => {
+    if (typeof query !== 'string') throw new Error('Invalid search text.');
+    getSecondaryResourcesBrowser(event).find(query);
+  });
+
+  ipcMain.handle('secondary-resources:find-next', (event, forward: unknown) => {
+    getSecondaryResourcesBrowser(event).findNext(forward !== false);
+  });
+
+  ipcMain.handle('secondary-resources:stop-find', (event) => {
+    getSecondaryResourcesBrowser(event).stopFind();
+  });
+
+  ipcMain.handle('secondary-resources:zoom-in', (event) => {
+    getSecondaryResourcesBrowser(event).zoomIn();
+  });
+
+  ipcMain.handle('secondary-resources:zoom-out', (event) => {
+    getSecondaryResourcesBrowser(event).zoomOut();
+  });
+
+  ipcMain.handle('secondary-resources:zoom-reset', (event) => {
+    getSecondaryResourcesBrowser(event).zoomReset();
   });
 
   ipcMain.handle('resources:home', (event) => {
@@ -577,6 +698,36 @@ function getAuthManager(): DesktopAuthManager {
 function getResourcesBrowser(): ResourcesBrowser {
   if (!resourcesBrowser) throw new Error('The resources browser is not ready.');
   return resourcesBrowser;
+}
+
+function getSecondaryOverlayWindow(event: IpcMainInvokeEvent): BrowserWindow {
+  const overlay = displayWindowManager?.getOverlayWindowForSender(event.sender);
+  if (!overlay || event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('IPC request is not from a secondary display window.');
+  }
+  return overlay;
+}
+
+function getSecondaryResourcesBrowser(event: IpcMainInvokeEvent): ResourcesBrowser {
+  const overlay = getSecondaryOverlayWindow(event);
+  const existing = secondaryResourcesBrowsers.get(overlay);
+  if (existing) return existing;
+
+  const browser = createResourcesBrowser(overlay, (channel, payload) => {
+    if (overlay.isDestroyed() || overlay.webContents.isDestroyed()) return;
+    const secondaryChannel = channel.replace(/^resources:/, 'secondary-resources:');
+    overlay.webContents.send(secondaryChannel, payload);
+  });
+  secondaryResourcesBrowsers.set(overlay, browser);
+  overlay.once('closed', () => {
+    browser.dispose();
+    secondaryResourcesBrowsers.delete(overlay);
+  });
+  return browser;
+}
+
+function closeSecondaryResourcesBrowsers(): void {
+  for (const browser of secondaryResourcesBrowsers.values()) browser.close();
 }
 
 function getWorkspaceManager(): WorkspaceManager {

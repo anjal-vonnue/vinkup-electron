@@ -19,6 +19,7 @@ const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
     setFocused: (focused: boolean) => void;
     isFocusable: () => boolean;
     executeJavaScript: ReturnType<typeof vi.fn>;
+    send: ReturnType<typeof vi.fn>;
     webContents: EventEmitter;
   }>,
 }));
@@ -36,6 +37,7 @@ class FakeWindow extends EventEmitter {
   readonly webContents: EventEmitter & {
     isDestroyed: () => boolean;
     executeJavaScript: ReturnType<typeof vi.fn>;
+    send: ReturnType<typeof vi.fn>;
   };
   destroyed = false;
   focused = false;
@@ -49,6 +51,7 @@ class FakeWindow extends EventEmitter {
     this.webContents = Object.assign(new EventEmitter(), {
       isDestroyed: () => false,
       executeJavaScript: vi.fn(() => Promise.resolve()),
+      send: vi.fn(),
     });
     this.bounds = {
       x: typeof options.x === 'number' ? options.x : 0,
@@ -153,6 +156,7 @@ describe('DisplayWindowManager focus alerts', () => {
         },
         isFocusable: () => window.focusable,
         executeJavaScript: window.webContents.executeJavaScript,
+        send: window.webContents.send,
         webContents: window.webContents,
       });
       window.on('closed', () => {
@@ -214,6 +218,34 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('dismisses the alert when a secondary display overlay regains focus', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(800);
+
+    const alertWindow = createdWindows.find(({ options }) => isAlertWindow(options));
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+    expect(alertWindow?.destroyed).toBe(false);
+    expect(overlay).toBeDefined();
+
+    overlay?.setFocused(true);
+
+    expect(alertWindow?.destroyed).toBe(true);
+    manager.dispose();
+  });
+
   it('updates the theme of existing secondary display overlays', async () => {
     const mainWindow = new FakeWindow();
     const manager = new DisplayWindowManager(
@@ -232,6 +264,47 @@ describe('DisplayWindowManager focus alerts', () => {
     expect(overlay?.executeJavaScript).toHaveBeenCalledWith(
       "document.documentElement.dataset.theme = 'dark'"
     );
+    manager.dispose();
+  });
+
+  it('keeps secondary displays uncovered during sign-in and restores protection on success', async () => {
+    const mainWindow = new FakeWindow();
+    mainWindow.fullscreen = false;
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    manager.setProtectionContext(false, null, false);
+    await manager.start();
+    expect(
+      createdWindows.some(({ options, destroyed }) => options.fullscreen === true && !destroyed)
+    ).toBe(false);
+    expect(manager.isProtectionEnabledForCurrentUser()).toBe(false);
+
+    manager.setProtectionContext(true, null, false);
+    expect(
+      createdWindows.some(({ options, destroyed }) => options.fullscreen === true && !destroyed)
+    ).toBe(false);
+
+    manager.setProtectionContext(false, 'trainee', true, true);
+    await vi.waitFor(() => {
+      expect(mainWindow.isFullScreen()).toBe(true);
+      expect(
+        createdWindows.some(({ options, destroyed }) => options.fullscreen === true && !destroyed)
+      ).toBe(true);
+    });
+    const overlay = createdWindows.find(
+      ({ options, destroyed }) => options.fullscreen === true && !destroyed
+    );
+    expect(overlay).toBeDefined();
+    await vi.waitFor(() =>
+      expect(overlay?.send).toHaveBeenCalledWith('display-overlay:auth-state', true, true)
+    );
+    expect(manager.isProtectionEnabledForCurrentUser()).toBe(true);
     manager.dispose();
   });
 
@@ -261,6 +334,55 @@ describe('DisplayWindowManager focus alerts', () => {
     overlay?.setFocused(false);
     expect(manager.isReferenceScreenFocused()).toBe(false);
     expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+    manager.dispose();
+  });
+
+  it('keeps main and secondary Resources activity mutually exclusive', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+    const overlayContents = overlay?.webContents as unknown as WebContents;
+
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: false,
+    });
+
+    manager.setOverlayResourcesActive(overlayContents, true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: true,
+    });
+
+    manager.setMainResourcesActive(true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: true,
+      secondaryResourcesActive: false,
+    });
+    manager.setOverlayResourcesActive(overlayContents, true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: true,
+      secondaryResourcesActive: false,
+    });
+
+    manager.setMainResourcesActive(false);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: false,
+    });
+    manager.setOverlayResourcesActive(overlayContents, true);
+    expect(manager.getBrowserAvailability()).toEqual({
+      mainResourcesActive: false,
+      secondaryResourcesActive: true,
+    });
     manager.dispose();
   });
 

@@ -88,6 +88,9 @@ function installDesktopPrintApi(begin: () => Promise<void> = () => Promise.resol
       setDisplayTheme: () => Promise.resolve(),
       isReferenceScreenFocused: () => Promise.resolve(false),
       onReferenceScreenFocusChange: () => () => undefined,
+      getBrowserAvailability: () =>
+        Promise.resolve({ mainResourcesActive: false, secondaryResourcesActive: false }),
+      onBrowserAvailabilityChange: () => () => undefined,
       beginCertificatePrint: begin,
       endCertificatePrint: end,
       onFullscreenChange: () => () => undefined,

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import Header from './Header';
 import { MemoryRouter } from 'react-router';
 
@@ -19,6 +19,7 @@ vi.mock('../../context/Useauth', () => ({
 
 afterEach(() => {
   cleanup();
+  Reflect.deleteProperty(window, 'desktop');
 });
 
 describe('Header', () => {
@@ -44,6 +45,114 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'Resources' })).toHaveAttribute('href', '/resources');
     expect(screen.getByRole('link', { name: 'Rahul Sharma' })).toHaveAttribute('href', '/profile');
     expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
+  });
+
+  it('disables the Resources navigation while the secondary display is using Resources', async () => {
+    let availabilityListener:
+      | ((availability: {
+          mainResourcesActive: boolean;
+          secondaryResourcesActive: boolean;
+        }) => void)
+      | undefined;
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: {
+        window: {
+          getBrowserAvailability: vi.fn().mockResolvedValue({
+            mainResourcesActive: false,
+            secondaryResourcesActive: false,
+          }),
+          onBrowserAvailabilityChange: (
+            listener: (availability: {
+              mainResourcesActive: boolean;
+              secondaryResourcesActive: boolean;
+            }) => void
+          ) => {
+            availabilityListener = listener;
+            return vi.fn();
+          },
+        },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Header />
+      </MemoryRouter>
+    );
+
+    const resourcesLink = screen.getByRole('link', { name: 'Resources' });
+    await waitFor(() => {
+      expect(resourcesLink).toHaveAttribute('aria-disabled', 'false');
+    });
+    act(() => {
+      availabilityListener?.({
+        mainResourcesActive: false,
+        secondaryResourcesActive: true,
+      });
+    });
+
+    expect(resourcesLink).toHaveAttribute('aria-disabled', 'true');
+    expect(fireEvent.click(resourcesLink)).toBe(false);
+  });
+
+  it('does not replace a newer availability event with a stale initial snapshot', async () => {
+    let resolveSnapshot:
+      | ((availability: {
+          mainResourcesActive: boolean;
+          secondaryResourcesActive: boolean;
+        }) => void)
+      | undefined;
+    let availabilityListener:
+      | ((availability: {
+          mainResourcesActive: boolean;
+          secondaryResourcesActive: boolean;
+        }) => void)
+      | undefined;
+    Object.defineProperty(window, 'desktop', {
+      configurable: true,
+      value: {
+        window: {
+          getBrowserAvailability: () =>
+            new Promise((resolve) => {
+              resolveSnapshot = resolve;
+            }),
+          onBrowserAvailabilityChange: (
+            listener: (availability: {
+              mainResourcesActive: boolean;
+              secondaryResourcesActive: boolean;
+            }) => void
+          ) => {
+            availabilityListener = listener;
+            return vi.fn();
+          },
+        },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Header />
+      </MemoryRouter>
+    );
+
+    const resourcesLink = screen.getByRole('link', { name: 'Resources' });
+    act(() => {
+      availabilityListener?.({
+        mainResourcesActive: false,
+        secondaryResourcesActive: true,
+      });
+    });
+    await act(() =>
+      Promise.resolve().then(() =>
+        resolveSnapshot?.({
+          mainResourcesActive: false,
+          secondaryResourcesActive: false,
+        })
+      )
+    );
+
+    expect(resourcesLink).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('shows leading content instead of the app name when given', () => {

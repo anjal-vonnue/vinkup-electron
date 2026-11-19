@@ -68,6 +68,13 @@
   color: var(--color-text-primary);
 }
 
+.linkDisabled,
+.linkDisabled:hover {
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 /* Active: raised white chip inside the pill */
 .link.active,
 .link.active:hover {

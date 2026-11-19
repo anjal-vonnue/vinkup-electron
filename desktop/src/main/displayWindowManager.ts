@@ -1,5 +1,5 @@
 import { BrowserWindow, screen, type Display, type WebContents } from 'electron';
-import type { UserRole } from '@itp/types';
+import type { BrowserAvailability, UserRole } from '@itp/types';
 import path from 'node:path';
 
 const OVERLAY_COLOR = '#10131f';
@@ -33,6 +33,7 @@ function sameBounds(left: Electron.Rectangle, right: Electron.Rectangle): boolea
 export class DisplayWindowManager {
   private readonly overlays = new Map<number, BrowserWindow>();
   private readonly overlayReferencesActive = new Map<number, boolean>();
+  private readonly overlayResourcesActive = new Map<number, boolean>();
   private readonly alerts = new Map<number, BrowserWindow>();
   private readonly closeAuthorized = new WeakSet<BrowserWindow>();
   private readonly mainWindow: BrowserWindow;
@@ -51,6 +52,8 @@ export class DisplayWindowManager {
   private isMoving = false;
   private isRelocatingByManager = false;
   private isAuthenticationInProgress = false;
+  private isOverlayAuthenticated = true;
+  private animateOverlayAuthentication = false;
   private isStaffSession = false;
   private isCertificatePrintInProgress = false;
   private isQuitting = false;
@@ -61,6 +64,7 @@ export class DisplayWindowManager {
   private focusedOverlayId: number | null = null;
   private referenceScreenFocused = false;
   private displayTheme: 'light' | 'dark' = 'light';
+  private mainResourcesActive = false;
 
   constructor(
     mainWindow: BrowserWindow,
@@ -234,6 +238,50 @@ export class DisplayWindowManager {
     }
   }
 
+  ownsOverlaySender(sender: WebContents): boolean {
+    return this.getOverlayWindowForSender(sender) !== null;
+  }
+
+  getOverlayWindowForSender(sender: WebContents): BrowserWindow | null {
+    for (const window of this.overlays.values()) {
+      if (isAlive(window) && window.webContents === sender) return window;
+    }
+    return null;
+  }
+
+  setOverlayResourcesActive(sender: WebContents, active: boolean): void {
+    for (const [id, window] of this.overlays) {
+      if (!isAlive(window) || window.webContents !== sender) continue;
+      if (!this.mainResourcesActive) {
+        if (active) {
+          for (const overlayId of this.overlayResourcesActive.keys()) {
+            this.overlayResourcesActive.set(overlayId, false);
+          }
+        }
+        this.overlayResourcesActive.set(id, active);
+      }
+      this.broadcastBrowserAvailability();
+      return;
+    }
+  }
+
+  setMainResourcesActive(active: boolean): void {
+    this.mainResourcesActive = active;
+    if (active) {
+      for (const id of this.overlayResourcesActive.keys()) {
+        this.overlayResourcesActive.set(id, false);
+      }
+    }
+    this.broadcastBrowserAvailability();
+  }
+
+  getBrowserAvailability(): BrowserAvailability {
+    return {
+      mainResourcesActive: this.mainResourcesActive,
+      secondaryResourcesActive: [...this.overlayResourcesActive.values()].some(Boolean),
+    };
+  }
+
   isReferenceScreenFocused(): boolean {
     return this.referenceScreenFocused;
   }
@@ -246,25 +294,50 @@ export class DisplayWindowManager {
     }
   }
 
-  setProtectionContext(authenticationInProgress: boolean, role: UserRole | null): void {
+  setProtectionContext(
+    authenticationInProgress: boolean,
+    role: UserRole | null,
+    authenticated = role !== null,
+    animateAuthentication = false
+  ): void {
     if (this.isQuitting) return;
     const wasProtectionSuspended = this.isAuthenticationInProgress || this.isStaffSession;
     this.isAuthenticationInProgress = authenticationInProgress;
     this.isStaffSession = role === 'mentor' || role === 'manager';
-    const isProtectionSuspended = this.isAuthenticationInProgress || this.isStaffSession;
+    this.setOverlayAuthenticated(authenticated && !this.isStaffSession, animateAuthentication);
     if (!this.enabled) return;
 
-    if (isProtectionSuspended) {
+    if (this.isStaffSession) {
       this.focusLostAt = null;
       this.clearAlerts();
       this.destroyAllOverlays();
-      if (this.isStaffSession) {
-        for (const timer of this.launchFocusTimers) clearTimeout(timer);
-        this.launchFocusTimers = [];
-        if (isAlive(this.mainWindow)) {
-          if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
-          this.mainWindow.setVisibleOnAllWorkspaces(false);
-        }
+      for (const timer of this.launchFocusTimers) clearTimeout(timer);
+      this.launchFocusTimers = [];
+      if (isAlive(this.mainWindow)) {
+        if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
+        this.mainWindow.setVisibleOnAllWorkspaces(false);
+      }
+      return;
+    }
+
+    if (this.isAuthenticationInProgress) {
+      this.focusLostAt = null;
+      this.clearAlerts();
+      this.destroyAllOverlays();
+      if (isAlive(this.mainWindow)) {
+        if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
+        this.mainWindow.setVisibleOnAllWorkspaces(false);
+      }
+      return;
+    }
+
+    if (!this.isOverlayAuthenticated) {
+      this.focusLostAt = null;
+      this.clearAlerts();
+      this.destroyAllOverlays();
+      if (isAlive(this.mainWindow)) {
+        if (this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(false);
+        this.mainWindow.setVisibleOnAllWorkspaces(false);
       }
       return;
     }
@@ -277,16 +350,14 @@ export class DisplayWindowManager {
 
     if (isAlive(this.mainWindow)) {
       this.appDisplayId = screen.getDisplayMatching(this.mainWindow.getBounds()).id;
-      if (!this.mainWindow.isFullScreen()) this.mainWindow.setFullScreen(true);
       this.mainWindow.show();
-      this.keepOnAllWorkspaces(this.mainWindow);
       this.mainWindow.focus();
+      void this.restoreProtectionAfterAuthentication();
     }
-    this.reconcile();
   }
 
   isProtectionEnabledForCurrentUser(): boolean {
-    return this.enabled && !this.isStaffSession;
+    return this.enabled && this.isOverlayAuthenticated && !this.isStaffSession;
   }
 
   shouldPreventMinimize(): boolean {
@@ -300,6 +371,18 @@ export class DisplayWindowManager {
     );
   }
 
+  private setOverlayAuthenticated(authenticated: boolean, animate = false): void {
+    if (this.isOverlayAuthenticated === authenticated) {
+      if (authenticated && animate) this.animateOverlayAuthentication = true;
+      return;
+    }
+    this.isOverlayAuthenticated = authenticated;
+    this.animateOverlayAuthentication = authenticated && animate;
+    for (const window of this.overlays.values()) {
+      this.sendOverlayAuthenticationState(window, this.animateOverlayAuthentication);
+    }
+  }
+
   private readonly onDisplayAdded = (): void => {
     this.scheduleReconcile();
   };
@@ -309,7 +392,7 @@ export class DisplayWindowManager {
   };
 
   private readonly onDisplayRemoved = (_event: Electron.Event, removed: Display): void => {
-    if (this.isStaffSession) return;
+    if (this.isStaffSession || !this.isOverlayAuthenticated) return;
     if (removed.id === this.appDisplayId) {
       void this.moveToDisplay(screen.getPrimaryDisplay()).catch((error: unknown) => {
         console.error('[desktop] Failed to move the app to the primary display', error);
@@ -320,7 +403,13 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowWillMove = (): void => {
-    if (this.isQuitting || this.isStaffSession || this.isMoving || !isAlive(this.mainWindow)) {
+    if (
+      this.isQuitting ||
+      !this.isOverlayAuthenticated ||
+      this.isStaffSession ||
+      this.isMoving ||
+      !isAlive(this.mainWindow)
+    ) {
       return;
     }
     this.isMoving = true;
@@ -329,7 +418,14 @@ export class DisplayWindowManager {
   };
 
   private readonly onMainWindowMove = (): void => {
-    if (this.isQuitting || this.isStaffSession || !isAlive(this.mainWindow)) return;
+    if (
+      this.isQuitting ||
+      !this.isOverlayAuthenticated ||
+      this.isStaffSession ||
+      !isAlive(this.mainWindow)
+    ) {
+      return;
+    }
     if (this.isRelocatingByManager) {
       this.keepMainWindowOnCorrectWorkspaces();
       return;
@@ -341,6 +437,7 @@ export class DisplayWindowManager {
   private readonly onMainWindowBlur = (): void => {
     if (
       this.isAuthenticationInProgress ||
+      !this.isOverlayAuthenticated ||
       this.isStaffSession ||
       this.isCertificatePrintInProgress
     ) {
@@ -375,6 +472,7 @@ export class DisplayWindowManager {
   private readonly onMainWindowLeaveFullscreen = (): void => {
     if (
       this.isMoving ||
+      !this.isOverlayAuthenticated ||
       this.isCertificatePrintInProgress ||
       this.isStaffSession ||
       this.isQuitting ||
@@ -437,6 +535,7 @@ export class DisplayWindowManager {
       !this.isReadyForFocusTracking ||
       this.isQuitting ||
       this.isAuthenticationInProgress ||
+      !this.isOverlayAuthenticated ||
       this.isStaffSession ||
       this.isCertificatePrintInProgress ||
       this.isMoving ||
@@ -491,17 +590,30 @@ export class DisplayWindowManager {
   }
 
   private readonly reconcile = (): void => {
-    if (
-      this.isQuitting ||
-      this.isAuthenticationInProgress ||
-      this.isStaffSession ||
-      this.isMoving ||
-      !isAlive(this.mainWindow)
-    ) {
+    if (this.isQuitting || this.isStaffSession || this.isMoving || !isAlive(this.mainWindow)) {
       return;
     }
 
     const displays = screen.getAllDisplays();
+    this.reconcileOverlayWindows(displays);
+    if (this.isAuthenticationInProgress || !this.isOverlayAuthenticated) {
+      this.clearAlerts();
+      return;
+    }
+
+    this.reconcileAlerts(displays);
+  };
+
+  private reconcileOverlayWindows(displays = screen.getAllDisplays()): void {
+    if (
+      this.isQuitting ||
+      this.isStaffSession ||
+      !this.isOverlayAuthenticated ||
+      !isAlive(this.mainWindow)
+    ) {
+      this.destroyAllOverlays();
+      return;
+    }
     if (!displays.some((display) => display.id === this.appDisplayId)) {
       const current = screen.getDisplayMatching(this.mainWindow.getBounds());
       this.appDisplayId = current.id;
@@ -525,12 +637,17 @@ export class DisplayWindowManager {
         this.placeWindow(existing, display.bounds);
       }
     }
-
-    this.reconcileAlerts(displays);
-  };
+  }
 
   private async moveToDisplay(requestedDisplay: Display): Promise<void> {
-    if (this.isQuitting || this.isStaffSession || !isAlive(this.mainWindow)) return;
+    if (
+      this.isQuitting ||
+      !this.isOverlayAuthenticated ||
+      this.isStaffSession ||
+      !isAlive(this.mainWindow)
+    ) {
+      return;
+    }
     if (this.isMoving) {
       this.pendingDisplayId = requestedDisplay.id;
       return;
@@ -631,6 +748,22 @@ export class DisplayWindowManager {
     });
   }
 
+  private async restoreProtectionAfterAuthentication(): Promise<void> {
+    const window = this.mainWindow;
+    if (!isAlive(window) || this.isQuitting || !this.isOverlayAuthenticated) return;
+
+    try {
+      if (!window.isFullScreen()) await this.setFullscreen(true);
+      if (!isAlive(window) || this.isQuitting || !this.isOverlayAuthenticated) return;
+
+      this.appDisplayId = screen.getDisplayMatching(window.getBounds()).id;
+      this.keepOnAllWorkspaces(window);
+      this.reconcile();
+    } catch (error) {
+      console.error('[desktop] Failed to restore fullscreen after authentication', error);
+    }
+  }
+
   private scheduleAppDisplaySync(): void {
     if (this.appDisplaySyncTimer) clearTimeout(this.appDisplaySyncTimer);
     this.appDisplaySyncTimer = setTimeout(() => {
@@ -644,6 +777,7 @@ export class DisplayWindowManager {
   private async syncAppDisplay(): Promise<void> {
     if (
       this.isQuitting ||
+      !this.isOverlayAuthenticated ||
       this.isStaffSession ||
       this.isRelocatingByManager ||
       !isAlive(this.mainWindow)
@@ -725,6 +859,7 @@ export class DisplayWindowManager {
 
     this.overlays.set(display.id, window);
     this.overlayReferencesActive.set(display.id, false);
+    this.overlayResourcesActive.set(display.id, false);
     this.configureWindow(window, true);
     window.on('will-move', (event) => event.preventDefault());
     window.on('move', () => this.placeWindow(window, display.bounds));
@@ -732,6 +867,7 @@ export class DisplayWindowManager {
       this.focusedOverlayId = display.id;
       this.updateReferenceScreenFocus();
       this.focusLostAt = null;
+      if (this.areAlertsOpen) this.dismissAlerts();
     });
     window.on('blur', () => {
       if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
@@ -744,8 +880,10 @@ export class DisplayWindowManager {
       if (this.overlays.get(display.id) !== window) return;
       this.overlays.delete(display.id);
       this.overlayReferencesActive.delete(display.id);
+      this.overlayResourcesActive.delete(display.id);
       if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
       this.updateReferenceScreenFocus();
+      this.broadcastBrowserAvailability();
     });
     window.once('ready-to-show', () => {
       if (!isAlive(window) || this.isQuitting) return;
@@ -756,8 +894,10 @@ export class DisplayWindowManager {
       window.moveTop();
     });
     void window
-      .loadURL(new URL('overlay.html', `${this.overlayUrl.replace(/\/$/, '')}/`).toString())
+      .loadURL(this.getOverlayUrl())
       .then(() => this.applyDisplayTheme(window))
+      .then(() => this.sendBrowserAvailability(window))
+      .then(() => this.sendOverlayAuthenticationState(window, this.animateOverlayAuthentication))
       .catch((error: unknown) => console.error('[desktop] Failed to load display overlay', error));
     return window;
   }
@@ -778,13 +918,44 @@ export class DisplayWindowManager {
       .then(() => undefined);
   }
 
+  private sendBrowserAvailability(window: BrowserWindow): void {
+    if (!isAlive(window) || window.webContents.isDestroyed()) return;
+    window.webContents.send('browser:availability-changed', this.getBrowserAvailability());
+  }
+
+  private getOverlayUrl(): string {
+    const url = new URL('overlay.html', `${this.overlayUrl.replace(/\/$/, '')}/`);
+    url.searchParams.set(
+      'authenticated',
+      String(this.isOverlayAuthenticated && !this.animateOverlayAuthentication)
+    );
+    return url.toString();
+  }
+
+  private sendOverlayAuthenticationState(window: BrowserWindow, animate = false): void {
+    if (!isAlive(window) || window.webContents.isDestroyed()) return;
+    window.webContents.send('display-overlay:auth-state', this.isOverlayAuthenticated, animate);
+  }
+
+  private broadcastBrowserAvailability(): void {
+    if (isAlive(this.mainWindow) && !this.mainWindow.webContents.isDestroyed()) {
+      this.mainWindow.webContents.send(
+        'browser:availability-changed',
+        this.getBrowserAvailability()
+      );
+    }
+    for (const window of this.overlays.values()) this.sendBrowserAvailability(window);
+  }
+
   private destroyOverlay(id: number, expectedWindow?: BrowserWindow): void {
     const window = this.overlays.get(id);
     if (!window || (expectedWindow && expectedWindow !== window)) return;
     this.overlays.delete(id);
     this.overlayReferencesActive.delete(id);
+    this.overlayResourcesActive.delete(id);
     if (this.focusedOverlayId === id) this.focusedOverlayId = null;
     this.updateReferenceScreenFocus();
+    this.broadcastBrowserAvailability();
     this.closeOwnedWindow(window);
   }
 
