@@ -5,25 +5,14 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const SHORTCUTS = new Set(['<Super>Left', '<Super>Right', '<Super>Up', '<Super>Down']);
-const BINDING_KEYS: Record<string, readonly string[]> = {
-  'org.gnome.desktop.wm.keybindings': [
-    'maximize',
-    'unmaximize',
-    'toggle-maximized',
-    'tile-left',
-    'tile-right',
-    'move-to-side-w',
-    'move-to-side-e',
-  ],
-  'org.gnome.mutter.keybindings': ['toggle-tiled-left', 'toggle-tiled-right'],
-  'org.gnome.shell.extensions.tiling-assistant': [
-    'tile-left-half',
-    'tile-right-half',
-    'tile-maximize',
-    'restore-window',
-  ],
-};
+const SHORTCUTS = new Set([
+  '<super>left',
+  '<super>right',
+  '<super>up',
+  '<super>down',
+  '<super>h',
+  '<super>d',
+]);
 
 interface SavedBinding {
   schema: string;
@@ -95,29 +84,38 @@ export class GnomeShortcutProtection {
   }
 
   private async disableShortcuts(): Promise<void> {
-    if (await this.readSnapshot()) return;
-
-    const schemas = new Set((await this.runCommand(['list-schemas'])).split(/\s+/));
-    const saved: SavedBindings = { version: 1, bindings: [] };
+    const saved = (await this.readSnapshot()) ?? { version: 1 as const, bindings: [] };
+    const savedKeys = new Set(saved.bindings.map((binding) => `${binding.schema}.${binding.key}`));
     const updates: Array<{ binding: SavedBinding; replacement: string }> = [];
 
-    for (const [schema, keys] of Object.entries(BINDING_KEYS)) {
-      if (!schemas.has(schema)) continue;
-      const availableKeys = new Set((await this.runCommand(['list-keys', schema])).split(/\s+/));
-      for (const key of keys) {
-        if (!availableKeys.has(key)) continue;
-        const original = await this.runCommand(['get', schema, key]);
-        const bindings = parseStringArray(original);
-        const remaining = bindings.filter((binding) => !SHORTCUTS.has(binding));
-        if (remaining.length === bindings.length) continue;
-
-        const binding = { schema, key, original };
-        saved.bindings.push(binding);
-        updates.push({ binding, replacement: serializeStringArray(remaining) });
+    const settings = await this.runCommand(['list-recursively']);
+    for (const line of settings.split(/\r?\n/)) {
+      const match = /^([a-zA-Z0-9.-]+) ([a-zA-Z0-9-]+) (.+)$/.exec(line);
+      if (!match) continue;
+      const [, schema, key, original] = match;
+      if (
+        !schema?.startsWith('org.gnome.') ||
+        !key ||
+        !original ||
+        !original.toLowerCase().includes('<super>')
+      ) {
+        continue;
       }
+
+      const parsed = parseBindingValue(original);
+      if (!parsed) continue;
+
+      const remaining = parsed.bindings.filter((binding) => !SHORTCUTS.has(binding.toLowerCase()));
+      const savedKey = `${schema}.${key}`;
+      if (remaining.length === parsed.bindings.length || savedKeys.has(savedKey)) continue;
+
+      const binding = { schema, key, original };
+      saved.bindings.push(binding);
+      savedKeys.add(savedKey);
+      updates.push({ binding, replacement: parsed.serialize(remaining) });
     }
 
-    if (saved.bindings.length === 0) return;
+    if (updates.length === 0) return;
     await this.writeSnapshot(saved);
     try {
       for (const { binding, replacement } of updates) {
@@ -214,15 +212,59 @@ function parseSnapshot(contents: string): SavedBindings {
       typeof value.key !== 'string' ||
       !('original' in value) ||
       typeof value.original !== 'string' ||
-      !BINDING_KEYS[value.schema]?.includes(value.key)
+      !/^org\.gnome(?:\.[a-z0-9-]+)+$/.test(value.schema) ||
+      !/^[a-z0-9-]+$/.test(value.key)
     ) {
       throw new Error('The saved GNOME shortcut state contains an invalid binding.');
     }
-    parseStringArray(value.original);
+    if (!parseBindingValue(value.original)) {
+      throw new Error('The saved GNOME shortcut state contains an invalid binding value.');
+    }
     return { schema: value.schema, key: value.key, original: value.original };
   });
 
   return { version: 1, bindings };
+}
+
+function parseBindingValue(
+  value: string
+): { bindings: string[]; serialize: (bindings: string[]) => string } | null {
+  const input = value.trim();
+  if (input.startsWith('[') || input.startsWith('@as')) {
+    const bindings = parseStringArray(value);
+    return { bindings, serialize: serializeStringArray };
+  }
+  if (input.startsWith("'")) {
+    const binding = parseStringValue(value);
+    return {
+      bindings: [binding],
+      serialize: (bindings) => serializeStringValue(bindings[0] ?? ''),
+    };
+  }
+  return null;
+}
+
+function parseStringValue(value: string): string {
+  const input = value.trim();
+  if (input.length < 2 || input[0] !== "'" || input[input.length - 1] !== "'") {
+    throw new Error(`Unsupported GNOME shortcut value: ${value}`);
+  }
+
+  let result = '';
+  for (let index = 1; index < input.length - 1; index += 1) {
+    const character = input[index];
+    if (character !== '\\') {
+      result += character;
+      continue;
+    }
+    index += 1;
+    const escaped = input[index];
+    if (!escaped || index >= input.length - 1) {
+      throw new Error(`Invalid escape in GNOME shortcut value: ${value}`);
+    }
+    result += escaped === 'n' ? '\n' : escaped === 'r' ? '\r' : escaped === 't' ? '\t' : escaped;
+  }
+  return result;
 }
 
 function parseStringArray(value: string): string[] {
@@ -275,6 +317,15 @@ function parseStringArray(value: string): string[] {
     }
     if (input[index] !== ']') throw new Error(`Invalid GNOME shortcut value: ${value}`);
   }
+}
+
+function serializeStringValue(value: string): string {
+  return `'${value
+    .replaceAll('\\', '\\\\')
+    .replaceAll("'", "\\'")
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('\t', '\\t')}'`;
 }
 
 function serializeStringArray(values: string[]): string {

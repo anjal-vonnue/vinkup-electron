@@ -16,6 +16,7 @@ const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
   createdWindows: [] as Array<{
     destroyed: boolean;
     options: Record<string, unknown>;
+    window: FakeWindow;
     setFocused: (focused: boolean) => void;
     isFocusable: () => boolean;
     executeJavaScript: ReturnType<typeof vi.fn>;
@@ -43,8 +44,10 @@ class FakeWindow extends EventEmitter {
   focused = false;
   visible = false;
   minimized = false;
+  wmHidden = false;
   fullscreen = true;
   focusable = true;
+  alwaysOnTop = false;
   bounds: Electron.Rectangle = { x: 0, y: 0, width: 1280, height: 720 };
 
   constructor(readonly options: Record<string, unknown> = {}) {
@@ -80,6 +83,7 @@ class FakeWindow extends EventEmitter {
 
   restore(): void {
     this.minimized = false;
+    this.wmHidden = false;
     this.visible = true;
     this.emit('restore');
   }
@@ -91,7 +95,9 @@ class FakeWindow extends EventEmitter {
 
   setVisibleOnAllWorkspaces(): void {}
 
-  setAlwaysOnTop(): void {}
+  setAlwaysOnTop(value: boolean): void {
+    this.alwaysOnTop = value;
+  }
 
   setFocusable(value: boolean): void {
     this.focusable = value;
@@ -152,6 +158,17 @@ function isAlertWindow(options: Record<string, unknown>): boolean {
   );
 }
 
+function isOverlayWindow(options: Record<string, unknown>): boolean {
+  const webPreferences = options.webPreferences;
+  return (
+    typeof webPreferences === 'object' &&
+    webPreferences !== null &&
+    'preload' in webPreferences &&
+    typeof webPreferences.preload === 'string' &&
+    webPreferences.preload.endsWith('/preload/overlay.js')
+  );
+}
+
 describe('DisplayWindowManager focus alerts', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -161,6 +178,7 @@ describe('DisplayWindowManager focus alerts', () => {
       createdWindows.push({
         destroyed: false,
         options,
+        window,
         setFocused: (focused) => {
           window.focused = focused;
           window.emit(focused ? 'focus' : 'blur');
@@ -225,7 +243,7 @@ describe('DisplayWindowManager focus alerts', () => {
 
     mainWindow.emit('focus');
 
-    expect(alertWindow?.destroyed).toBe(true);
+    await vi.waitFor(() => expect(alertWindow?.destroyed).toBe(true));
     manager.dispose();
   });
 
@@ -253,7 +271,7 @@ describe('DisplayWindowManager focus alerts', () => {
 
     overlay?.setFocused(true);
 
-    expect(alertWindow?.destroyed).toBe(true);
+    await vi.waitFor(() => expect(alertWindow?.destroyed).toBe(true));
     manager.dispose();
   });
 
@@ -586,6 +604,48 @@ describe('DisplayWindowManager focus alerts', () => {
     await vi.advanceTimersByTimeAsync(100);
     await vi.waitFor(() => expect(mainWindow.isFocused()).toBe(true));
     expect(mainWindow.isFullScreen()).toBe(true);
+    manager.dispose();
+  });
+
+  it('restores a display window GNOME hid without Electron reporting it minimized', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(800);
+
+    const overlayWindow = createdWindows.find(({ options }) => isOverlayWindow(options))?.window;
+    if (!overlayWindow) throw new Error('Expected a display overlay window.');
+    const alertWindow = createdWindows.find(({ options }) => isAlertWindow(options))?.window;
+    if (!alertWindow) throw new Error('Expected a focus alert window.');
+
+    overlayWindow.wmHidden = true;
+    const restoreOverlay = vi.spyOn(overlayWindow, 'restore');
+    alertWindow.focused = false;
+    const refocusAlert = vi.spyOn(alertWindow, 'focus');
+
+    manager.handleAlertChoice('back');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(refocusAlert).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(mainWindow.isFocused()).toBe(true);
+      expect(overlayWindow.isVisible()).toBe(true);
+      expect(overlayWindow.isMinimized()).toBe(false);
+      expect(overlayWindow.isFullScreen()).toBe(true);
+      expect(restoreOverlay).toHaveBeenCalled();
+      expect(overlayWindow.wmHidden).toBe(false);
+    });
+
     manager.dispose();
   });
 

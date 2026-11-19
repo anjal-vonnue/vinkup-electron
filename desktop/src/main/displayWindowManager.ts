@@ -40,6 +40,7 @@ export class DisplayWindowManager {
   private pendingDisplayId: number | null = null;
   private isMoving = false;
   private isRelocatingByManager = false;
+  private isRestoringFromAlert = false;
   private isAuthenticationInProgress = false;
   private isOverlayAuthenticated = true;
   private animateOverlayAuthentication = false;
@@ -347,6 +348,7 @@ export class DisplayWindowManager {
       !this.isOverlayAuthenticated ||
       this.isStaffSession ||
       this.isMoving ||
+      this.isRestoringFromAlert ||
       !isAlive(this.mainWindow)
     ) {
       return;
@@ -383,6 +385,7 @@ export class DisplayWindowManager {
   private readonly onMainWindowFocus = (): void => {
     this.isReadyForFocusTracking = true;
     this.focusLostAt = null;
+    if (this.isRestoringFromAlert) return;
     if (this.areAlertsOpen) {
       this.dismissAlerts();
       return;
@@ -455,6 +458,7 @@ export class DisplayWindowManager {
       !this.isOverlayAuthenticated ||
       this.isStaffSession ||
       this.isMoving ||
+      this.isRestoringFromAlert ||
       !isAlive(this.mainWindow)
     ) {
       this.focusLostAt = null;
@@ -633,8 +637,7 @@ export class DisplayWindowManager {
     }
   }
 
-  private async setFullscreen(fullscreen: boolean): Promise<void> {
-    const window = this.mainWindow;
+  private async setFullscreen(fullscreen: boolean, window = this.mainWindow): Promise<void> {
     if (!isAlive(window) || window.isFullScreen() === fullscreen) return;
 
     await new Promise<void>((resolve, reject) => {
@@ -677,7 +680,7 @@ export class DisplayWindowManager {
         if (isAlive(window) && !window.isMinimized()) {
           resolve();
         } else {
-          reject(new Error('Timed out waiting for the main window to be restored.'));
+          reject(new Error('Timed out waiting for the window to be restored.'));
         }
       }, FULLSCREEN_CHANGE_TIMEOUT_MS);
       window.once('restore', onRestored);
@@ -1008,35 +1011,71 @@ export class DisplayWindowManager {
   }
 
   private async dismissAlertsAndRestore(): Promise<void> {
+    if (this.isRestoringFromAlert) return;
+    this.isRestoringFromAlert = true;
     const returnDisplay = screen
       .getAllDisplays()
       .find((display) => display.id === this.alertReturnDisplayId);
-    this.clearAlerts();
-    this.alertDismissedAt = Date.now();
-    this.focusLostAt = null;
-    if (!isAlive(this.mainWindow) || this.isQuitting) return;
-    await this.restoreMainWindowForFocus();
-    if (!isAlive(this.mainWindow) || this.isQuitting) return;
-    this.mainWindow.show();
-    this.keepOnAllWorkspaces(this.mainWindow);
-    if (
-      returnDisplay &&
-      screen.getDisplayMatching(this.mainWindow.getBounds()).id !== returnDisplay.id
-    ) {
-      void this.moveToDisplay(returnDisplay).catch((error: unknown) => {
-        console.error('[desktop] Failed to return to the app display', error);
-      });
-      return;
+    try {
+      if (!isAlive(this.mainWindow) || this.isQuitting) return;
+      await this.restoreMainWindowForFocus();
+      if (!isAlive(this.mainWindow) || this.isQuitting) return;
+
+      this.mainWindow.show();
+      this.mainWindow.moveTop();
+      this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
+      this.keepOnAllWorkspaces(this.mainWindow);
+      await Promise.all(
+        [...this.overlays.values()].map((window) => this.restoreDisplayWindow(window))
+      );
+      if (!isAlive(this.mainWindow) || this.isQuitting) return;
+
+      if (
+        returnDisplay &&
+        screen.getDisplayMatching(this.mainWindow.getBounds()).id !== returnDisplay.id
+      ) {
+        this.appDisplayId = returnDisplay.id;
+        this.clearAlerts();
+        this.alertDismissedAt = Date.now();
+        this.focusLostAt = null;
+        void this.moveToDisplay(returnDisplay).catch((error: unknown) => {
+          console.error('[desktop] Failed to return to the app display', error);
+        });
+        return;
+      }
+
+      if (returnDisplay) this.appDisplayId = returnDisplay.id;
+      this.mainWindow.focus();
+      this.clearAlerts();
+      this.alertDismissedAt = Date.now();
+      this.focusLostAt = null;
+      this.mainWindow.show();
+      this.mainWindow.moveTop();
+      this.mainWindow.focus();
+      this.raiseOverlays();
+    } finally {
+      this.isRestoringFromAlert = false;
     }
-    if (returnDisplay) this.appDisplayId = returnDisplay.id;
-    this.mainWindow.focus();
-    this.raiseOverlays();
+  }
+
+  private async restoreDisplayWindow(window: BrowserWindow): Promise<void> {
+    if (!isAlive(window) || this.isQuitting) return;
+    window.restore();
+    await this.restoreMinimizedWindow(window);
+    if (!isAlive(window) || this.isQuitting) return;
+    if (!window.isFullScreen()) await this.setFullscreen(true, window);
+    if (!isAlive(window) || this.isQuitting) return;
+    window.setAlwaysOnTop(true, 'screen-saver');
+    window.showInactive();
+    window.moveTop();
   }
 
   private raiseOverlays(): void {
     if (this.isQuitting || this.isStaffSession || this.isAuthenticationInProgress) return;
     for (const window of this.overlays.values()) {
       if (isAlive(window)) {
+        if (window.isMinimized()) window.restore();
+        if (!window.isFullScreen()) window.setFullScreen(true);
         window.setAlwaysOnTop(true, 'screen-saver');
         window.showInactive();
         window.moveTop();

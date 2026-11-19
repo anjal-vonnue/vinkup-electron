@@ -9,9 +9,12 @@ const schemas = [
   'org.gnome.desktop.wm.keybindings',
   'org.gnome.mutter.keybindings',
   'org.gnome.shell.extensions.tiling-assistant',
+  'org.gnome.shell.extensions.custom-shortcuts',
 ];
 
 const initialSettings = new Map([
+  ['org.gnome.desktop.wm.keybindings.minimize', "['<Super>h']"],
+  ['org.gnome.desktop.wm.keybindings.show-desktop', "['<Super>d']"],
   ['org.gnome.desktop.wm.keybindings.maximize', "['<Super>Up']"],
   ['org.gnome.desktop.wm.keybindings.unmaximize', "['<Super>Down', '<Alt>F5']"],
   ['org.gnome.shell.extensions.tiling-assistant.tile-left-half', "['<Super>Left', '<Super>KP_4']"],
@@ -21,6 +24,8 @@ const initialSettings = new Map([
   ],
   ['org.gnome.shell.extensions.tiling-assistant.tile-maximize', "['<Super>Up', '<Super>KP_5']"],
   ['org.gnome.shell.extensions.tiling-assistant.restore-window', "['<Super>Down']"],
+  ['org.gnome.shell.extensions.custom-shortcuts.hide-windows', "['<Super>D', '<Ctrl><Alt>F12']"],
+  ['org.gnome.shell.extensions.custom-shortcuts.show-desktop-binding', "'<Super>d'"],
 ]);
 
 const temporaryDirectories: string[] = [];
@@ -38,24 +43,20 @@ async function createTemporaryDirectory(): Promise<string> {
 }
 
 function createGSettingsRunner(settings = new Map(initialSettings)) {
-  const keysBySchema = new Map<string, string[]>();
-  for (const setting of settings.keys()) {
-    const schema = schemas.find((candidate) => setting.startsWith(`${candidate}.`));
-    if (!schema) continue;
-    const key = setting.slice(schema.length + 1);
-    keysBySchema.set(schema, [...(keysBySchema.get(schema) ?? []), key]);
-  }
-
   const runCommand = vi.fn((args: string[]) => {
     const [command, schema, key, value] = args;
     if (command === 'list-schemas') return Promise.resolve(schemas.join('\n'));
-    if (command === 'list-keys' && schema) {
-      return Promise.resolve((keysBySchema.get(schema) ?? []).join('\n'));
-    }
-    if (command === 'get' && schema && key) {
-      const current = settings.get(`${schema}.${key}`);
-      if (current === undefined) throw new Error(`Unknown setting ${schema}.${key}`);
-      return Promise.resolve(current);
+    if (command === 'list-recursively') {
+      return Promise.resolve(
+        [...settings.entries()]
+          .map(([setting, current]) => {
+            const settingSchema = schemas.find((candidate) => setting.startsWith(`${candidate}.`));
+            if (!settingSchema) return '';
+            return `${settingSchema} ${setting.slice(settingSchema.length + 1)} ${current}`;
+          })
+          .filter(Boolean)
+          .join('\n')
+      );
     }
     if (command === 'set' && schema && key && value !== undefined) {
       settings.set(`${schema}.${key}`, value);
@@ -68,7 +69,7 @@ function createGSettingsRunner(settings = new Map(initialSettings)) {
 }
 
 describe('GnomeShortcutProtection', () => {
-  it('temporarily removes only Super+Arrow bindings and restores original values', async () => {
+  it('removes protected shortcuts from GNOME and extension bindings, then restores originals', async () => {
     const userDataPath = await createTemporaryDirectory();
     const { runCommand, settings } = createGSettingsRunner();
     const protection = new GnomeShortcutProtection(userDataPath, runCommand, 'linux', {
@@ -78,6 +79,14 @@ describe('GnomeShortcutProtection', () => {
     await protection.restorePreviousSession();
     await protection.setTraineeActive(true);
 
+    expect(settings.get('org.gnome.desktop.wm.keybindings.minimize')).toBe('[]');
+    expect(settings.get('org.gnome.desktop.wm.keybindings.show-desktop')).toBe('[]');
+    expect(settings.get('org.gnome.shell.extensions.custom-shortcuts.hide-windows')).toBe(
+      "['<Ctrl><Alt>F12']"
+    );
+    expect(settings.get('org.gnome.shell.extensions.custom-shortcuts.show-desktop-binding')).toBe(
+      "''"
+    );
     expect(settings.get('org.gnome.desktop.wm.keybindings.maximize')).toBe('[]');
     expect(settings.get('org.gnome.desktop.wm.keybindings.unmaximize')).toBe("['<Alt>F5']");
     expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-left-half')).toBe(
