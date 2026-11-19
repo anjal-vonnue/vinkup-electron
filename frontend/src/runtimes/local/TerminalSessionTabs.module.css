@@ -1,0 +1,127 @@
+.bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  min-height: 32px;
+  background-color: var(--color-bg-panel);
+  border-bottom: 1px solid var(--color-border-divider);
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabWrap {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border-divider);
+  border-bottom: 2px solid transparent;
+}
+
+.tabWrapActive {
+  border-bottom-color: var(--color-accent-purple-soft);
+  background-color: var(--color-bg-base);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px 0 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tabActive {
+  color: var(--color-text-primary);
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background-color: currentColor;
+  color: var(--color-text-muted);
+}
+
+.statusDot[data-status='ready'] {
+  color: var(--color-text-green);
+}
+
+.statusDot[data-status='opening'] {
+  color: var(--color-accent-spinner);
+}
+
+.statusDot[data-status='exited'] {
+  color: var(--color-status-warning);
+}
+
+.statusDot[data-status='error'] {
+  color: var(--color-status-error-text);
+}
+
+.statusText {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.close {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 6px 0 2px;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+}
+
+.close:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-pill-inactive);
+}
+
+.close:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.add {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  color: var(--color-text-secondary);
+  border-right: 1px solid var(--color-border-divider);
+}
+
+.add:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-pill-inactive);
+}
+
+.add:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.limit {
+  align-self: center;
+  margin: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
