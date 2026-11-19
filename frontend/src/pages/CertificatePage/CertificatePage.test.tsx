@@ -1,9 +1,10 @@
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CourseCertificate } from '@itp/types';
 
+import { ToastProvider } from '../../components/Toast';
 import CertificatePage from './CertificatePage';
 import { getCertificate } from '../../api/certificate';
 import { ApiError } from '../../api/errors';
@@ -26,11 +27,13 @@ const certificate: CourseCertificate = {
 };
 function renderPage(courseId = 'css') {
   return render(
-    <MemoryRouter initialEntries={[`/certificates/${courseId}`]}>
-      <Routes>
-        <Route path="/certificates/:courseId" element={<CertificatePage />} />
-      </Routes>
-    </MemoryRouter>
+    <ToastProvider>
+      <MemoryRouter initialEntries={[`/certificates/${courseId}`]}>
+        <Routes>
+          <Route path="/certificates/:courseId" element={<CertificatePage />} />
+        </Routes>
+      </MemoryRouter>
+    </ToastProvider>
   );
 }
 
@@ -59,7 +62,7 @@ describe('CertificatePage', () => {
 
     renderPage();
 
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('Loading certificate…')).toBeInTheDocument();
   });
 
   it('asks for the certificate of the course in the URL', async () => {
@@ -100,30 +103,13 @@ describe('CertificatePage', () => {
     );
   });
 
-  describe('printing', () => {
-    it('prints with the current theme and certificate as the file name', async () => {
-      const user = userEvent.setup();
-      vi.mocked(getCertificate).mockResolvedValue(certificate);
-      document.documentElement.dataset.theme = 'dark';
-
-      let titleWhilePrinting = '';
-      let themeWhilePrinting: string | undefined;
-      printMock.mockImplementation(() => {
-        titleWhilePrinting = document.title;
-        themeWhilePrinting = document.documentElement.dataset.theme;
-      });
-
-      renderPage();
-      await user.click(await screen.findByRole('button', { name: /Print \/ Save as PDF/ }));
-
-      expect(printMock).toHaveBeenCalledTimes(1);
-      expect(titleWhilePrinting).toBe('Vinkup certificate - CSS - Asha Rao');
-      expect(themeWhilePrinting).toBe('dark');
-    });
-
+  describe('PDF saving', () => {
     it('saves a PDF through the desktop app instead of opening the system print flow', async () => {
       const user = userEvent.setup();
-      const savePdf = vi.fn().mockResolvedValue(true);
+      const savePdf = vi.fn().mockResolvedValue({
+        fileName: 'Vinkup certificate - CSS - Asha Rao.pdf',
+        location: 'Downloads',
+      });
       Object.defineProperty(window, 'desktop', {
         configurable: true,
         value: { certificate: { savePdf } },
@@ -131,11 +117,14 @@ describe('CertificatePage', () => {
       vi.mocked(getCertificate).mockResolvedValue(certificate);
 
       renderPage();
-      await user.click(await screen.findByRole('button', { name: /Print \/ Save as PDF/ }));
+      await user.click(await screen.findByRole('button', { name: /Save as PDF/ }));
 
       expect(savePdf).toHaveBeenCalledWith('Vinkup certificate - CSS - Asha Rao');
       expect(printMock).not.toHaveBeenCalled();
       expect(document.title).toBe('Vinkup');
+      expect(
+        await screen.findByText('Saved Vinkup certificate - CSS - Asha Rao.pdf to Downloads.')
+      ).toBeInTheDocument();
     });
 
     it('shows an error and restores the page if saving a PDF fails', async () => {
@@ -152,7 +141,7 @@ describe('CertificatePage', () => {
       document.documentElement.dataset.theme = 'dark';
 
       renderPage();
-      await user.click(await screen.findByRole('button', { name: /Print \/ Save as PDF/ }));
+      await user.click(await screen.findByRole('button', { name: /Save as PDF/ }));
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'Unable to save certificate PDF: Disk is full'
@@ -161,20 +150,17 @@ describe('CertificatePage', () => {
       expect(document.documentElement.dataset.theme).toBe('dark');
     });
 
-    it('puts the theme and the tab title back after printing', async () => {
+    it('does not open a print dialog outside the desktop app', async () => {
       const user = userEvent.setup();
       vi.mocked(getCertificate).mockResolvedValue(certificate);
-      document.documentElement.dataset.theme = 'dark';
 
       renderPage();
-      await user.click(await screen.findByRole('button', { name: /Print \/ Save as PDF/ }));
+      await user.click(await screen.findByRole('button', { name: /Save as PDF/ }));
 
-      act(() => {
-        window.dispatchEvent(new Event('afterprint'));
-      });
-
-      expect(document.title).toBe('Vinkup');
-      expect(document.documentElement.dataset.theme).toBe('dark');
+      expect(printMock).not.toHaveBeenCalled();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Certificate PDF downloads are only available in the VinkUp desktop app.'
+      );
     });
 
     it('uses A4 landscape only while the page is open', async () => {

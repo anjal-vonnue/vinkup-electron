@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import Header from '../../components/Header';
 import CertificateSheet from '../../components/CertificateSheet';
+import { useToast } from '../../components/Toast';
 import StateMessage from '../../components/StateMessage';
 import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
@@ -16,42 +17,38 @@ import styles from './CertificatePage.module.css';
 export default function CertificatePage() {
   const { courseId = '' } = useParams();
   const { isLoading, certificate, error, retry } = useCertificate(courseId);
-  // One message for both paths: the browser print dialog and the desktop "save as PDF".
-  const [printError, setPrintError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const toast = useToast();
 
   useLandscapePageStyle();
   // Light theme + "Vinkup certificate – CSS – Asha Rao" as the PDF file name while printing.
-  const { print, prepare, restore } = usePrintMode<null>({
+  const { prepare, restore } = usePrintMode<null>({
     defaults: null,
     documentTitle: certificate
       ? certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
       : 'Vinkup certificate',
-    desktopPrintException: true,
   });
 
-  const handlePrint = async (): Promise<void> => {
-    setPrintError(null);
+  const handleSavePdf = async (): Promise<void> => {
+    setSaveError(null);
 
-    // Browser (or no certificate yet): open the normal print dialog.
     const desktopCertificate = window.desktop?.certificate;
     if (!desktopCertificate || !certificate) {
-      try {
-        await print(null);
-      } catch (printFailure: unknown) {
-        console.error('[certificate] Failed to open the print dialog', printFailure);
-        setPrintError('Unable to open certificate printing. Please try again.');
-      }
+      setSaveError('Certificate PDF downloads are only available in the VinkUp desktop app.');
       return;
     }
 
-    // Desktop shell: render the print view, then save it as a PDF through the main process.
     prepare(null);
     try {
-      await desktopCertificate.savePdf(
+      const saved = await desktopCertificate.savePdf(
         certificateDocumentTitle(certificate.courseTitle, certificate.traineeName)
       );
+      toast.show({
+        message: `Saved ${saved.fileName} to ${saved.location}.`,
+        variant: 'success',
+      });
     } catch (saveError: unknown) {
-      setPrintError(
+      setSaveError(
         saveError instanceof Error
           ? `Unable to save certificate PDF: ${saveError.message}`
           : 'Unable to save certificate PDF. Please try again.'
@@ -111,14 +108,14 @@ export default function CertificatePage() {
             <ArrowLeft size={16} aria-hidden="true" />
             Back to Dashboard
           </Link>
-          <button type="button" className={styles.printButton} onClick={() => void handlePrint()}>
-            <Printer size={16} aria-hidden="true" />
-            Print / Save as PDF
+          <button type="button" className={styles.printButton} onClick={() => void handleSavePdf()}>
+            <Download size={16} aria-hidden="true" />
+            Save as PDF
           </button>
         </div>
-        {printError && (
+        {saveError && (
           <p className={`${styles.printError} ${styles.screenOnly}`} role="alert">
-            {printError}
+            {saveError}
           </p>
         )}
 

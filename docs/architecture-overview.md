@@ -147,7 +147,7 @@ A single-page React app built with Vite. Plain CSS modules. Monaco is the code e
 | `/typing-test`               | TypingTestPage    | `GET /typing-test/results`; saves with `POST /typing-test/results`                                                                       |
 | `/journal`                   | JournalPage       | `GET /journal`; today's entry saves with `PUT /days/:dayId/journal`                                                                      |
 | `/help`                      | HelpPage          | None: the help content ships with the frontend                                                                                           |
-| `/certificates/:courseId`    | CertificatePage   | `GET /courses/:courseId/certificate`; prints landscape with Print / Save as PDF                                                          |
+| `/certificates/:courseId`    | CertificatePage   | `GET /courses/:courseId/certificate`; desktop app saves an A4 landscape PDF to Downloads or a fallback folder                            |
 | `/admin`                     | AdminTraineesPage | Mentors. `GET /admin/trainees` (assigned only); adds with `POST /admin/trainees`; search, sort, filter and CSV export run in the browser |
 | `/admin/trainees/:traineeId` | AdminTraineePage  | Mentors. `GET /admin/trainees/:traineeId` and `/flags`; `/tasks/:taskId/code` when a task is opened; print report                        |
 | `/manager`                   | ManagerPage       | Managers. `GET /manager/staff` and `/manager/trainees`; creates/edits accounts; assigns mentors; confirms activation changes             |
@@ -190,7 +190,7 @@ Mentor pages use their own header (`AdminHeader`) and skip the fullscreen gate a
 
 ### Focus and activity tracking
 
-**Flags.** `useFlagTracking` runs on the task page. It listens for leaving fullscreen, the tab becoming hidden and the window losing focus, measures how long the trainee was away, and sends `POST /activity/:taskId/events` with `FULLSCREEN_EXIT`, `TAB_SWITCH` or `WINDOW_BLUR` and the duration when they come back. It then shows the warning toast. A flag that fails to send is dropped. Durations are sent in milliseconds.
+**Flags.** `useFlagTracking` runs on the task page. It listens for leaving fullscreen, the tab becoming hidden and the window losing focus, measures how long the trainee was away, and sends `POST /activity/:taskId/events` with `FULLSCREEN_EXIT`, `TAB_SWITCH` or `WINDOW_BLUR` and the duration when they come back. A flag that fails to send is dropped. Durations are sent in milliseconds. Focus on active References or Resources content in a secondary display overlay is treated as remaining in VinkUp; the desktop focus watchdog also recognizes the focused allowlisted Resources `WebContentsView` in the main window.
 
 **Time.** `ActivityProvider` ticks every second while the trainee is signed in. A second counts as active only when the page is visible and there was input (keys, clicks, scroll, mouse) in the last 5 minutes. The task page reports `coding` while the trainee has typed within the last minute; the rest of active time is shown as reading time. Totals go to `POST /activity/time` every 60 seconds in batches of at most 10 minutes, with the IST date; on hiding the page they're sent with `fetch` `keepalive` so they survive closing the tab. Failed batches are kept for the next flush.
 

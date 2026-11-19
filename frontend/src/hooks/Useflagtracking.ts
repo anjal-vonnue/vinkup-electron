@@ -34,11 +34,11 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
     let windowBlurTimeout: ReturnType<typeof setTimeout> | undefined;
 
     let activeFlag: ActiveFlag | null = null;
-    let isReferenceScreenFocused = false;
+    let isAllowedOverlayContentFocused = false;
     let focusStateVersion = 0;
     let skipNextReturnWarning = false;
     function startFlag(type: FlagEventType) {
-      if (activeFlag || isReferenceScreenFocused) return;
+      if (activeFlag || isAllowedOverlayContentFocused) return;
 
       activeFlag = {
         type,
@@ -62,9 +62,9 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       }).catch(() => {});
     }
 
-    function handleReferenceFocusChange(isFocused: boolean) {
+    function handleAllowedOverlayFocusChange(isFocused: boolean) {
       focusStateVersion += 1;
-      isReferenceScreenFocused = isFocused;
+      isAllowedOverlayContentFocused = isFocused;
       if (!isFocused) return;
 
       if (activeFlag?.type === 'TAB_SWITCH' || document.visibilityState === 'hidden') {
@@ -75,20 +75,20 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
     }
 
     const desktopWindow = window.desktop?.window;
-    const removeReferenceFocusListener = desktopWindow?.onReferenceScreenFocusChange(
-      handleReferenceFocusChange
+    const removeAllowedOverlayFocusListener = desktopWindow?.onAllowedOverlayContentFocusChange(
+      handleAllowedOverlayFocusChange
     );
     if (desktopWindow) {
       const initialFocusStateVersion = focusStateVersion;
       void desktopWindow
-        .isReferenceScreenFocused()
+        .isAllowedOverlayContentFocused()
         .then((isFocused) => {
           if (focusStateVersion === initialFocusStateVersion) {
-            handleReferenceFocusChange(isFocused);
+            handleAllowedOverlayFocusChange(isFocused);
           }
         })
         .catch((error: unknown) => {
-          console.error('[activity] Failed to read secondary reference focus state', error);
+          console.error('[activity] Failed to read allowed overlay focus state', error);
         });
     }
 
@@ -96,7 +96,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       if (document.visibilityState === 'hidden') {
         if (isAway) return; // already logged this hidden period
         isAway = true;
-        if (isReferenceScreenFocused) {
+        if (isAllowedOverlayContentFocused) {
           skipNextReturnWarning = true;
           activeFlag = null;
         } else if (isFullscreenActive()) {
@@ -106,7 +106,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
         isAway = false;
         if (isFullscreenActive()) {
           endFlag();
-          if (!isReferenceScreenFocused && !skipNextReturnWarning) {
+          if (!isAllowedOverlayContentFocused && !skipNextReturnWarning) {
             onWarningRef.current(LEFT_WORKSPACE_WARNING);
           }
         }
@@ -117,7 +117,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
     function handleFullscreenChange() {
       const isFullscreen = isFullscreenActive();
       if (wasFullscreen && !isFullscreen) {
-        if (!isReferenceScreenFocused) {
+        if (!isAllowedOverlayContentFocused) {
           startFlag('FULLSCREEN_EXIT');
           onWarningRef.current(LEFT_WORKSPACE_WARNING);
         }
@@ -140,7 +140,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       windowBlurTimeout = setTimeout(() => {
         if (!isFullscreenActive()) return;
         if (document.visibilityState === 'hidden') return;
-        if (isReferenceScreenFocused) return;
+        if (isAllowedOverlayContentFocused) return;
 
         // Focus just moved into our own preview iframe, not out of the window
         if (document.hasFocus()) return;
@@ -151,7 +151,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       }, 500);
     }
     function handleWindowFocus() {
-      if (isReferenceScreenFocused) {
+      if (isAllowedOverlayContentFocused) {
         isUnfocused = false;
         activeFlag = null;
         return;
@@ -193,7 +193,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('blur', handleWindowBlur); // NEW
       window.removeEventListener('focus', handleWindowFocus); // NEW
-      removeReferenceFocusListener?.();
+      removeAllowedOverlayFocusListener?.();
       if (resizeTimeout) {
         clearTimeout(resizeTimeout);
       }

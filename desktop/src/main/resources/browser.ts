@@ -31,6 +31,7 @@ export const EMPTY_BROWSER_STATE: ResourcesBrowserState = {
 
 export interface ResourcesBrowserEvents {
   onState: (state: ResourcesBrowserState) => void;
+  onFocusChange: (focused: boolean) => void;
   onFocusAddress: () => void;
   onOpenFind: () => void;
   onFindResult: (result: ResourcesFindResult) => void;
@@ -51,6 +52,7 @@ export class ResourcesBrowser {
   private state: ResourcesBrowserState = { ...EMPTY_BROWSER_STATE };
   private lastBounds: ResourcesBrowserBounds | null = null;
   private attached = false;
+  private viewFocused = false;
   private downloadHandler:
     | ((event: Electron.Event, item: Electron.DownloadItem, contents: Electron.WebContents) => void)
     | null = null;
@@ -87,6 +89,7 @@ export class ResourcesBrowser {
 
   close(): void {
     this.attached = false;
+    this.setViewFocused(false);
     this.view?.setVisible(false);
   }
 
@@ -96,6 +99,7 @@ export class ResourcesBrowser {
 
     if (this.lastBounds.width <= 0 || this.lastBounds.height <= 0) {
       this.view?.setVisible(false);
+      this.setViewFocused(false);
       return;
     }
     this.applyVisibility();
@@ -255,6 +259,7 @@ export class ResourcesBrowser {
     if (!this.view) return;
 
     this.attached = false;
+    this.setViewFocused(false);
     if (!this.window.isDestroyed()) {
       this.window.contentView.removeChildView(this.view);
       this.view.setVisible(false);
@@ -410,6 +415,14 @@ export class ResourcesBrowser {
       this.update({ title });
     });
 
+    contents.on('focus', () => {
+      this.setViewFocused(true);
+    });
+
+    contents.on('blur', () => {
+      this.setViewFocused(false);
+    });
+
     contents.on('found-in-page', (_event, result) => {
       this.events.onFindResult({
         activeMatchOrdinal: result.activeMatchOrdinal,
@@ -554,6 +567,13 @@ export class ResourcesBrowser {
       this.lastBounds.height > 0;
 
     this.view.setVisible(visible);
+    if (!visible) this.setViewFocused(false);
+  }
+
+  private setViewFocused(focused: boolean): void {
+    if (this.viewFocused === focused) return;
+    this.viewFocused = focused;
+    this.events.onFocusChange(focused);
   }
 
   private applyBounds(): void {

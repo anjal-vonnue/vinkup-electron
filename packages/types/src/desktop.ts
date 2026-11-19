@@ -194,22 +194,20 @@ export interface DesktopApi {
     setFullscreen: (value: boolean) => Promise<boolean>;
     isFullscreen: () => Promise<boolean>;
     setDisplayTheme: (theme: 'light' | 'dark') => Promise<void>;
-    isReferenceScreenFocused: () => Promise<boolean>;
+    isAllowedOverlayContentFocused: () => Promise<boolean>;
     /** Returns an unsubscribe function. */
-    onReferenceScreenFocusChange: (listener: (isFocused: boolean) => void) => () => void;
+    onAllowedOverlayContentFocusChange: (listener: (isFocused: boolean) => void) => () => void;
     getBrowserAvailability: () => Promise<BrowserAvailability>;
     /** Returns an unsubscribe function. */
     onBrowserAvailabilityChange: (
       listener: (availability: BrowserAvailability) => void
     ) => () => void;
-    beginCertificatePrint: () => Promise<void>;
-    endCertificatePrint: () => Promise<void>;
     /** Returns an unsubscribe function. */
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => () => void;
   };
 
   certificate: {
-    savePdf: (fileName: string) => Promise<boolean>;
+    savePdf: (fileName: string) => Promise<{ fileName: string; location: string }>;
   };
 
   /** Host execution for task runtimes (files, preview server, shells, dev servers). */

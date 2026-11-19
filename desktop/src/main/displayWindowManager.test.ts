@@ -16,6 +16,7 @@ const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
   createdWindows: [] as Array<{
     destroyed: boolean;
     options: Record<string, unknown>;
+    window: FakeWindow;
     setFocused: (focused: boolean) => void;
     isFocusable: () => boolean;
     executeJavaScript: ReturnType<typeof vi.fn>;
@@ -42,8 +43,11 @@ class FakeWindow extends EventEmitter {
   destroyed = false;
   focused = false;
   visible = false;
+  minimized = false;
+  wmHidden = false;
   fullscreen = true;
   focusable = true;
+  alwaysOnTop = false;
   bounds: Electron.Rectangle = { x: 0, y: 0, width: 1280, height: 720 };
 
   constructor(readonly options: Record<string, unknown> = {}) {
@@ -73,6 +77,17 @@ class FakeWindow extends EventEmitter {
     return this.fullscreen;
   }
 
+  isMinimized(): boolean {
+    return this.minimized;
+  }
+
+  restore(): void {
+    this.minimized = false;
+    this.wmHidden = false;
+    this.visible = true;
+    this.emit('restore');
+  }
+
   setFullScreen(value: boolean): void {
     this.fullscreen = value;
     this.emit(value ? 'enter-full-screen' : 'leave-full-screen');
@@ -80,7 +95,9 @@ class FakeWindow extends EventEmitter {
 
   setVisibleOnAllWorkspaces(): void {}
 
-  setAlwaysOnTop(): void {}
+  setAlwaysOnTop(value: boolean): void {
+    this.alwaysOnTop = value;
+  }
 
   setFocusable(value: boolean): void {
     this.focusable = value;
@@ -141,6 +158,17 @@ function isAlertWindow(options: Record<string, unknown>): boolean {
   );
 }
 
+function isOverlayWindow(options: Record<string, unknown>): boolean {
+  const webPreferences = options.webPreferences;
+  return (
+    typeof webPreferences === 'object' &&
+    webPreferences !== null &&
+    'preload' in webPreferences &&
+    typeof webPreferences.preload === 'string' &&
+    webPreferences.preload.endsWith('/preload/overlay.js')
+  );
+}
+
 describe('DisplayWindowManager focus alerts', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -150,6 +178,7 @@ describe('DisplayWindowManager focus alerts', () => {
       createdWindows.push({
         destroyed: false,
         options,
+        window,
         setFocused: (focused) => {
           window.focused = focused;
           window.emit(focused ? 'focus' : 'blur');
@@ -214,7 +243,7 @@ describe('DisplayWindowManager focus alerts', () => {
 
     mainWindow.emit('focus');
 
-    expect(alertWindow?.destroyed).toBe(true);
+    await vi.waitFor(() => expect(alertWindow?.destroyed).toBe(true));
     manager.dispose();
   });
 
@@ -242,7 +271,7 @@ describe('DisplayWindowManager focus alerts', () => {
 
     overlay?.setFocused(true);
 
-    expect(alertWindow?.destroyed).toBe(true);
+    await vi.waitFor(() => expect(alertWindow?.destroyed).toBe(true));
     manager.dispose();
   });
 
@@ -308,7 +337,7 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
-  it('reports reference-screen focus only for an active, focused overlay', async () => {
+  it('reports allowed overlay focus for active references and Resources content', async () => {
     const mainWindow = new FakeWindow();
     const onReferenceFocusChange = vi.fn();
     const manager = new DisplayWindowManager(
@@ -325,14 +354,25 @@ describe('DisplayWindowManager focus alerts', () => {
     expect(overlay).toBeDefined();
 
     manager.setOverlayReferencesActive(overlay?.webContents as unknown as WebContents, true);
-    expect(manager.isReferenceScreenFocused()).toBe(false);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(false);
 
     overlay?.setFocused(true);
-    expect(manager.isReferenceScreenFocused()).toBe(true);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(true);
     expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
 
     overlay?.setFocused(false);
-    expect(manager.isReferenceScreenFocused()).toBe(false);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(false);
+    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+
+    manager.setOverlayReferencesActive(overlay?.webContents as unknown as WebContents, false);
+    manager.setOverlayResourcesActive(overlay?.webContents as unknown as WebContents, true);
+    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, true);
+    overlay?.setFocused(true);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(true);
+    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
+
+    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, false);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(false);
     expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
     manager.dispose();
   });
@@ -462,6 +502,34 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('treats the focused main Resources browser as Vinkup and alerts after it loses focus', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    await vi.advanceTimersByTimeAsync(800);
+    mainWindow.focused = false;
+    manager.setMainResourcesActive(true);
+    manager.setMainResourcesFocused(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(false);
+
+    manager.setMainResourcesFocused(false);
+    await vi.advanceTimersByTimeAsync(1_300);
+
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(true);
+    manager.dispose();
+  });
+
   it('refocuses after dragging and alerts when focus is later lost', async () => {
     const mainWindow = new FakeWindow();
     const manager = new DisplayWindowManager(
@@ -522,10 +590,125 @@ describe('DisplayWindowManager focus alerts', () => {
 
     mainWindow.setBounds({ x: 0, y: 0, width: 1280, height: 720 });
     manager.handleAlertChoice('back');
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(mainWindow.getBounds().x).toBe(1280);
+    });
 
     expect(mainWindow.getBounds().x).toBe(1280);
+    expect(mainWindow.isFullScreen()).toBe(true);
+    manager.dispose();
+  });
+
+  it('restores a minimized main window to fullscreen when Go back is selected', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(800);
+
+    mainWindow.minimized = true;
+    mainWindow.visible = false;
+    mainWindow.fullscreen = false;
+    mainWindow.focused = false;
+    vi.spyOn(mainWindow, 'restore').mockImplementation(() => {
+      setTimeout(() => {
+        mainWindow.minimized = false;
+        mainWindow.visible = true;
+        mainWindow.emit('restore');
+      }, 100);
+    });
+    vi.spyOn(mainWindow, 'setFullScreen').mockImplementation((value) => {
+      setTimeout(() => {
+        mainWindow.fullscreen = value;
+        mainWindow.emit(value ? 'enter-full-screen' : 'leave-full-screen');
+      }, 100);
+    });
+    manager.handleAlertChoice('back');
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(mainWindow.isMinimized()).toBe(false);
+    expect(mainWindow.isFullScreen()).toBe(false);
+    expect(mainWindow.isFocused()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.waitFor(() => expect(mainWindow.isFocused()).toBe(true));
+    expect(mainWindow.isFullScreen()).toBe(true);
+    manager.dispose();
+  });
+
+  it('restores a display window GNOME hid without Electron reporting it minimized', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(800);
+
+    const overlayWindow = createdWindows.find(({ options }) => isOverlayWindow(options))?.window;
+    if (!overlayWindow) throw new Error('Expected a display overlay window.');
+    const alertWindow = createdWindows.find(({ options }) => isAlertWindow(options))?.window;
+    if (!alertWindow) throw new Error('Expected a focus alert window.');
+
+    overlayWindow.wmHidden = true;
+    const restoreOverlay = vi.spyOn(overlayWindow, 'restore');
+    alertWindow.focused = false;
+    const refocusAlert = vi.spyOn(alertWindow, 'focus');
+
+    manager.handleAlertChoice('back');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(refocusAlert).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(mainWindow.isFocused()).toBe(true);
+      expect(overlayWindow.isVisible()).toBe(true);
+      expect(overlayWindow.isMinimized()).toBe(false);
+      expect(overlayWindow.isFullScreen()).toBe(true);
+      expect(restoreOverlay).toHaveBeenCalled();
+      expect(overlayWindow.wmHidden).toBe(false);
+    });
+
+    manager.dispose();
+  });
+
+  it('re-enters fullscreen when the system exits fullscreen for tiling', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.minimized = true;
+    mainWindow.visible = false;
+
+    mainWindow.setFullScreen(false);
+
+    expect(mainWindow.isMinimized()).toBe(false);
+    expect(mainWindow.isVisible()).toBe(true);
+    await vi.waitFor(() => expect(mainWindow.isFullScreen()).toBe(true));
     expect(mainWindow.isFullScreen()).toBe(true);
     manager.dispose();
   });

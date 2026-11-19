@@ -26,6 +26,8 @@ import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager'
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
 import { DisplayWindowManager } from './displayWindowManager';
+import { saveCertificatePdf } from './certificatePdf';
+import { GnomeShortcutProtection } from './gnomeShortcutProtection';
 import { startOverlayServer, type OverlayServer } from './overlayServer';
 import { getScreenProtectionDisabled } from './screenProtectionConfig';
 import { BUNDLED_ALLOWLIST } from './resources/allowlist';
@@ -50,6 +52,7 @@ let overlayServer: OverlayServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
 let displayWindowManager: DisplayWindowManager | null = null;
+let gnomeShortcutProtection: GnomeShortcutProtection | null = null;
 let resourcesBrowser: ResourcesBrowser | null = null;
 const secondaryResourcesBrowsers = new Map<BrowserWindow, ResourcesBrowser>();
 let workspaceManager: WorkspaceManager | null = null;
@@ -80,6 +83,12 @@ if (!hasSingleInstanceLock) {
 
 async function bootstrap(): Promise<void> {
   installMenu();
+  gnomeShortcutProtection = new GnomeShortcutProtection(app.getPath('userData'));
+  try {
+    await gnomeShortcutProtection.restorePreviousSession();
+  } catch (error) {
+    console.error('[desktop] Failed to restore GNOME shortcuts from a previous session', error);
+  }
 
   // The desktop shell does not need camera, microphone, location, notifications or
   // clipboard-read permissions. Add specific permissions here only when a feature needs them.
@@ -129,10 +138,15 @@ function createResourcesBrowser(
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.send(channel, payload);
     }
-  }
+  },
+  trackMainWindowFocus = true
 ): ResourcesBrowser {
   return new ResourcesBrowser(window, activeResourcesAllowlist, {
     onState: (state) => sendEvent('resources:state-changed', state),
+    onFocusChange: (focused) => {
+      if (trackMainWindowFocus) displayWindowManager?.setMainResourcesFocused(focused);
+      else displayWindowManager?.setOverlayResourcesFocused(window.webContents, focused);
+    },
     onFocusAddress: () => sendEvent('resources:focus-address'),
     onOpenFind: () => sendEvent('resources:open-find'),
     onFindResult: (result) => sendEvent('resources:find-result', result),
@@ -153,7 +167,7 @@ function createDisplayWindowManager(
     overlayServer.url,
     (isFocused) => {
       if (!window.isDestroyed()) {
-        window.webContents.send('window:reference-screen-focus-changed', isFocused);
+        window.webContents.send('window:allowed-overlay-content-focus-changed', isFocused);
       }
     }
   );
@@ -223,6 +237,10 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
+  const isTrainee = state.status === 'authenticated' && state.user?.role === 'trainee';
+  void gnomeShortcutProtection?.setTraineeActive(isTrainee).catch((error: unknown) => {
+    console.error('[desktop] Failed to update GNOME trainee shortcuts', error);
+  });
   if (state.status === 'pending') loginPendingForOverlayTransition = true;
   const shouldTransitionOverlay =
     state.status === 'authenticated' && loginPendingForOverlayTransition;
@@ -282,6 +300,9 @@ function createMainWindow(): BrowserWindow {
   window.on('minimize', () => {
     if (displayWindowManager?.shouldPreventMinimize() ?? !DISABLE_SCREEN_PROTECTION) {
       window.restore();
+      void displayWindowManager?.restoreMainWindowAfterMinimize().catch((error: unknown) => {
+        console.error('[desktop] Failed to restore fullscreen after minimizing', error);
+      });
     }
   });
 
@@ -407,41 +428,48 @@ function registerIpcHandlers(): void {
     return displayWindowManager?.setDisplayTheme(theme);
   });
 
-  ipcMain.handle('window:is-reference-screen-focused', (event) => {
+  ipcMain.handle('window:is-allowed-overlay-content-focused', (event) => {
     assertTrustedSender(event);
     assertMainWindowSender(event);
-    return displayWindowManager?.isReferenceScreenFocused() ?? false;
-  });
-
-  ipcMain.handle('window:begin-certificate-print', (event) => {
-    assertTrustedSender(event);
-    assertMainWindowSender(event);
-    const frameUrl = event.senderFrame?.url;
-    if (!frameUrl || !isCertificatePageUrl(frameUrl)) {
-      throw new Error('Certificate printing can only start from the certificate page.');
-    }
-    displayWindowManager?.beginCertificatePrint();
-  });
-
-  ipcMain.handle('window:end-certificate-print', (event) => {
-    assertTrustedSender(event);
-    assertMainWindowSender(event);
-    displayWindowManager?.endCertificatePrint();
+    return displayWindowManager?.isAllowedOverlayContentFocused() ?? false;
   });
 
   ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
-
-    displayWindowManager?.beginCertificatePrint();
-    try {
-      return await savePdf(event, fileName, {
-        label: 'certificate',
-        fallbackFileName: 'certificate',
-        landscape: true,
-      });
-    } finally {
-      displayWindowManager?.endCertificatePrint();
+    assertMainWindowSender(event);
+    const frameUrl = event.senderFrame?.url;
+    if (!frameUrl || !isCertificatePageUrl(frameUrl)) {
+      throw new Error('Certificate PDFs can only be saved from the certificate page.');
     }
+
+    if (typeof fileName !== 'string' || !fileName.trim()) {
+      throw new Error('A certificate file name is required.');
+    }
+
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) throw new Error('The certificate window is not available.');
+    const pdf = await event.sender.printToPDF({
+      pageSize: 'A4',
+      landscape: true,
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
+
+    const downloadsPath = app.getPath('downloads');
+    const documentsPath = app.getPath('documents');
+    return saveCertificatePdf(pdf, sanitizePdfFileName(fileName, 'certificate'), [
+      { path: downloadsPath, label: 'Downloads', create: false },
+      {
+        path: path.join(documentsPath, 'VinkUp Certificates'),
+        label: 'Documents/VinkUp Certificates',
+        create: true,
+      },
+      {
+        path: path.join(app.getPath('userData'), 'Certificates'),
+        label: 'VinkUp app data',
+        create: true,
+      },
+    ]);
   });
   ipcMain.handle('report:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
@@ -713,11 +741,15 @@ function getSecondaryResourcesBrowser(event: IpcMainInvokeEvent): ResourcesBrows
   const existing = secondaryResourcesBrowsers.get(overlay);
   if (existing) return existing;
 
-  const browser = createResourcesBrowser(overlay, (channel, payload) => {
-    if (overlay.isDestroyed() || overlay.webContents.isDestroyed()) return;
-    const secondaryChannel = channel.replace(/^resources:/, 'secondary-resources:');
-    overlay.webContents.send(secondaryChannel, payload);
-  });
+  const browser = createResourcesBrowser(
+    overlay,
+    (channel, payload) => {
+      if (overlay.isDestroyed() || overlay.webContents.isDestroyed()) return;
+      const secondaryChannel = channel.replace(/^resources:/, 'secondary-resources:');
+      overlay.webContents.send(secondaryChannel, payload);
+    },
+    false
+  );
   secondaryResourcesBrowsers.set(overlay, browser);
   overlay.once('closed', () => {
     browser.dispose();
@@ -959,12 +991,17 @@ app.on('before-quit', (event) => {
   const manager = workspaceManager;
   const server = localServer;
   const displayServer = overlayServer;
+  const restoreGnomeShortcuts =
+    gnomeShortcutProtection?.setTraineeActive(false).catch((error: unknown) => {
+      console.error('[desktop] Failed to restore GNOME shortcuts before exit', error);
+    }) ?? Promise.resolve();
 
   void settleWithin(
     Promise.allSettled([
       manager ? manager.closeAll() : Promise.resolve(),
       server ? server.close() : Promise.resolve(),
       displayServer ? displayServer.close() : Promise.resolve(),
+      restoreGnomeShortcuts,
     ]),
     SHUTDOWN_CLEANUP_TIMEOUT_MS
   ).then(() => {
