@@ -9,6 +9,7 @@ import styles from './AdminTraineesPage.module.css';
 import CohortSummary from '../../components/CohortSummary';
 import TeamAnalytics from '../../components/TeamAnalytics';
 import { filterTrainees, sortTrainees } from '../../lib/traineeListState';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import TraineeListToolbar from './TraineeListToolbar';
 import { useTraineeListParams } from './useTraineeListParams';
 import {
@@ -80,6 +81,18 @@ export default function AdminTraineesPage() {
     setError(null);
     setAttempt((n) => n + 1);
   };
+
+  // A submission changes the counts and the "needs attention" state of the list.
+  useRealtimeEvent((event) => {
+    if (event.type !== 'task.submitted') return;
+    setError(null);
+    setAttempt((n) => n + 1);
+  });
+
+  useRealtimeRefresh(() => {
+    setError(null);
+    setAttempt((n) => n + 1);
+  });
 
   if (error) {
     return (

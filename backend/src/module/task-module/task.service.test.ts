@@ -7,6 +7,7 @@ const repo = vi.hoisted(() => ({
   findProgress: vi.fn(),
   saveFiles: vi.fn(),
   markSubmitted: vi.fn(),
+  findSubmissionContext: vi.fn(),
 }));
 const progress = vi.hoisted(() => ({
   assertTaskUnlocked: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('./task.repository', () => ({
     findProgress = repo.findProgress;
     saveFiles = repo.saveFiles;
     markSubmitted = repo.markSubmitted;
+    findSubmissionContext = repo.findSubmissionContext;
   },
 }));
 
@@ -31,6 +33,7 @@ vi.mock('../progress-module/progress.service', () => ({
 }));
 
 import { TaskService } from './task.service';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 
 const traineeId = 'trainee-1';
 const taskId = 'html-day-01-t-1';
@@ -66,6 +69,11 @@ describe('TaskService', () => {
     repo.markSubmitted.mockImplementation((_t: string, _id: string, submittedAt: Date) =>
       Promise.resolve({ last_submitted_at: submittedAt })
     );
+    repo.findSubmissionContext.mockResolvedValue({
+      mentorId: null,
+      traineeName: 'Asha',
+      taskTitle: 'Profile page',
+    });
   });
 
   describe('getTask', () => {
@@ -196,6 +204,39 @@ describe('TaskService', () => {
 
       expect(repo.findProgress).not.toHaveBeenCalled();
       expect(repo.markSubmitted).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells the assigned mentor who submitted which task', async () => {
+      repo.findSubmissionContext.mockResolvedValue({
+        mentorId: 'mentor-1',
+        traineeName: 'Asha',
+        taskTitle: 'Profile page',
+      });
+      const publish = vi.spyOn(realtimeBroker, 'publish');
+
+      await service.submit(traineeId, taskId);
+
+      expect(publish).toHaveBeenCalledWith(
+        'mentor-1',
+        expect.objectContaining({
+          type: 'task.submitted',
+          traineeId,
+          traineeName: 'Asha',
+          taskId,
+          taskTitle: 'Profile page',
+          submissionCount: 1,
+        })
+      );
+      publish.mockRestore();
+    });
+
+    it('sends nothing when the trainee has no mentor assigned', async () => {
+      const publish = vi.spyOn(realtimeBroker, 'publish');
+
+      await service.submit(traineeId, taskId);
+
+      expect(publish).not.toHaveBeenCalled();
+      publish.mockRestore();
     });
 
     it('saves nothing for a task that does not exist', async () => {

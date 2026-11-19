@@ -2,6 +2,7 @@ import type { AdminFeedbackEntry, TaskReview, TaskReviewSummary } from '@itp/typ
 import { ConflictError, NotFoundError, TaskNotSubmittedError } from '../../errors/AppError';
 import { ProgressService } from '../progress-module/progress.service';
 import { ReviewRepository } from './review.repository';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 
 const reviewRepository = new ReviewRepository();
 const progressService = new ProgressService();
@@ -133,7 +134,7 @@ export class ReviewService {
     decision: 'approved' | 'rework',
     feedback: string
   ): Promise<TaskReview> {
-    await this.assertTraineeAndTask(traineeId, taskId);
+    const { task } = await this.assertTraineeAndTask(traineeId, taskId);
 
     // Fast path: a clean error before opening a transaction.
     assertAwaitingReview(await reviewRepository.findProgress(traineeId, taskId));
@@ -144,7 +145,22 @@ export class ReviewService {
     );
 
     const rows = await reviewRepository.listTaskReviews(traineeId, taskId);
-    return toTaskReview(rows[0]);
+    const review = toTaskReview(rows[0]);
+
+    // The trainee's open task page updates without a reload. Sent only to them.
+    realtimeBroker.publish(traineeId, {
+      type: 'task.reviewed',
+      taskId,
+      taskTitle: task.title,
+      decision,
+      reviewStatus: decision,
+      submissionNo: review.submissionNo,
+      feedback: review.feedback,
+      mentorName: review.adminName,
+      reviewedAt: review.reviewedAt,
+    });
+
+    return review;
   }
 
   private assertTraineeAndTask = async (traineeId: string, taskId: string) => {
@@ -154,5 +170,6 @@ export class ReviewService {
     ]);
     if (!trainee) throw new NotFoundError('Trainee not found.');
     if (!task) throw new NotFoundError('Task not found.');
+    return { trainee, task };
   };
 }

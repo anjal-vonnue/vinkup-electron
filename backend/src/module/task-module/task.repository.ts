@@ -39,6 +39,29 @@ export class TaskRepository {
   };
 
   /**
+   * Who to notify about a submit/resubmit, plus the names the notification shows.
+   * `mentorId` is null when nobody is assigned to the trainee yet.
+   */
+  findSubmissionContext = async (
+    traineeId: string,
+    taskId: string
+  ): Promise<{ mentorId: string | null; traineeName: string; taskTitle: string }> => {
+    const [trainee, task] = await Promise.all([
+      prisma.trainee.findUnique({
+        where: { id: traineeId },
+        select: { name: true, mentor_id: true },
+      }),
+      prisma.task.findUnique({ where: { id: taskId }, select: { title: true } }),
+    ]);
+
+    return {
+      mentorId: trainee?.mentor_id ?? null,
+      traineeName: trainee?.name ?? '',
+      taskTitle: task?.title ?? '',
+    };
+  };
+
+  /**
    * Stores the whole file set. A new row starts as in_progress; an existing row keeps its status,
    * so a completed task stays completed when it is edited again.
    */

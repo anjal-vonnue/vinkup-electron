@@ -23,6 +23,7 @@ import StatsSummary from '../../components/StatsSummary';
 import PrintReport from '../../components/PrintReport';
 import PrintReportButton from '../../components/PrintReportButton';
 import { useAuth } from '../../context/Useauth';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import { usePrintMode } from '../../hooks/usePrintMode';
 import {
   DEFAULT_PRINT_OPTIONS,
@@ -79,6 +80,22 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
   const flags = useAdminResource(loadFlags);
   const code = useAdminResource(loadCode);
   const feedback = useAdminResource(loadFeedback);
+
+  // The trainee submitted or resubmitted; reload the list instead of waiting for a manual refresh.
+  useRealtimeEvent((event) => {
+    if (event.type !== 'task.submitted' || event.traineeId !== traineeId) return;
+
+    detail.refresh();
+    if (event.taskId === selectedTaskId) code.refresh();
+  });
+
+  // After a stream reconnect, catch a submission that landed while the stream was down.
+  useRealtimeRefresh(() => {
+    detail.refresh();
+    flags.refresh();
+    feedback.refresh();
+    if (selectedTaskId) code.refresh();
+  });
 
   // Where the mentor was in the task list when they clicked "View code".
   const scrollBeforeViewRef = useRef<number | null>(null);

@@ -145,6 +145,7 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | GET    | `/api/auth/google/callback`                            | No      | OAuth callback; sets `auth_token` cookie and redirects                                 |
 | POST   | `/api/auth/logout`                                     | Any     | Clear the auth cookie                                                                  |
 | GET    | `/api/auth/me`                                         | Any     | Current user (trainee, mentor or manager) and role from the token                      |
+| GET    | `/api/events`                                          | Any     | Server-Sent Events stream of review and submission notifications                       |
 | GET    | `/api/dashboard`                                       | Trainee | Dashboard: next day, progress counts, time totals, typing summary, finished courses    |
 | GET    | `/api/courses/:courseId/days`                          | Trainee | Days of one course with this trainee's status                                          |
 | GET    | `/api/courses/:courseId/certificate`                   | Trainee | Certificate for a finished course                                                      |
@@ -189,7 +190,7 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | PATCH  | `/api/manager/trainees/:traineeId/status`              | Manager | Activate or deactivate a trainee                                                       |
 | PATCH  | `/api/manager/trainees/:traineeId/mentor`              | Manager | Assign, reassign or unassign (`mentorId: null`) a trainee                              |
 
-48 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Mentor" = `requireMentor` plus the assignment guard on trainee routes; "Manager" = `requireManager`.
+49 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Mentor" = `requireMentor` plus the assignment guard on trainee routes; "Manager" = `requireManager`.
 
 Task review rules, schema and UI are documented in [task-review-workflow.md](./task-review-workflow.md).
 
@@ -275,6 +276,28 @@ The desktop app uses a separate flow under `/api/auth/desktop`. It shares the sa
 `DesktopAuthSessionResponse` is `{ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, user }`. Access tokens are JWTs (`typ: "desktop"`, `sid`) with a `DESKTOP_ACCESS_TOKEN_TTL` lifetime (default `15m`); refresh tokens are opaque, stored hashed, rotate on every use, and slide for 30 days.
 
 Desktop error codes: `DESKTOP_AUTH_INVALID_STATE`, `DESKTOP_AUTH_INVALID_PKCE`, `DESKTOP_AUTH_INVALID_CODE`, `DESKTOP_AUTH_EXPIRED`, `DESKTOP_AUTH_CODE_USED`, `DESKTOP_AUTH_FAILED`, `DESKTOP_AUTH_CANCELLED`, `DESKTOP_SESSION_EXPIRED`, `DESKTOP_SESSION_REVOKED` (plus `DOMAIN_NOT_PERMITTED` / `NOT_PROVISIONED` for rejected accounts). The renderer maps these to its own smaller `DesktopAuthErrorCode` set.
+
+---
+
+## Realtime events (SSE)
+
+### GET /api/events
+
+- **Auth:** any signed-in user. The route runs the matching role guard (`requireTrainee`, `requireMentor` or `requireManager`) by the token's role, so a deactivated account is refused like any other route.
+- **Purpose:** pushes change notifications to open pages (trainee task page, mentor pages) so they do not need a manual refresh. One connection per tab, opened by the frontend's `RealtimeProvider` inside the authenticated routes only.
+- **Response 200:** `Content-Type: text/event-stream`, held open until the client disconnects or a proxy closes it. Headers include `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`.
+  - First frame: `retry: 2000`
+  - A `: ping` comment every 15 s so proxies do not drop an idle stream.
+  - One default `message` event per change, so the client switches on `type` in `onmessage`:
+    ```
+    data: {"type":"task.reviewed","taskId":"...","decision":"approved",...}
+    ```
+- **Event types** (`RealtimeEvent`, `packages/types/src/realtime.ts`):
+  - `task.reviewed` — sent to the trainee whose submission was approved or sent back: `{ taskId, taskTitle, decision, reviewStatus, submissionNo, feedback, mentorName, reviewedAt }`.
+  - `task.submitted` — sent to the trainee's currently assigned mentor on submit and resubmit: `{ traineeId, traineeName, taskId, taskTitle, submissionCount, submittedAt }`.
+- **Delivery rules:** the server decides the recipient (`realtimeBroker.publish(userId, …)`); a mentor never receives another mentor's trainee. Events are hints: clients re-read the REST resource, which stays the source of truth. The frontend also shows one app-wide toast per event (`RealtimeNotifications`, mounted inside `ProtectedRoute`), so the user is told about a review or resubmission even when the affected page is not open.
+- **Limits:** the broker is in-process (`realtime-module/realtime.broker.ts`), so it only reaches streams held by the same backend instance; running several instances needs a shared bus. Netlify's proxy closes the stream after ~26 s; `EventSource` reconnects and the client refreshes its data on reconnect to recover events sent in the gap.
+- **Errors:** `401 UNAUTHENTICATED` without a valid cookie; `403 FORBIDDEN` for the wrong role or an inactive account.
 
 ---
 

@@ -3,6 +3,7 @@ import { screen, render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import type { MeResponse } from '@itp/types';
 import { AuthContext, type AuthContextValue } from '../context/AuthContext';
+import { ToastProvider } from '../components/Toast';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicOnlyRoute } from './PublicOnlyRoute';
 import { RoleRoute } from './RoleRoute';
@@ -60,9 +61,11 @@ function AppRoutes() {
 function renderApp(route: string, authOverrides: Partial<AuthContextValue>) {
   return render(
     <AuthContext.Provider value={fakeAuth(authOverrides)}>
-      <MemoryRouter initialEntries={[route]}>
-        <AppRoutes />
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter initialEntries={[route]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </ToastProvider>
     </AuthContext.Provider>
   );
 }
