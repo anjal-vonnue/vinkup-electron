@@ -10,10 +10,11 @@ import globals from 'globals';
 const rootDir = import.meta.dirname;
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/build/**', '**/release/**'] },
+  {
+    ignores: ['**/dist/**', '**/node_modules/**', '**/build/**', '**/release/**'],
+  },
 
-  // Base, non-type-aware rules for everything — covers eslint.config.js
-  // and any config file not explicitly matched below
+  // Base, non-type-aware rules for everything
   js.configs.recommended,
 
   // Frontend — type-aware, explicit project files, own root
@@ -47,18 +48,20 @@ export default tseslint.config(
         },
       ],
     },
-    settings: { react: { version: 'detect' } },
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
   },
 
-  // Backend — type-aware, restricted to src/ only, so prisma.config.ts
-  // is never matched here at all (belt-and-suspenders with the
-  // tsconfig exclude from step 5)
+  // Backend — type-aware, includes source and test files
   {
     files: ['backend/src/**/*.ts'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
-        project: [path.join(rootDir, 'backend/tsconfig.json')],
+        project: [path.join(rootDir, 'backend/tsconfig.eslint.json')],
         tsconfigRootDir: path.join(rootDir, 'backend'),
       },
     },
@@ -114,6 +117,7 @@ export default tseslint.config(
     },
     rules: {},
   },
+
   {
     files: ['frontend/scripts/**/*.mjs'],
     languageOptions: {
@@ -121,6 +125,7 @@ export default tseslint.config(
     },
     rules: {},
   },
+
   {
     files: ['desktop/scripts/**/*.mjs'],
     languageOptions: {
@@ -128,6 +133,7 @@ export default tseslint.config(
     },
     rules: {},
   },
+
   {
     files: ['desktop/src/main/overlay-references.js'],
     languageOptions: {

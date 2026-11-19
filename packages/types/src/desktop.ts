@@ -88,6 +88,26 @@ export type TerminalExitEvent = {
   exitCode: number;
 };
 
+export type LighthouseCategory = 'performance' | 'accessibility' | 'best-practices' | 'seo';
+
+export type LighthouseAuditResult = {
+  url: string;
+  fetchedAt: string;
+  scores: Record<LighthouseCategory, number | null>;
+  audits: Array<{
+    id: string;
+    title: string;
+    description: string;
+    score: number | null;
+    displayValue?: string;
+    scoreDisplayMode: string;
+  }>;
+};
+
+export interface AuditApi {
+  run: (taskId: string) => Promise<LighthouseAuditResult>;
+}
+
 export interface WorkspaceApi {
   open: (input: WorkspaceOpenInput) => Promise<WorkspaceOpenResult>;
   sync: (input: WorkspaceSyncInput) => Promise<void>;
@@ -160,6 +180,7 @@ export interface DesktopApi {
   /** Host execution for task runtimes (files, preview server, shells, dev servers). */
   workspace: WorkspaceApi;
   terminal: TerminalApi;
+  audit: AuditApi;
   run: RunApi;
 
   /**

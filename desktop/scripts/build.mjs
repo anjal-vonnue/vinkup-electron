@@ -8,7 +8,7 @@ const shared = {
   target: 'node22',
   format: 'cjs',
   sourcemap: true,
-  external: ['electron', 'esbuild', 'node-pty'],
+  external: ['electron', 'esbuild', 'node-pty', 'lighthouse', 'chrome-launcher'],
   logLevel: 'info',
 };
 

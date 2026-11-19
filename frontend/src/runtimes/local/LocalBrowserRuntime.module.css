@@ -43,7 +43,7 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .urlField {
@@ -60,7 +60,7 @@
 }
 
 .urlSelect {
-  max-width: 320px;
+  max-width: 240px;
   height: 28px;
   padding: 0 14px 0 30px;
   border: 1px solid var(--color-border-default);
@@ -140,4 +140,454 @@
   height: 6px;
   border-radius: 999px;
   background-color: currentColor;
+}
+
+.auditDescription {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.auditDescription p {
+  margin: 0 0 8px;
+}
+
+.auditDescription p:last-child {
+  margin-bottom: 0;
+}
+
+.auditDescription a {
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.auditDescription ul,
+.auditDescription ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.auditDescription strong {
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------
+ * Lighthouse tab. Append to the end of LocalBrowserRuntime.module.css.
+ * New class names only (all start with "lh"); nothing above is changed,
+ * so the Result and Console tabs are unaffected.
+ * ------------------------------------------------------------------ */
+
+/* Tone: sets --lh-tone for rings, icons and bands */
+
+.lhGood {
+  --lh-tone: var(--color-text-green, #0a8f5c);
+}
+
+.lhAverage {
+  --lh-tone: var(--color-status-warning-text, #d97706);
+}
+
+.lhPoor {
+  --lh-tone: var(--color-status-error-text, #dc2626);
+}
+
+.lhNone {
+  --lh-tone: var(--color-text-dim);
+}
+
+.lhSrOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Scroll container: fills the tab panel and scrolls on its own */
+
+.lhScroll {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.lhHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.lhTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--color-text-primary);
+}
+
+.lhTimestamp {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Buttons */
+
+.lhButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  background-color: var(--color-bg-surface-2);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lhButton:hover:not(:disabled) {
+  border-color: var(--color-accent-purple, #7c41e4);
+}
+
+.lhButton:disabled {
+  color: var(--color-text-dim);
+  cursor: not-allowed;
+}
+
+.lhButtonPrimary {
+  border-color: var(--color-accent-purple, #7c41e4);
+  background-color: var(--color-accent-purple, #7c41e4);
+  color: #ffffff;
+}
+
+.lhButtonPrimary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.lhButtonPrimary:disabled {
+  border-color: var(--color-border-default);
+  background-color: var(--color-bg-surface-2);
+}
+
+.lhButton:focus-visible,
+.lhRowSummary:focus-visible,
+.lhFoldSummary:focus-visible {
+  outline: 2px solid var(--color-accent-purple, #7c41e4);
+  outline-offset: 2px;
+}
+
+/* Empty / loading / error states */
+
+.lhState {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  overflow-y: auto;
+}
+
+.lhStateIcon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  color: var(--color-accent-purple, #7c41e4);
+  background-color: color-mix(in srgb, var(--color-accent-purple, #7c41e4) 14%, transparent);
+}
+
+.lhStateError {
+  color: var(--color-status-error-text, #dc2626);
+}
+
+.lhStateTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--color-text-primary);
+}
+
+.lhStateText {
+  max-width: 44ch;
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.lhState .lhButton {
+  margin-top: 6px;
+}
+
+.lhSpinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--color-border-divider);
+  border-top-color: var(--color-accent-purple, #7c41e4);
+  border-radius: 999px;
+  animation: lhSpin 0.8s linear infinite;
+}
+
+@keyframes lhSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lhSpinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* Score rings */
+
+.lhScores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lhScore {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  text-align: center;
+  background-color: var(--color-bg-surface-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: 14px;
+}
+
+.lhRing {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: conic-gradient(var(--lh-tone) calc(var(--lh-p) * 1%), var(--color-border-divider) 0);
+}
+
+.lhRing::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background-color: var(--color-bg-surface-2);
+}
+
+.lhRing span {
+  position: relative;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--lh-tone);
+}
+
+.lhScoreLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.lhScoreBand {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Findings */
+
+.lhFindings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lhHeading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+}
+
+.lhGroupTitle,
+.lhFoldSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--color-text-primary);
+}
+
+.lhGroupTitle span,
+.lhFoldSummary span {
+  padding: 0 8px;
+  border-radius: 999px;
+  background-color: var(--color-bg-sunken);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.lhFoldSummary {
+  min-height: 32px;
+  margin-bottom: 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.lhFoldSummary::-webkit-details-marker {
+  display: none;
+}
+
+.lhFold[open] > .lhFoldSummary {
+  margin-bottom: 8px;
+}
+
+.lhFoldSummary::before,
+.lhRowSummary::after {
+  content: '';
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--color-text-dim);
+  border-bottom: 2px solid var(--color-text-dim);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.lhFold[open] > .lhFoldSummary::before,
+.lhRow[open] > .lhRowSummary::after {
+  transform: rotate(45deg);
+}
+
+.lhGroup {
+  overflow: hidden;
+  background-color: var(--color-bg-surface-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+}
+
+.lhRow + .lhRow {
+  border-top: 1px solid var(--color-border-divider);
+}
+
+.lhRowSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.lhRowSummary::-webkit-details-marker {
+  display: none;
+}
+
+.lhRowSummary:hover {
+  background-color: var(--color-bg-sunken);
+}
+
+.lhRowSummary:focus-visible {
+  outline-offset: -2px;
+}
+
+.lhRowIcon {
+  flex-shrink: 0;
+  color: var(--lh-tone);
+}
+
+.lhRowTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.lhRowValue {
+  flex-shrink: 0;
+  max-width: 40%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background-color: var(--color-bg-sunken);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.lhRowBody {
+  padding: 0 14px 14px 42px;
+  overflow-wrap: anywhere;
+}
+
+/* Grouped "Needs attention" findings. Append to LocalBrowserRuntime.module.css. */
+
+.lhCategory + .lhCategory {
+  margin-top: 20px;
+}
+
+.lhCategoryTitle {
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border-divider);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--color-accent-label, var(--color-text-secondary));
+}
+
+.lhSubgroup + .lhSubgroup {
+  margin-top: 14px;
+}
+
+.lhSubgroupTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.lhSubgroupTitle span {
+  padding: 0 8px;
+  border-radius: 999px;
+  background-color: var(--color-bg-sunken);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
