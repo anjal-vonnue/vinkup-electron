@@ -121,11 +121,12 @@ A single-page React app built with Vite. Plain CSS modules. Monaco is the code e
 
 `main.tsx` installs the mock adapter when `VITE_USE_MOCKS=true`, then renders the app inside `ToastProvider` and `BrowserRouter`. `App.tsx` wraps every route in three layers, outermost first:
 
-| Layer              | What it does                                                                                                                                    |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AuthProvider`     | Calls `GET /auth/me` on load; holds `loading`, `authenticated` or `unauthenticated`; registers the Axios 401 handler that signs the trainee out |
-| `FullscreenGate`   | For signed-in trainees (not mentors), blocks the app until the browser is in fullscreen ("Fullscreen required")                                 |
-| `ActivityProvider` | For trainees only: counts active, coding and reading time and sends it to the API every 60 seconds and when the page is hidden                  |
+| Layer                      | What it does                                                                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AuthProvider`             | Calls `GET /auth/me` on load; holds `loading`, `authenticated` or `unauthenticated`; registers the Axios 401 handler that signs the trainee out |
+| `FullscreenGate`           | For signed-in trainees (not mentors), blocks the app until the browser is in fullscreen ("Fullscreen required")                                 |
+| `ActivityProvider`         | For trainees only: counts active, coding and reading time and sends it to the API every 60 seconds and when the page is hidden                  |
+| `WorkspaceSessionProvider` | Holds the active task id and an in-memory workspace snapshot so returning Home restores the open workspace                                      |
 
 `ProtectedRoute` shows a loader while `/me` is pending and redirects to `/login` when signed out; `PublicOnlyRoute` keeps signed-in users off the login page. Inside it, `RoleRoute` splits the routes by role: each role has a home route and opening another role's route sends the user to their own home (`/` for trainees, `/admin` for mentors, `/manager` for managers). The task page is lazy-loaded, because Monaco and the runtimes are large.
 
@@ -165,6 +166,8 @@ Every call lives in `src/api/` as a typed function (`getDayTasks`, `saveTaskCode
 ### Task workspace
 
 The task page is the largest part of the frontend. Its state lives in a reducer (`pages/TaskPage/state/`): the open files, the active file, which files have unsaved changes, and the layout. Monaco keeps one model per file (`useMonacoModels`).
+
+**Leaving and returning.** `WorkspaceSessionProvider` keeps the active task id and the latest `WorkspaceState` snapshot in memory (not in storage). Visiting another section (Resources, Typing Test, Journal, ...) unmounts the task page but leaves that snapshot intact; returning Home through `WorkspaceAwareHome` reopens `/tasks/:taskId` and the new `WorkspaceProvider` rehydrates from the snapshot, including edits that have not been saved yet. The Home link _inside_ the workspace, Back to tasks and the day breadcrumb call `exitWorkspace()` first: that clears the session, so Home then shows the normal dashboard. If the preserved task can no longer be loaded, the session is cleared to avoid a redirect loop.
 
 **Saving.** `useAutosave` saves 2 seconds after typing stops, and at least every 8 seconds while typing continues. Each save sends every file of the task in one `PUT /tasks/:taskId/code`. Before sending, `lib/saveRules.ts` checks the limits (200,000 characters per file, 5 MB for the task); a broken rule shows the message and blocks saving instead of sending. A failed save retries after 5 seconds; offline, it waits for the connection. Ctrl/Cmd+S, Back to tasks and Submit Task save first.
 
