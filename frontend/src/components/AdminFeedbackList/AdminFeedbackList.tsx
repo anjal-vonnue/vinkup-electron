@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import type { AdminFeedbackEntry } from '@itp/types';
 import { formatIstDateTime } from '../../lib/formatDateTime';
+import CollapsibleMarkdown from '../CollapsibleMarkdown/CollapsibleMarkdown';
 import styles from './AdminFeedbackList.module.css';
 
 export type AdminFeedbackListProps = {
@@ -13,6 +14,7 @@ type ViewMode = 'grouped' | 'timeline';
 export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
 
   // Sort newest first by default
   const sortedFeedback = useMemo(() => {
@@ -136,7 +138,13 @@ export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) 
                       </span>
                     </div>
 
-                    <div className={styles.feedbackBox}>{latestEntry.feedback}</div>
+                    <CollapsibleMarkdown
+                      markdown={latestEntry.feedback}
+                      className={styles.feedbackBox}
+                      accordionId={latestEntry.id}
+                      activeAccordionId={expandedReviewId}
+                      onAccordionChange={setExpandedReviewId}
+                    />
                   </div>
 
                   {/* Older reviews expandable */}
@@ -168,7 +176,13 @@ export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) 
                             </span>
                           </div>
 
-                          <div className={styles.feedbackBox}>{entry.feedback}</div>
+                          <CollapsibleMarkdown
+                            markdown={entry.feedback}
+                            className={styles.feedbackBox}
+                            accordionId={entry.id}
+                            activeAccordionId={expandedReviewId}
+                            onAccordionChange={setExpandedReviewId}
+                          />
                         </div>
                       ))}
                     </>
@@ -226,7 +240,13 @@ export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) 
                   </div>
                 </div>
 
-                <div className={styles.feedbackBox}>{entry.feedback}</div>
+                <CollapsibleMarkdown
+                  markdown={entry.feedback}
+                  className={styles.feedbackBox}
+                  accordionId={entry.id}
+                  activeAccordionId={expandedReviewId}
+                  onAccordionChange={setExpandedReviewId}
+                />
               </div>
             </div>
           ))}

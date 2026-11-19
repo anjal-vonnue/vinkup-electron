@@ -5,10 +5,13 @@ import { approveTask, getAdminTaskReviews, requestRework } from '../../api/admin
 import type { ApiError } from '../../api/errors';
 import { TASK_STATUS_LABELS } from '../../lib/adminLabels';
 import { formatIstDateTime } from '../../lib/formatDateTime';
+import CollapsibleMarkdown from '../CollapsibleMarkdown/CollapsibleMarkdown';
 import LoaderOverlay from '../Common/LoadingState';
 import { ErrorState } from '../Common/ErrorState';
 import { ToastContext } from '../Toast';
 import styles from './AdminCodePanel.module.css';
+
+const MAX_REWORK_MARKDOWN_CHARS = 10000;
 
 // Monaco is heavy; load it only when an admin actually opens some code.
 const ReadOnlyCodeViewer = lazy(() => import('../ReadOnlyCodeViewer'));
@@ -55,13 +58,17 @@ export default function AdminCodePanel({
   const [isApproving, setIsApproving] = useState(false);
   const [isReworkModalOpen, setIsReworkModalOpen] = useState(false);
   const [reworkFeedback, setReworkFeedback] = useState('');
+  const [reworkFileName, setReworkFileName] = useState<string | null>(null);
+  const [reworkInputError, setReworkInputError] = useState<string | null>(null);
   const [reworkError, setReworkError] = useState<string | null>(null);
   const [isSubmittingRework, setIsSubmittingRework] = useState(false);
+  const reworkFileInputRef = useRef<HTMLInputElement>(null);
 
   // Review history
   const [showHistory, setShowHistory] = useState(false);
   const [historyReviews, setHistoryReviews] = useState<TaskReview[] | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [expandedHistoryReviewId, setExpandedHistoryReviewId] = useState<string | null>(null);
 
   // Move focus to the panel when it opens, so keyboard users land on the code they asked for.
   useEffect(() => {
@@ -93,13 +100,44 @@ export default function AdminCodePanel({
 
   const handleOpenReworkModal = () => {
     setReworkFeedback('');
+    setReworkFileName(null);
+    setReworkInputError(null);
     setReworkError(null);
     setIsReworkModalOpen(true);
+  };
+
+  const handleReworkFileChange = async (file: File | undefined) => {
+    if (!file) return;
+    setReworkInputError(null);
+    setReworkError(null);
+    if (!file.name.toLowerCase().endsWith('.md')) {
+      setReworkInputError('Choose a Markdown file with a .md extension.');
+      if (reworkFileInputRef.current) reworkFileInputRef.current.value = '';
+      return;
+    }
+    try {
+      const contents = await file.text();
+      if (contents.length >= MAX_REWORK_MARKDOWN_CHARS) {
+        setReworkFeedback('');
+        setReworkFileName(null);
+        setReworkInputError('Markdown feedback must be under 10,000 characters.');
+        if (reworkFileInputRef.current) reworkFileInputRef.current.value = '';
+        return;
+      }
+      setReworkFeedback(contents);
+      setReworkFileName(file.name);
+      if (!contents.trim()) setReworkInputError('The selected Markdown file is empty.');
+    } catch {
+      setReworkInputError('Unable to read the selected Markdown file.');
+      setReworkFileName(null);
+      if (reworkFileInputRef.current) reworkFileInputRef.current.value = '';
+    }
   };
 
   const handleSubmitRework = async () => {
     if (!code || isSubmittingRework) return;
     const feedback = reworkFeedback.trim();
+    if (reworkInputError) return;
     if (!feedback) {
       setReworkError('Meaningful feedback is required before requesting rework.');
       return;
@@ -264,7 +302,13 @@ export default function AdminCodePanel({
                     <span>{formatIstDateTime(rev.reviewedAt)}</span>
                   </div>
                   {rev.feedback ? (
-                    <div className={styles.historyFeedback}>{rev.feedback}</div>
+                    <CollapsibleMarkdown
+                      markdown={rev.feedback}
+                      className={styles.historyFeedback}
+                      accordionId={rev.id}
+                      activeAccordionId={expandedHistoryReviewId}
+                      onAccordionChange={setExpandedHistoryReviewId}
+                    />
                   ) : (
                     <div className={styles.meta}>No feedback written.</div>
                   )}
@@ -334,18 +378,73 @@ export default function AdminCodePanel({
               feedback and can modify their code to resubmit.
             </p>
 
-            <textarea
-              className={styles.textarea}
-              placeholder="e.g. Please fix the HTML tags formatting and add the missing section header..."
-              value={reworkFeedback}
-              onChange={(e) => {
-                setReworkFeedback(e.target.value);
-                if (reworkError) setReworkError(null);
-              }}
-              rows={5}
-              autoFocus
+            <div className={styles.feedbackSource} role="group" aria-label="Review feedback source">
+              <label className={styles.feedbackOption}>
+                <input
+                  type="radio"
+                  name="rework-feedback-source"
+                  checked={!reworkFileName}
+                  onChange={() => {
+                    setReworkFileName(null);
+                    setReworkFeedback('');
+                    setReworkInputError(null);
+                    if (reworkFileInputRef.current) reworkFileInputRef.current.value = '';
+                  }}
+                />
+                Write feedback
+              </label>
+              <label className={styles.feedbackOption}>
+                <input
+                  type="radio"
+                  name="rework-feedback-source"
+                  checked={Boolean(reworkFileName)}
+                  onChange={() => reworkFileInputRef.current?.click()}
+                />
+                Upload Markdown
+              </label>
+            </div>
+
+            {!reworkFileName ? (
+              <textarea
+                className={styles.textarea}
+                placeholder="e.g. Please fix the HTML tags formatting and add the missing section header..."
+                value={reworkFeedback}
+                onChange={(e) => {
+                  setReworkFeedback(e.target.value);
+                  setReworkInputError(null);
+                  if (reworkError) setReworkError(null);
+                }}
+                rows={5}
+                autoFocus
+              />
+            ) : (
+              <div className={styles.selectedFile}>
+                <span>Selected: {reworkFileName}</span>
+                <button
+                  type="button"
+                  className={styles.removeFileBtn}
+                  onClick={() => {
+                    setReworkFileName(null);
+                    setReworkFeedback('');
+                    setReworkInputError(null);
+                    if (reworkFileInputRef.current) reworkFileInputRef.current.value = '';
+                  }}
+                >
+                  Remove file
+                </button>
+              </div>
+            )}
+
+            <input
+              ref={reworkFileInputRef}
+              className={styles.fileInput}
+              type="file"
+              accept=".md,text/markdown,text/plain"
+              aria-label="Upload Markdown feedback file"
+              onChange={(event) => void handleReworkFileChange(event.target.files?.[0])}
             />
 
+            {reworkInputError && <p className={styles.modalError}>{reworkInputError}</p>}
             {reworkError && <p className={styles.modalError}>{reworkError}</p>}
 
             <div className={styles.modalButtons}>

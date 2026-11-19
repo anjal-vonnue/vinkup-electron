@@ -123,12 +123,63 @@
 }
 
 .feedbackSnippet {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.35rem;
   font-size: 0.85rem;
   color: var(--color-text-secondary);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 50ch;
+  max-height: 3.2em;
+  line-height: 1.6;
+}
+
+.feedbackSnippet > :global(div) {
+  min-width: 0;
+  overflow: hidden;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.feedbackSnippet :global(h1),
+.feedbackSnippet :global(h2),
+.feedbackSnippet :global(h3),
+.feedbackSnippet :global(h4),
+.feedbackSnippet :global(h5),
+.feedbackSnippet :global(h6),
+.feedbackSnippet :global(p),
+.feedbackSnippet :global(li),
+.feedbackSnippet :global(blockquote),
+.feedbackSnippet :global(code),
+.feedbackSnippet :global(pre) {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.feedbackSnippet :global(h1),
+.feedbackSnippet :global(h2),
+.feedbackSnippet :global(h3),
+.feedbackSnippet :global(h4),
+.feedbackSnippet :global(h5),
+.feedbackSnippet :global(h6),
+.feedbackSnippet :global(p),
+.feedbackSnippet :global(ul),
+.feedbackSnippet :global(ol),
+.feedbackSnippet :global(blockquote),
+.feedbackSnippet :global(pre) {
+  margin-block: 0;
+}
+
+.feedbackSnippet :global(ul),
+.feedbackSnippet :global(ol) {
+  padding-left: 1rem;
+}
+
+.feedbackSnippet :global(pre) {
+  padding: 0;
+  background: transparent;
+  white-space: pre-wrap;
 }
 
 .reviewerNote {

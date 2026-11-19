@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertCircle, ArrowRight, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import type { ReworkTaskSummary } from '@itp/types';
+import MarkdownRenderer from '../MarkdownRenderer/MarkdownRenderer';
 import styles from './ReworkBanner.module.css';
 
 export type ReworkBannerProps = {
@@ -63,12 +64,12 @@ export default function ReworkBanner({
                 </span>
                 <h3 className={styles.itemTitle}>{task.taskTitle}</h3>
                 {task.latestReview?.feedback && (
-                  <p className={styles.feedbackSnippet}>
+                  <div className={styles.feedbackSnippet}>
                     <span className={styles.reviewerNote}>
                       {task.latestReview.adminName || 'Mentor'}:
-                    </span>{' '}
-                    &ldquo;{task.latestReview.feedback}&rdquo;
-                  </p>
+                    </span>
+                    <MarkdownRenderer markdown={task.latestReview.feedback} />
+                  </div>
                 )}
               </div>
 

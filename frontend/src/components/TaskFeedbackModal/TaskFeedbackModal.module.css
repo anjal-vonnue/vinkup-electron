@@ -7,7 +7,6 @@
   justify-content: center;
   padding: 16px;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
   animation: fadeIn 150ms ease;
 }
 
@@ -123,8 +122,11 @@
 }
 
 .body {
+  min-height: 0;
   padding: 24px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: 16px;

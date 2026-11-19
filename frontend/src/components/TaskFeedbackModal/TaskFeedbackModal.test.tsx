@@ -58,6 +58,24 @@ describe('TaskFeedbackModal', () => {
     expect(screen.getByText('Rework')).toBeInTheDocument();
   });
 
+  it('renders Markdown review feedback as formatted content', () => {
+    render(
+      <TaskFeedbackModal
+        isOpen={true}
+        onClose={vi.fn()}
+        taskId="task-101"
+        taskTitle="HTML Basics"
+        initialReview={{
+          ...mockReview,
+          feedback: '## Required changes\n\n- Fix the spacing\n- Close the tag',
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Required changes' })).toBeInTheDocument();
+    expect(screen.getByRole('list').querySelectorAll('li')).toHaveLength(2);
+  });
+
   it('fetches review if initialReview is not provided', async () => {
     vi.mocked(getTaskReview).mockResolvedValueOnce({
       reviewStatus: 'rework',
