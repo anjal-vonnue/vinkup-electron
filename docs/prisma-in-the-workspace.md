@@ -32,6 +32,7 @@ Vitest + Supertest test. The trainee builds the rest, day by day.
 | `npm run db:seed`                     | Runs `prisma/seed.ts`                                                                           |
 | `npm run db:generate`                 | `prisma generate`                                                                               |
 | `npm run db:validate`                 | `prisma validate`                                                                               |
+| `npm run db:studio`                   | `prisma studio` on the course database                                                          |
 | `npm run check`                       | `tsc --noEmit`                                                                                  |
 
 The "Platform note" at the top of each day's first task says the same in short.
@@ -72,6 +73,20 @@ When a task contains `prisma/schema.prisma` (and its `package.json` does not dep
 
 If PostgreSQL is missing, not running, or the role cannot create databases, opening the task fails
 with an actionable message in the Result pane instead of starting a broken workspace.
+
+### Prisma Studio and the Unix socket
+
+`npx prisma studio` works too. Studio 7's data browser uses the `postgres` (postgres.js) driver,
+which does not understand the `?host=/var/run/postgresql` query parameter that `psql`, `pg` and the
+Prisma CLI use for the socket. The starter's `prisma.config.ts` notices the `studio` command and,
+for that command only, gives Studio a host-less URL plus `PGHOST` (and `PGUSER` / `PGPORT`) so it
+connects through the same socket with peer authentication. Every other Prisma command keeps the
+normal `DATABASE_URL`. When `VINKUP_DATABASE_URL` points at a TCP server with a password, nothing is
+rewritten and Studio connects over TCP as usual.
+
+Saved tasks created before this change still have the old `prisma.config.ts`, so Studio reports
+"Could not load schema metadata" there until `prisma.config.ts` is replaced with the current
+starter's copy (or the trainee starts the task with no saved code).
 
 ### Databases are never deleted automatically
 
@@ -123,27 +138,30 @@ Open any Prisma task (for example `/tasks/prisma-day-01-t-1`) in the desktop app
    `API on http://localhost:3000 (open the Preview tab)`. The Preview shows three tickets as JSON.
 3. Open a terminal: `echo $DATABASE_URL` prints the course URL, and
    `npx prisma migrate status` reports the migration as applied.
-4. Add `priority String @default("normal")` to `Ticket`, then
+4. `npm run db:studio` (or `npx prisma studio`) opens Prisma Studio in the Preview tab with the
+   `Ticket` table and its seeded rows. It uses the socket through the config shim described above.
+5. Add `priority String @default("normal")` to `Ticket`, then
    `npm run db:migrate -- --name add_priority`. A new migration appears in Files and the column is
    added without losing rows.
-5. **Close the task and open it again**, then Run: the rows are still there (the database is
+6. **Close the task and open it again**, then Run: the rows are still there (the database is
    shared, not recreated).
-6. `npm test`: the test passes and the prompt comes back.
-7. `psql "$DATABASE_URL" -c 'select * from "Ticket"'` in the terminal shows the same rows.
-8. `npm run db:reset`, then Run: three seeded tickets again.
+7. `npm test`: the test passes and the prompt comes back.
+8. `psql "$DATABASE_URL" -c 'select * from "Ticket"'` in the terminal shows the same rows.
+9. `npm run db:reset`, then Run: three seeded tickets again.
 
 ## If something fails
 
-| Symptom                                                 | Likely cause                                         | Try                                                                         |
-| ------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------- |
-| `PostgreSQL was not found on this machine`              | `psql` missing from the login PATH                   | Install PostgreSQL, make sure `psql -V` works in a terminal                 |
-| `PostgreSQL is installed but its server is not running` | Server stopped                                       | `sudo systemctl start postgresql` (or your platform's service)              |
-| `Your PostgreSQL user cannot create databases`          | Role lacks `CREATEDB`                                | `ALTER ROLE "<your user>" CREATEDB;`                                        |
-| `PostgreSQL rejected the connection`                    | TCP/password auth, not peer                          | Set `VINKUP_DATABASE_URL` and restart the app                               |
-| `P1000 Authentication failed` in the terminal           | URL has no usable credentials                        | Same as above; the terminal inherits `DATABASE_URL` from the app            |
-| `P3005 The database schema is not empty`                | A task's migrations do not match the shared database | `npm run db:reset` (destroys the course data) or add the missing migration  |
-| `npm test` connects to the course database              | `VINKUP_TEST_DATABASE_URL` not set                   | Open the task in the desktop app; a plain `npm test` outside it cannot work |
-| Preview shows `[]`                                      | The seed did not run                                 | Check the Run output for the seed's error, then `npm run db:seed`           |
+| Symptom                                                 | Likely cause                                         | Try                                                                              |
+| ------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `PostgreSQL was not found on this machine`              | `psql` missing from the login PATH                   | Install PostgreSQL, make sure `psql -V` works in a terminal                      |
+| `PostgreSQL is installed but its server is not running` | Server stopped                                       | `sudo systemctl start postgresql` (or your platform's service)                   |
+| `Your PostgreSQL user cannot create databases`          | Role lacks `CREATEDB`                                | `ALTER ROLE "<your user>" CREATEDB;`                                             |
+| `PostgreSQL rejected the connection`                    | TCP/password auth, not peer                          | Set `VINKUP_DATABASE_URL` and restart the app                                    |
+| `P1000 Authentication failed` in the terminal           | URL has no usable credentials                        | Same as above; the terminal inherits `DATABASE_URL` from the app                 |
+| `P3005 The database schema is not empty`                | A task's migrations do not match the shared database | `npm run db:reset` (destroys the course data) or add the missing migration       |
+| `npm test` connects to the course database              | `VINKUP_TEST_DATABASE_URL` not set                   | Open the task in the desktop app; a plain `npm test` outside it cannot work      |
+| Preview shows `[]`                                      | The seed did not run                                 | Check the Run output for the seed's error, then `npm run db:seed`                |
+| Studio: `Could not load schema metadata`                | Old `prisma.config.ts` without the Studio shim       | Replace it with the current starter's copy, or start the task with no saved code |
 
 ## Limits
 
@@ -153,6 +171,8 @@ Open any Prisma task (for example `/tasks/prisma-day-01-t-1`) in the desktop app
 - All Prisma tasks share one database, so a task that changes the schema also changes what the next
   task sees. `db:reset` is the escape hatch.
 - Stay on Prisma 7.10. Prisma 8 changes the API.
+- `prisma studio` depends on the socket shim in `prisma.config.ts`; re-test Studio after upgrading
+  Prisma, in case its driver learns to read `?host=` itself.
 - The old PGlite path is kept only for already-saved work; new starters never use it.
 
 ## History
