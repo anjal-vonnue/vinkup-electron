@@ -17,6 +17,7 @@ import RuntimeHost from '../../runtimes/RuntimeHost';
 import type { PaneId } from '../../types/workspaceTypes';
 import { useReportActivityMode } from '../../context/useActivity';
 import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
+import { useWorkspaceSession } from '../../context/WorkspaceSessionContext';
 import { useTaskActivityMode } from '../../pages/TaskPage/hooks/useTaskActivityMode';
 import { WorkActivityContext } from '../../pages/TaskPage/state/WorkActivityContext';
 import {
@@ -44,6 +45,7 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   useReportActivityMode(mode);
   const dispatch = useWorkspaceDispatch();
   const navigate = useNavigate();
+  const { exitWorkspace } = useWorkspaceSession();
   const runner = useRunner();
   const toast = useToast();
 
@@ -142,12 +144,13 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
     void (async () => {
       const ok = await autosave.flush();
       if (ok) {
+        exitWorkspace();
         await navigate(`/days/${task.day.id}`);
       } else {
         setIsLeaveConfirmOpen(true);
       }
     })();
-  }, [autosave, navigate, task.day.id]);
+  }, [autosave, navigate, task.day.id, exitWorkspace]);
 
   const handleSubmit = useCallback(async () => {
     const result = await submitTask(task.id);
@@ -275,6 +278,7 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
           tone="danger"
           onConfirm={() => {
             setIsLeaveConfirmOpen(false);
+            exitWorkspace();
             void navigate(`/days/${task.day.id}`);
           }}
           onCancel={() => setIsLeaveConfirmOpen(false)}

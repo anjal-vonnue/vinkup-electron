@@ -141,6 +141,7 @@ export default function TaskPage() {
         dayId={data.task.day.id}
         dayNumber={data.task.day.dayNumber}
         taskNumber={data.task.sequenceOrder}
+        onNavigateAway={exitWorkspace}
       />
     ) : undefined;
 
