@@ -75,7 +75,9 @@ export function useLocalWorkspace(taskId: string): LocalWorkspace {
 
     return () => {
       cancelled = true;
-      void api.close(taskId).catch(() => undefined);
+      // Leaving the route (Resources, Journal, …) must not tear down the host workspace:
+      // its folder holds node_modules, and the trainee expects to resume the same session.
+      // WorkspaceSessionContext closes it when they explicitly leave (Home / Back to tasks).
     };
   }, [api, taskId, attempt]);
 

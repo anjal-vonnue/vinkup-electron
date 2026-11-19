@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   TerminalDataEvent,
@@ -61,6 +62,8 @@ type WorkspaceSession = {
   server: WorkspaceStaticServer;
   terminals: Map<string, TerminalEntry>;
   install: WorkspaceProcess | null;
+  /** package.json that the last successful `npm install` covered, so it can be skipped. */
+  installedPackageJson: string | null;
   run: WorkspaceRun | null;
   /** localhost ports that currently accept connections */
   servers: Map<number, string>;
@@ -91,6 +94,18 @@ function stripAnsi(text: string): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * The package.json currently on disk. A workspace folder survives ordinary navigation, so
+ * this marks which dependency set the last successful `npm install` covered.
+ */
+async function packageJsonOnDisk(root: string): Promise<string | null> {
+  try {
+    return await readFile(path.join(root, 'package.json'), 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -177,6 +192,7 @@ export class WorkspaceManager {
           server,
           terminals: new Map(),
           install: null,
+          installedPackageJson: null,
           run: null,
           servers: new Map(),
           portMonitors: new Map(),
@@ -258,6 +274,14 @@ export class WorkspaceManager {
       const session = this.requireSession(taskId);
       if (session.install) return;
 
+      const packageJson = await packageJsonOnDisk(session.root);
+      if (packageJson !== null && packageJson === session.installedPackageJson) {
+        // The trainee visited another section and came back: the folder and node_modules
+        // are still here, so report the existing install as done instead of running it again.
+        this.callbacks.emitEvent({ type: 'run-exited', taskId, kind: 'install', exitCode: 0 });
+        return;
+      }
+
       const host = await resolveHostEnvironment();
       if (!session.closed) {
         const process = spawnWorkspaceProcess({
@@ -282,6 +306,7 @@ export class WorkspaceManager {
 
         void process.exit.then(({ exitCode }) => {
           if (session.install === process) session.install = null;
+          if (exitCode === 0) session.installedPackageJson = packageJson;
           if (session.closed) return;
           this.callbacks.emitEvent({ type: 'run-exited', taskId, kind: 'install', exitCode });
         });
@@ -441,6 +466,10 @@ export class WorkspaceManager {
       if (!entry) continue;
       session.terminals.delete(terminalId);
       entry.terminal.kill();
+      // A dev server started from the shell dies with it. Without this, the session keeps
+      // the stale port when only navigation closed the terminal, and the next server on
+      // that port would not be announced again.
+      if (session.terminals.size === 0) this.clearServers(session);
       return Promise.resolve();
     }
     return Promise.resolve();

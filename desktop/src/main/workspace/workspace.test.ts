@@ -304,6 +304,44 @@ describe('WorkspaceManager', () => {
     await expect(readFile(path.join(root, 'index.html'), 'utf8')).rejects.toThrow();
   });
 
+  it('skips npm install when the same package.json was already installed in this session', async () => {
+    const baseDir = await temporaryRoot();
+    const events: WorkspaceEvent[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: (event) => events.push(event),
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    await manager.open({
+      taskId: 'task_install',
+      files: {
+        'package.json': JSON.stringify({ name: 'task-install', version: '1.0.0' }),
+        'index.js': 'console.log(1)\n',
+      },
+    });
+
+    const exited = () =>
+      events.filter((event) => event.type === 'run-exited' && event.kind === 'install');
+
+    await manager.install('task_install');
+    await vi.waitFor(() => expect(exited()).toHaveLength(1), { timeout: 60_000 });
+    expect(exited()[0]).toMatchObject({ exitCode: 0 });
+
+    // npm writes a lockfile every time it runs, so removing it makes the second call
+    // observable: if install ran again, the file would be back.
+    const lockfile = path.join(baseDir, 'task_install', 'package-lock.json');
+    await rm(lockfile, { force: true });
+
+    // Returning from another section mounts the runtime again and asks for install again.
+    await manager.install('task_install');
+    await vi.waitFor(() => expect(exited()).toHaveLength(2), { timeout: 5_000 });
+    expect(exited()[1]).toMatchObject({ exitCode: 0 });
+    await expect(stat(lockfile)).rejects.toThrow();
+
+    await manager.close('task_install');
+  });
+
   it('refuses to open the same task twice with a bad id', async () => {
     const baseDir = await temporaryRoot();
     const manager = new WorkspaceManager({
