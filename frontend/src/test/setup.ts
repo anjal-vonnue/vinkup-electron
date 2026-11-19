@@ -19,6 +19,10 @@ export const fakeEditor = {
   onKeyDown: vi.fn(() => ({ dispose: vi.fn() })),
   onDidPaste: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeCursorPosition: vi.fn(() => ({ dispose: vi.fn() })),
+  layout: vi.fn(),
+  onDidChangeModel: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidChangeModelContent: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
 };
 
 export const fakeMonaco = {
