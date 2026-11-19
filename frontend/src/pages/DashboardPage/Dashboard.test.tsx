@@ -1,12 +1,14 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import type { DashboardResponse, DaySummary, DayStatus } from '@itp/types';
 
 import DashboardPage from './DashboardPage';
 import { getDashboard, getReworkTasks } from '../../api/dashboard';
 import { getCourseDays } from '../../api/courses';
+import { RealtimeProvider } from '../../context/RealtimeProvider';
+import { installFakeEventSource } from '../../test/fakeEventSource';
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 
@@ -200,9 +202,11 @@ const mockDashboard: DashboardResponse = {
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <DashboardPage />
-    </MemoryRouter>
+    <RealtimeProvider enabled>
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    </RealtimeProvider>
   );
 }
 
@@ -215,6 +219,10 @@ describe('DashboardPage', () => {
       const days = daysByCourse[courseId];
       return days ? Promise.resolve(days) : Promise.reject(new Error('Course not found.'));
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('shows the loader while dashboard data is loading and keeps the header visible', () => {
@@ -595,6 +603,54 @@ describe('DashboardPage', () => {
 
       await screen.findByRole('heading', { name: 'Closures and Higher-Order Functions' });
       expect(screen.queryByText('Rework Requested')).not.toBeInTheDocument();
+    });
+
+    it('shows the rework banner when a rework decision arrives over the realtime stream', async () => {
+      const fake = installFakeEventSource();
+      vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
+      vi.mocked(getReworkTasks)
+        .mockResolvedValueOnce([])
+        .mockResolvedValue([
+          {
+            taskId: 'html-day-01-t-1',
+            taskTitle: 'Structure a Personal Portfolio',
+            sequenceOrder: 1,
+            dayId: 'html-day-01',
+            dayNumber: 1,
+            courseId: 'html',
+            courseTitle: 'HTML & Semantic Web',
+            submissionCount: 2,
+            latestReview: {
+              id: 'rev-1',
+              adminId: 'admin-1',
+              adminName: 'Mentor Hawas',
+              decision: 'rework',
+              feedback: 'Fix heading hierarchy.',
+              reviewedAt: '2026-10-01T10:00:00.000Z',
+            },
+          },
+        ]);
+
+      renderPage();
+
+      await screen.findByRole('heading', { name: 'Closures and Higher-Order Functions' });
+      expect(screen.queryByText('Rework Requested')).not.toBeInTheDocument();
+
+      act(() => {
+        fake.source?.emit({
+          type: 'task.reviewed',
+          taskId: 'html-day-01-t-1',
+          taskTitle: 'Structure a Personal Portfolio',
+          decision: 'rework',
+          reviewStatus: 'rework',
+          submissionNo: 2,
+          feedback: 'Fix heading hierarchy.',
+          mentorName: 'Mentor Hawas',
+          reviewedAt: '2026-10-01T10:00:00.000Z',
+        });
+      });
+
+      expect(await screen.findByRole('button', { name: /rework requested/i })).toBeInTheDocument();
     });
 
     it('displays rework banner when mentor requested rework and expands when clicked', async () => {

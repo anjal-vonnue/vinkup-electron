@@ -15,6 +15,7 @@ import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
 import GreetingBanner from '../../components/GreetingBanner';
 import { useAuth } from '../../context/Useauth';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import { useGreeting } from '../../hooks/useGreeting';
 import styles from './DashboardPage.module.css';
 import HelpButton from '../../components/HelpButton';
@@ -130,6 +131,34 @@ export default function DashboardPage() {
     setError(null);
     setAttempt((n) => n + 1);
   };
+
+  /**
+   * Re-reads what a review changes: the rework banner and the dashboard counts.
+   * The course schedule is left alone, so the trainee keeps the tab they opened.
+   */
+  const refreshReviewState = useCallback(async () => {
+    try {
+      const [data, rework] = await Promise.all([
+        getDashboard(),
+        getReworkTasks().catch(() => [] as ReworkTaskSummary[]),
+      ]);
+      setDashboard(data);
+      setReworkTasks(rework);
+    } catch {
+      // Best effort: the next event, reconnect or page load catches up.
+    }
+  }, []);
+
+  // A mentor's decision changes the rework banner while this page stays open.
+  useRealtimeEvent((event) => {
+    if (event.type !== 'task.reviewed') return;
+    void refreshReviewState();
+  });
+
+  // After a stream reconnect, catch a review that landed while the stream was down.
+  useRealtimeRefresh(() => {
+    void refreshReviewState();
+  });
 
   if (isLoading) {
     return (
