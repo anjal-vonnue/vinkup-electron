@@ -65,6 +65,18 @@ export default function CodeEditor({
     onRunRef.current = onRun;
   });
 
+  useEffect(() => {
+    if (!container || !editorInstance) return;
+
+    const observer = new ResizeObserver(() => {
+      editorInstance.layout();
+    });
+
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, [container, editorInstance]);
+
   const reportBlockedPaste = useBlockedPasteReporter(taskId, 'editor');
 
   usePasteBlock({
@@ -103,6 +115,8 @@ export default function CodeEditor({
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: 14,
           lineHeight: 22,
+          wordWrap: 'on',
+          wrappingStrategy: 'advanced',
           lineNumbers: (lineNumber: number) => String(lineNumber).padStart(2, '0'),
           minimap: { enabled: false },
           tabSize: 2,

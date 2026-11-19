@@ -1,5 +1,5 @@
 import ReactMarkdown from 'react-markdown';
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -31,6 +31,14 @@ import styles from './LocalBrowserRuntime.module.css';
 type LocalBrowserRuntimeProps = { task: TaskResponse; isVisible: boolean };
 
 const NO_ENTRY_MESSAGE = 'Add an .html file to preview your work.';
+
+// Pane widths (px) below which the toolbar gives way, so the reload and Lighthouse
+// buttons are never pushed out of the header.
+const COMPACT_WIDTH = 560;
+const TINY_WIDTH = 440;
+const MICRO_WIDTH = 360; // Mobile S is 320px wide
+
+type PaneSize = 'regular' | 'compact' | 'tiny' | 'micro';
 
 const AUDIT_CATEGORIES = [
   { key: 'performance', label: 'Performance', icon: Zap },
@@ -440,7 +448,11 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
   const state = useWorkspaceState();
   const workspace = useLocalWorkspace(task.id);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const resultPanelRef = useRef<HTMLDivElement>(null);
+  const frameAreaRef = useRef<HTMLDivElement>(null);
+  const sizeRef = useRef<HTMLSpanElement>(null);
 
+  const [paneSize, setPaneSize] = useState<PaneSize>('regular');
   const [chosenEntry, setChosenEntry] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('result');
   const [auditResult, setAuditResult] = useState<LighthouseAuditResult | null>(null);
@@ -470,6 +482,57 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
         .sort(),
     [state.files]
   );
+
+  // How much room the pane really has. This measures the pane itself (the workspace marks it
+  // data-pane="result"), not our own content: content can be laid out wider than the pane and
+  // clipped, which would hide how small the pane actually is.
+  useEffect(() => {
+    const panel = resultPanelRef.current;
+    if (!panel) return;
+
+    const pane = panel.closest<HTMLElement>('[data-pane="result"]') ?? panel;
+
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width ?? 0;
+      if (width === 0) return;
+
+      const next: PaneSize =
+        width < MICRO_WIDTH
+          ? 'micro'
+          : width < TINY_WIDTH
+            ? 'tiny'
+            : width < COMPACT_WIDTH
+              ? 'compact'
+              : 'regular';
+
+      setPaneSize((current) => (current === next ? current : next));
+    });
+
+    observer.observe(pane);
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Width x height of the preview. Written straight into the footer text so dragging a pane
+  // border does not re-render this whole component on every frame.
+  const hasFrame = Boolean(run);
+
+  useEffect(() => {
+    const element = frameAreaRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      const label = sizeRef.current;
+      const box = entry?.contentRect;
+      if (!label || !box || box.width === 0 || box.height === 0) return;
+
+      label.textContent = `${Math.round(box.width)} × ${Math.round(box.height)}`;
+    });
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, [hasFrame, entryPath]);
 
   const canRun = workspace.status === 'ready' && entryPath !== null;
   const canAudit = canRun && Boolean(run) && !isAuditing;
@@ -543,7 +606,7 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
   const isError = workspace.status === 'error';
 
   const toolbarEnd = (
-    <div className={styles.toolbar}>
+    <div className={styles.toolbar} data-size={paneSize} data-single={htmlPaths.length <= 1}>
       <div className={styles.urlField}>
         <Lock size={13} aria-hidden="true" className={styles.lockIcon} />
         <select
@@ -590,15 +653,22 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
   );
 
   const footer = (
-    <div className={styles.footer}>
+    <div className={styles.footer} data-size={paneSize}>
       <span className={isError ? `${styles.status} ${styles.statusError}` : styles.status}>
         <span className={styles.systemTag}>[System]</span> {status}
       </span>
 
       {run && (
-        <span className={isDomReady ? `${styles.ready} ${styles.readyDone}` : styles.ready}>
-          <span className={styles.dot} aria-hidden="true" />
-          {isDomReady ? 'DOM Ready' : 'Loading…'}
+        <span className={styles.footerMeta}>
+          <span
+            ref={sizeRef}
+            className={styles.size}
+            title="Preview size in pixels (width × height)"
+          />
+          <span className={isDomReady ? `${styles.ready} ${styles.readyDone}` : styles.ready}>
+            <span className={styles.dot} aria-hidden="true" />
+            <span className={styles.readyLabel}>{isDomReady ? 'DOM Ready' : 'Loading…'}</span>
+          </span>
         </span>
       )}
     </div>
@@ -623,6 +693,7 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
     >
       {/* Preview tab */}
       <div
+        ref={resultPanelRef}
         className={styles.view}
         role="tabpanel"
         aria-label="Result"
@@ -643,7 +714,7 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
             )}
 
             {run ? (
-              <div className={styles.frameArea}>
+              <div className={styles.frameArea} ref={frameAreaRef}>
                 <PreviewFrame
                   src={run.url}
                   runId={run.runId}

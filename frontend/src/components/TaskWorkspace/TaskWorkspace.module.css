@@ -10,16 +10,40 @@
   min-height: 0;
 }
 
+/* While a handle is being dragged: keep the iframe and Monaco from swallowing the pointer. */
+.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.resizing .pane {
+  pointer-events: none;
+}
+
 .pane {
+  min-width: 0;
   min-height: 0;
   overflow: clip;
   /* overflow: hidden; */
-  border-right: 1px solid var(--color-border-divider);
 }
 
-.pane:last-child {
-  border-right: none;
+/* Whatever a pane holds (editor, sidebar, runtime header) may shrink with the pane. */
+.pane > * {
+  min-width: 0;
 }
+
+/*
+ * Result pane only. If the runtime frame lays out header / body / footer in a grid with a
+ * plain `1fr` column, that column cannot go below the header's min-content width (about
+ * 499px), so the body and footer are laid out at 499px and clipped by the narrower pane.
+ * minmax(0, 1fr) lets the column shrink with the pane. Ignored if the frame is not a grid.
+ */
+.pane[data-pane='result'] > * {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 100%;
+}
+
+/* The divider between panes is now drawn by the drag handle (PaneResizer). */
 
 .paneHidden {
   display: none;
