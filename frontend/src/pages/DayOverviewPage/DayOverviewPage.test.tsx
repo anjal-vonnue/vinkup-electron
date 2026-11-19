@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { clear, keys } from 'idb-keyval';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import type { DayCurrentStatus, DayTask, DayIntegrityResponse } from '@itp/types';
@@ -15,6 +15,8 @@ import {
   getDayIntegrity,
 } from '../../api/days';
 import { getTaskReview } from '../../api/tasks';
+import { RealtimeProvider } from '../../context/RealtimeProvider';
+import { installFakeEventSource } from '../../test/fakeEventSource';
 import DayOverviewPage from './DayOverviewPage';
 
 vi.mock('../../api/days');
@@ -49,11 +51,13 @@ const openStatus = { isLocked: false, isCompleted: false } as DayCurrentStatus;
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={[`/days/${dayId}`]}>
-      <Routes>
-        <Route path="/days/:dayId" element={<DayOverviewPage />} />
-      </Routes>
-    </MemoryRouter>
+    <RealtimeProvider enabled>
+      <MemoryRouter initialEntries={[`/days/${dayId}`]}>
+        <Routes>
+          <Route path="/days/:dayId" element={<DayOverviewPage />} />
+        </Routes>
+      </MemoryRouter>
+    </RealtimeProvider>
   );
 }
 
@@ -73,6 +77,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
+  vi.unstubAllGlobals();
   await clear(); // ticks from one test must not leak into the next
 });
 
@@ -142,6 +147,32 @@ describe('DayOverviewPage: review status', () => {
     expect(screen.getByText('Approved')).toBeInTheDocument();
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByText('Rework')).toBeInTheDocument();
+  });
+
+  it('updates the tag when a review arrives over the realtime stream', async () => {
+    const fake = installFakeEventSource();
+    vi.mocked(getDayTasks).mockResolvedValueOnce([pendingTask]).mockResolvedValue([approvedTask]);
+
+    renderPage();
+
+    expect(await screen.findByText('Completed')).toBeInTheDocument();
+
+    act(() => {
+      fake.source?.emit({
+        type: 'task.reviewed',
+        taskId: pendingTask.id,
+        taskTitle: pendingTask.title,
+        decision: 'approved',
+        reviewStatus: 'approved',
+        submissionNo: 1,
+        feedback: '',
+        mentorName: 'Mentor Maya',
+        reviewedAt: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    expect(await screen.findByText('Approved')).toBeInTheDocument();
+    expect(screen.queryByText('Completed')).not.toBeInTheDocument();
   });
 
   it('opens the feedback modal when the Rework tag is clicked', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowRight } from 'lucide-react';
 import type { DayTask, DayContent, DayCurrentStatus, DayIntegrityResponse } from '@itp/types';
@@ -23,6 +23,7 @@ import TaskFeedbackModal from '../../components/TaskFeedbackModal';
 import styles from './DayOverviewPage.module.css';
 import StateMessage from '../../components/StateMessage';
 import { ApiError } from '../../api/errors';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import Loader from '../../components/Common/LoadingState';
 import DayCelebration from '../../components/DayCelebration/DayCelebration';
 import DayIntegrityBadge from '../../components/DayIntegrityBadge/DayIntegrityBadge';
@@ -228,6 +229,36 @@ function DayOverviewContent() {
       isCancelled = true;
     };
   }, [dayId, shouldLoad]);
+
+  /**
+   * Re-reads only the tasks and the day status. A review changes the task badges and
+   * the completed count; re-fetching the journal here would overwrite what is being typed.
+   */
+  const refreshTasks = useCallback(async () => {
+    if (!dayId || !shouldLoad) return;
+
+    try {
+      const [nextTasks, nextStatus] = await Promise.all([getDayTasks(dayId), getDayStatus(dayId)]);
+      setResult((previous) =>
+        previous && previous.dayId === dayId && !('error' in previous)
+          ? { ...previous, tasks: nextTasks, status: nextStatus }
+          : previous
+      );
+    } catch {
+      // Best effort: the next event, reconnect or page load catches up.
+    }
+  }, [dayId, shouldLoad]);
+
+  // A mentor's approval or rework request changes the badges while this page stays open.
+  useRealtimeEvent((event) => {
+    if (event.type !== 'task.reviewed') return;
+    void refreshTasks();
+  });
+
+  // After a stream reconnect, catch a review that landed while the stream was down.
+  useRealtimeRefresh(() => {
+    void refreshTasks();
+  });
 
   // Only trust a result that belongs to the current dayId.
   const current = result && result.dayId === dayId ? result : null;
