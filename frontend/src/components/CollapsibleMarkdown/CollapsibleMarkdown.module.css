@@ -9,10 +9,16 @@
   transition: max-height 180ms ease;
 }
 
-.expand {
+.controls {
   position: absolute;
   right: 0;
   bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.expand {
   display: grid;
   min-width: 34px;
   height: 24px;

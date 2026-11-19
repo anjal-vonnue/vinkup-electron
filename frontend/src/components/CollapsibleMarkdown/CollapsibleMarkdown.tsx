@@ -44,25 +44,30 @@ export default function CollapsibleMarkdown({ markdown, className }: Collapsible
       >
         <MarkdownRenderer markdown={markdown} />
       </div>
-      {hasMore ? (
-        <button
-          type="button"
-          className={styles.expand}
-          aria-label="Show more feedback"
-          onClick={() => setVisibleLines((lines) => lines + LINES_PER_EXPANSION)}
-        >
-          <Ellipsis size={16} aria-hidden="true" />
-        </button>
-      ) : visibleLines > INITIAL_LINES ? (
-        <button
-          type="button"
-          className={styles.expand}
-          aria-label="Show less feedback"
-          onClick={() => setVisibleLines(INITIAL_LINES)}
-        >
-          <ArrowUp size={16} aria-hidden="true" />
-        </button>
-      ) : null}
+      {(hasMore || visibleLines > INITIAL_LINES) && (
+        <div className={styles.controls}>
+          {hasMore && (
+            <button
+              type="button"
+              className={styles.expand}
+              aria-label="Show more feedback"
+              onClick={() => setVisibleLines((lines) => lines + LINES_PER_EXPANSION)}
+            >
+              <Ellipsis size={16} aria-hidden="true" />
+            </button>
+          )}
+          {visibleLines > INITIAL_LINES && (
+            <button
+              type="button"
+              className={styles.expand}
+              aria-label="Show less feedback"
+              onClick={() => setVisibleLines(INITIAL_LINES)}
+            >
+              <ArrowUp size={16} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -88,8 +88,9 @@ describe('AdminFeedbackList', () => {
       );
 
       const expand = screen.getByRole('button', { name: 'Show more feedback' });
-      const content = expand.previousElementSibling;
+      const content = expand.parentElement?.previousElementSibling;
       let previousLines = Number(content?.getAttribute('data-visible-lines'));
+      let didMidExpansionCollapse = false;
       expect(previousLines).toBeGreaterThan(0);
 
       while (screen.queryByRole('button', { name: 'Show more feedback' })) {
@@ -97,6 +98,16 @@ describe('AdminFeedbackList', () => {
         const revealedLines = Number(content?.getAttribute('data-visible-lines'));
         expect(revealedLines).toBeGreaterThan(previousLines);
         previousLines = revealedLines;
+        expect(screen.getByRole('button', { name: 'Show less feedback' })).toBeInTheDocument();
+        if (!didMidExpansionCollapse && previousLines > 8 && previousLines < lineCount) {
+          await user.click(screen.getByRole('button', { name: 'Show less feedback' }));
+          expect(Number(content?.getAttribute('data-visible-lines'))).toBe(8);
+          expect(
+            screen.queryByRole('button', { name: 'Show less feedback' })
+          ).not.toBeInTheDocument();
+          previousLines = 8;
+          didMidExpansionCollapse = true;
+        }
       }
 
       expect(previousLines).toBeGreaterThanOrEqual(lineCount);
