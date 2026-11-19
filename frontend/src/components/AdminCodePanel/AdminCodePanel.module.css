@@ -277,6 +277,56 @@
   box-sizing: border-box;
 }
 
+.feedbackSource {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.feedbackOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.feedbackOption input {
+  accent-color: var(--color-accent-purple);
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.selectedFile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.removeFileBtn {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .textarea:focus {
   outline: none;
   border-color: var(--color-accent-purple);

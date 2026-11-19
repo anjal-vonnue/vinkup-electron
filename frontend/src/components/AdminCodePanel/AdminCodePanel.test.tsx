@@ -207,6 +207,67 @@ describe('AdminCodePanel', () => {
       expect(onReviewSuccess).toHaveBeenCalledWith('t1', 'rework');
     });
 
+    it('submits the contents of a selected Markdown file as feedback', async () => {
+      vi.mocked(requestRework).mockResolvedValue({
+        id: 'rev-rew-md-1',
+        taskId: 't1',
+        adminId: 'a1',
+        adminName: 'Admin',
+        submissionNo: 1,
+        decision: 'rework',
+        feedback: '## Rework\n- Fix heading hierarchy',
+        reviewedAt: '2026-10-02T15:00:00.000Z',
+      });
+      const user = userEvent.setup();
+      renderPanel({ code: completedCode });
+
+      await user.click(screen.getByRole('button', { name: 'Rework' }));
+      await user.upload(
+        screen.getByLabelText('Upload Markdown feedback file'),
+        new File(['## Rework\n- Fix heading hierarchy'], 'review.md', { type: 'text/markdown' })
+      );
+
+      expect(screen.getByText('Selected: review.md')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Please fix/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Submit Review' }));
+
+      expect(requestRework).toHaveBeenCalledWith(
+        'trainee-1',
+        't1',
+        '## Rework\n- Fix heading hierarchy'
+      );
+    });
+
+    it('clears the selected file when switching back to text feedback', async () => {
+      const user = userEvent.setup();
+      renderPanel({ code: completedCode });
+
+      await user.click(screen.getByRole('button', { name: 'Rework' }));
+      await user.upload(
+        screen.getByLabelText('Upload Markdown feedback file'),
+        new File(['File feedback'], 'review.md', { type: 'text/markdown' })
+      );
+      await user.click(screen.getByRole('radio', { name: 'Write feedback' }));
+
+      expect(screen.queryByText('Selected: review.md')).not.toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/Please fix/i)).toHaveValue('');
+    });
+
+    it('rejects files that do not have a Markdown extension', async () => {
+      const user = userEvent.setup();
+      renderPanel({ code: completedCode });
+
+      await user.click(screen.getByRole('button', { name: 'Rework' }));
+      await user.upload(
+        screen.getByLabelText('Upload Markdown feedback file'),
+        new File(['not markdown'], 'review.txt', { type: 'text/plain' })
+      );
+
+      expect(screen.getByText('Choose a Markdown file with a .md extension.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Submit Review' }));
+      expect(requestRework).not.toHaveBeenCalled();
+    });
+
     it('shows Approved badge and no review buttons when task is already approved', () => {
       renderPanel({ code: { ...completedCode, reviewStatus: 'approved' } });
 
