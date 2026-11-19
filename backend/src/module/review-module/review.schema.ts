@@ -4,7 +4,7 @@ import { z } from 'zod';
  * A review writes feedback for a trainee, so it is trimmed and length-capped here
  * once, before it ever reaches the database.
  */
-export const MAX_FEEDBACK_CHARS = 5000;
+export const MAX_FEEDBACK_CHARS = 10000;
 
 const feedbackTextSchema = z
   .string()

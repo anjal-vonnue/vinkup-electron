@@ -306,6 +306,12 @@
   clip-path: inset(50%);
 }
 
+.fileHint {
+  margin: 8px 0 0;
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  font-size: 12px;
+}
+
 .selectedFile {
   display: flex;
   align-items: center;

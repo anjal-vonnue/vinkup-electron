@@ -302,6 +302,24 @@ describe('AdminCodePanel', () => {
       expect(requestRework).not.toHaveBeenCalled();
     });
 
+    it('rejects Markdown files with 10,000 or more characters', async () => {
+      const user = userEvent.setup();
+      renderPanel({ code: completedCode });
+
+      await user.click(screen.getByRole('button', { name: 'Rework' }));
+      await user.upload(
+        screen.getByLabelText('Upload Markdown feedback file'),
+        new File(['x'.repeat(10_000)], 'review.md', { type: 'text/markdown' })
+      );
+
+      expect(
+        screen.getByText('Markdown feedback must be under 10,000 characters.')
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Selected: review.md')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Submit Review' }));
+      expect(requestRework).not.toHaveBeenCalled();
+    });
+
     it('shows Approved badge and no review buttons when task is already approved', () => {
       renderPanel({ code: { ...completedCode, reviewStatus: 'approved' } });
 

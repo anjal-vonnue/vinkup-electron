@@ -11,6 +11,8 @@ import { ErrorState } from '../Common/ErrorState';
 import { ToastContext } from '../Toast';
 import styles from './AdminCodePanel.module.css';
 
+const MAX_REWORK_MARKDOWN_CHARS = 10000;
+
 // Monaco is heavy; load it only when an admin actually opens some code.
 const ReadOnlyCodeViewer = lazy(() => import('../ReadOnlyCodeViewer'));
 
@@ -114,6 +116,13 @@ export default function AdminCodePanel({
     }
     try {
       const contents = await file.text();
+      if (contents.length >= MAX_REWORK_MARKDOWN_CHARS) {
+        setReworkFeedback('');
+        setReworkFileName(null);
+        setReworkInputError('Markdown feedback must be under 10,000 characters.');
+        if (reworkFileInputRef.current) reworkFileInputRef.current.value = '';
+        return;
+      }
       setReworkFeedback(contents);
       setReworkFileName(file.name);
       if (!contents.trim()) setReworkInputError('The selected Markdown file is empty.');
