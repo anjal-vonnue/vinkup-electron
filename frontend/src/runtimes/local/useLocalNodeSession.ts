@@ -136,6 +136,9 @@ export function useLocalNodeSession({
       terminal.write(`\r\n${YELLOW}Terminal exited (${event.exitCode}).${RESET}\r\n`);
     });
 
+    let finishInstall: (() => void) | null = null;
+    let installFailed = false;
+
     const offEvents = workspaceApi.onEvent((payload) => {
       if (!isWorkspaceEvent(payload) || payload.taskId !== taskId) return;
       handleWorkspaceEvent(
@@ -149,50 +152,66 @@ export function useLocalNodeSession({
               `\r\n${YELLOW}npm install failed — fix package.json and run npm install again${RESET}\r\n`
             );
           }
-          setStatus('ready');
+          finishInstall?.();
+          finishInstall = null;
         },
         (next) => onServerReadyRef.current?.(next)
       );
     });
 
-    void terminalApi
-      .open({ taskId, cols: terminal.cols, rows: terminal.rows })
-      .then((result) => {
-        if (cancelled) {
-          void terminalApi.close(result.terminalId);
-          return;
-        }
-        terminalId = result.terminalId;
-        terminalIdRef.current = result.terminalId;
-
-        if (queuedInput.length > 0) {
-          sendInput(result.terminalId, queuedInput.join(''));
-          queuedInput.length = 0;
-          queuedChars = 0;
-        }
-
-        const pending = pendingSizeRef.current;
-        if (pending) void terminalApi.resize(result.terminalId, pending.cols, pending.rows);
-
-        if (hasDependencies(filesRef.current['package.json'])) {
-          setStatus('installing');
-          void runApi.install(taskId).catch((reason: unknown) => {
-            if (cancelled) return;
-            setStatus('error');
-            setErrorMessage(reason instanceof Error ? reason.message : String(reason));
-          });
-        } else {
-          setStatus('ready');
-        }
-      })
-      .catch((reason: unknown) => {
+    // Install before opening the shell: npm's output then comes first and the shell prints
+    // its prompt at the end. Opening the shell first leaves its prompt above the install
+    // output, with no prompt under the cursor once the install finishes.
+    void (async () => {
+      if (hasDependencies(filesRef.current['package.json'])) {
+        setStatus('installing');
+        const installed = new Promise<void>((resolve) => {
+          finishInstall = resolve;
+        });
+        void runApi.install(taskId).catch((reason: unknown) => {
+          if (cancelled) return;
+          installFailed = true;
+          setStatus('error');
+          setErrorMessage(reason instanceof Error ? reason.message : String(reason));
+          finishInstall?.();
+          finishInstall = null;
+        });
+        await installed;
         if (cancelled) return;
-        setStatus('error');
-        setErrorMessage(reason instanceof Error ? reason.message : String(reason));
+      }
+
+      const result = await terminalApi.open({
+        taskId,
+        cols: terminal.cols,
+        rows: terminal.rows,
       });
+      if (cancelled) {
+        void terminalApi.close(result.terminalId);
+        return;
+      }
+      terminalId = result.terminalId;
+      terminalIdRef.current = result.terminalId;
+
+      if (queuedInput.length > 0) {
+        sendInput(result.terminalId, queuedInput.join(''));
+        queuedInput.length = 0;
+        queuedChars = 0;
+      }
+
+      const pending = pendingSizeRef.current;
+      if (pending) void terminalApi.resize(result.terminalId, pending.cols, pending.rows);
+
+      if (!installFailed) setStatus('ready');
+    })().catch((reason: unknown) => {
+      if (cancelled) return;
+      setStatus('error');
+      setErrorMessage(reason instanceof Error ? reason.message : String(reason));
+    });
 
     return () => {
       cancelled = true;
+      finishInstall?.();
+      finishInstall = null;
       inputSubscription.dispose();
       offData();
       offExit();
