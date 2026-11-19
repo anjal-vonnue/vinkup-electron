@@ -39,4 +39,46 @@ describe('SessionTimer', () => {
 
     expect(screen.getByRole('timer')).toHaveTextContent('0:00');
   });
+
+  it('freezes and shows "Submitted in" when it is stopped', () => {
+    const { rerender } = render(<SessionTimer />);
+    act(() => {
+      vi.advanceTimersByTime(18 * 60_000);
+    });
+
+    rerender(<SessionTimer isStopped />);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    const submitted = screen.getByRole('status');
+    expect(submitted).toHaveTextContent('Submitted in 18:00');
+    expect(submitted).toHaveAccessibleName('Submitted in 18 minutes 0 seconds');
+  });
+
+  it('shows only "Submitted" for a task that was already submitted when opened', () => {
+    render(<SessionTimer isStopped />);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    const submitted = screen.getByRole('status');
+    expect(submitted).toHaveTextContent(/^Submitted$/);
+    expect(submitted).toHaveAccessibleName('Submitted');
+  });
+
+  it('runs again when it is started after a submit (rework)', () => {
+    const { rerender } = render(<SessionTimer isStopped />);
+
+    rerender(<SessionTimer isStopped={false} />);
+    act(() => {
+      vi.advanceTimersByTime(5 * 60_000);
+    });
+
+    const timer = screen.getByRole('timer');
+    expect(timer).toHaveTextContent('5:00');
+    expect(timer).toHaveAccessibleName('Time on this task: 5 minutes 0 seconds');
+  });
 });

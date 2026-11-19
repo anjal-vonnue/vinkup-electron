@@ -125,6 +125,53 @@ describe('useSessionTimer', () => {
     expect(result.current).toBe(3);
   });
 
+  it('freezes when it is stopped (the task was submitted)', () => {
+    const { result, rerender } = renderHook(({ isStopped }) => useSessionTimer(isStopped), {
+      initialProps: { isStopped: false },
+    });
+    advance(18_000);
+
+    rerender({ isStopped: true });
+    advance(60_000);
+
+    expect(result.current).toBe(18);
+  });
+
+  it('does not count when it mounts already stopped (an already submitted task)', () => {
+    const { result } = renderHook(() => useSessionTimer(true));
+
+    advance(60_000);
+
+    expect(result.current).toBe(0);
+  });
+
+  it('carries on from the frozen value when it is started again (rework)', () => {
+    const { result, rerender } = renderHook(({ isStopped }) => useSessionTimer(isStopped), {
+      initialProps: { isStopped: false },
+    });
+    advance(10_000);
+    rerender({ isStopped: true });
+    advance(30_000);
+
+    rerender({ isStopped: false });
+    advance(5000);
+
+    expect(result.current).toBe(15);
+  });
+
+  it('still pauses on blur after it is started again', () => {
+    const { result, rerender } = renderHook(({ isStopped }) => useSessionTimer(isStopped), {
+      initialProps: { isStopped: true },
+    });
+    rerender({ isStopped: false });
+    advance(10_000);
+
+    setFocus(false);
+    advance(30_000);
+
+    expect(result.current).toBe(10);
+  });
+
   it('stops its interval and listeners on unmount', () => {
     const clearSpy = vi.spyOn(window, 'clearInterval');
     const removeDocSpy = vi.spyOn(document, 'removeEventListener');

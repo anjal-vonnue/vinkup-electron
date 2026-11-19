@@ -161,6 +161,33 @@ describe('TaskPage', () => {
     expect(timer).toHaveAccessibleName(/^Time on this task:/);
   });
 
+  it('shows "Submitted" instead of a running timer for an already submitted task', async () => {
+    vi.mocked(getTask).mockResolvedValue({
+      ...taskFixture,
+      status: 'completed',
+      reviewStatus: 'pending',
+    });
+    vi.mocked(getTaskCode).mockResolvedValue(taskCodeFixture);
+
+    renderTaskPage();
+
+    expect(await screen.findByRole('status', { name: 'Submitted' })).toBeInTheDocument();
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+  });
+
+  it('runs the timer for a task sent back for rework', async () => {
+    vi.mocked(getTask).mockResolvedValue({
+      ...taskFixture,
+      status: 'completed',
+      reviewStatus: 'rework',
+    });
+    vi.mocked(getTaskCode).mockResolvedValue(taskCodeFixture);
+
+    renderTaskPage();
+
+    expect(await screen.findByRole('timer')).toHaveAccessibleName(/^Time on this task:/);
+  });
+
   it('shows no session timer when the task could not load', async () => {
     vi.mocked(getTask).mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'Task not found.'));
     vi.mocked(getTaskCode).mockResolvedValue(taskCodeFixture);
