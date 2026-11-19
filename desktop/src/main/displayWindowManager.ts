@@ -24,12 +24,13 @@ export class DisplayWindowManager {
   private readonly overlays = new Map<number, BrowserWindow>();
   private readonly overlayReferencesActive = new Map<number, boolean>();
   private readonly overlayResourcesActive = new Map<number, boolean>();
+  private readonly overlayResourcesFocused = new Map<number, boolean>();
   private readonly alerts = new Map<number, BrowserWindow>();
   private readonly closeAuthorized = new WeakSet<BrowserWindow>();
   private readonly mainWindow: BrowserWindow;
   private readonly onExitChoice: () => void;
   private readonly overlayUrl: string;
-  private readonly onReferenceFocusChange: (isFocused: boolean) => void;
+  private readonly onAllowedOverlayFocusChange: (isFocused: boolean) => void;
   private appDisplayId: number;
   private reconcileTimer: NodeJS.Timeout | null = null;
   private focusWatchdog: NodeJS.Timeout | null = null;
@@ -51,9 +52,10 @@ export class DisplayWindowManager {
   private isReadyForFocusTracking = false;
   private alertReturnDisplayId: number | null = null;
   private focusedOverlayId: number | null = null;
-  private referenceScreenFocused = false;
+  private allowedOverlayFocused = false;
   private displayTheme: 'light' | 'dark' = 'light';
   private mainResourcesActive = false;
+  private mainResourcesFocused = false;
 
   constructor(
     mainWindow: BrowserWindow,
@@ -61,12 +63,12 @@ export class DisplayWindowManager {
     private readonly enabled: boolean,
     initialDisplayId: number | undefined,
     overlayUrl: string,
-    onReferenceFocusChange: (isFocused: boolean) => void = () => {}
+    onAllowedOverlayFocusChange: (isFocused: boolean) => void = () => {}
   ) {
     this.mainWindow = mainWindow;
     this.onExitChoice = onExitChoice;
     this.overlayUrl = overlayUrl;
-    this.onReferenceFocusChange = onReferenceFocusChange;
+    this.onAllowedOverlayFocusChange = onAllowedOverlayFocusChange;
     this.appDisplayId = initialDisplayId ?? screen.getPrimaryDisplay().id;
   }
 
@@ -170,7 +172,7 @@ export class DisplayWindowManager {
     for (const [id, window] of this.overlays) {
       if (!isAlive(window) || window.webContents !== sender) continue;
       this.overlayReferencesActive.set(id, active);
-      this.updateReferenceScreenFocus();
+      this.updateAllowedOverlayFocus();
       return;
     }
   }
@@ -193,23 +195,46 @@ export class DisplayWindowManager {
         if (active) {
           for (const overlayId of this.overlayResourcesActive.keys()) {
             this.overlayResourcesActive.set(overlayId, false);
+            this.overlayResourcesFocused.set(overlayId, false);
           }
         }
         this.overlayResourcesActive.set(id, active);
+        if (!active) this.overlayResourcesFocused.set(id, false);
       }
+      this.updateAllowedOverlayFocus();
       this.broadcastBrowserAvailability();
+      return;
+    }
+  }
+
+  setOverlayResourcesFocused(sender: WebContents, focused: boolean): void {
+    for (const [id, window] of this.overlays) {
+      if (!isAlive(window) || window.webContents !== sender) continue;
+      this.overlayResourcesFocused.set(
+        id,
+        !this.mainResourcesActive && this.overlayResourcesActive.get(id) === true && focused
+      );
+      this.updateAllowedOverlayFocus();
       return;
     }
   }
 
   setMainResourcesActive(active: boolean): void {
     this.mainResourcesActive = active;
+    if (!active) this.mainResourcesFocused = false;
     if (active) {
       for (const id of this.overlayResourcesActive.keys()) {
         this.overlayResourcesActive.set(id, false);
+        this.overlayResourcesFocused.set(id, false);
       }
     }
+    this.updateAllowedOverlayFocus();
     this.broadcastBrowserAvailability();
+  }
+
+  setMainResourcesFocused(focused: boolean): void {
+    this.mainResourcesFocused = this.mainResourcesActive && focused;
+    if (this.mainResourcesFocused) this.focusLostAt = null;
   }
 
   getBrowserAvailability(): BrowserAvailability {
@@ -219,8 +244,8 @@ export class DisplayWindowManager {
     };
   }
 
-  isReferenceScreenFocused(): boolean {
-    return this.referenceScreenFocused;
+  isAllowedOverlayContentFocused(): boolean {
+    return this.allowedOverlayFocused;
   }
 
   handleAlertChoice(choice: unknown): void {
@@ -489,7 +514,7 @@ export class DisplayWindowManager {
     const ownWindowFocused = [this.mainWindow, ...this.overlays.values()].some(
       (window) => isAlive(window) && window.isFocused()
     );
-    if (ownWindowFocused) {
+    if (ownWindowFocused || (this.mainResourcesActive && this.mainResourcesFocused)) {
       this.focusLostAt = null;
       return;
     }
@@ -814,18 +839,19 @@ export class DisplayWindowManager {
     this.overlays.set(display.id, window);
     this.overlayReferencesActive.set(display.id, false);
     this.overlayResourcesActive.set(display.id, false);
+    this.overlayResourcesFocused.set(display.id, false);
     this.configureWindow(window, true);
     window.on('will-move', (event) => event.preventDefault());
     window.on('move', () => this.placeWindow(window, display.bounds));
     window.on('focus', () => {
       this.focusedOverlayId = display.id;
-      this.updateReferenceScreenFocus();
+      this.updateAllowedOverlayFocus();
       this.focusLostAt = null;
       if (this.areAlertsOpen) this.dismissAlerts();
     });
     window.on('blur', () => {
       if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
-      this.updateReferenceScreenFocus();
+      this.updateAllowedOverlayFocus();
     });
     window.on('close', (event) => {
       if (!this.closeAuthorized.has(window) && !this.isQuitting) event.preventDefault();
@@ -835,8 +861,9 @@ export class DisplayWindowManager {
       this.overlays.delete(display.id);
       this.overlayReferencesActive.delete(display.id);
       this.overlayResourcesActive.delete(display.id);
+      this.overlayResourcesFocused.delete(display.id);
       if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
-      this.updateReferenceScreenFocus();
+      this.updateAllowedOverlayFocus();
       this.broadcastBrowserAvailability();
     });
     window.once('ready-to-show', () => {
@@ -856,13 +883,16 @@ export class DisplayWindowManager {
     return window;
   }
 
-  private updateReferenceScreenFocus(): void {
+  private updateAllowedOverlayFocus(): void {
+    const focusedOverlayId = this.focusedOverlayId;
     const isFocused =
-      this.focusedOverlayId !== null &&
-      this.overlayReferencesActive.get(this.focusedOverlayId) === true;
-    if (this.referenceScreenFocused === isFocused) return;
-    this.referenceScreenFocused = isFocused;
-    this.onReferenceFocusChange(isFocused);
+      focusedOverlayId !== null &&
+      (this.overlayReferencesActive.get(focusedOverlayId) === true ||
+        (this.overlayResourcesActive.get(focusedOverlayId) === true &&
+          this.overlayResourcesFocused.get(focusedOverlayId) === true));
+    if (this.allowedOverlayFocused === isFocused) return;
+    this.allowedOverlayFocused = isFocused;
+    this.onAllowedOverlayFocusChange(isFocused);
   }
 
   private applyDisplayTheme(window: BrowserWindow): Promise<void> {
@@ -907,8 +937,9 @@ export class DisplayWindowManager {
     this.overlays.delete(id);
     this.overlayReferencesActive.delete(id);
     this.overlayResourcesActive.delete(id);
+    this.overlayResourcesFocused.delete(id);
     if (this.focusedOverlayId === id) this.focusedOverlayId = null;
-    this.updateReferenceScreenFocus();
+    this.updateAllowedOverlayFocus();
     this.broadcastBrowserAvailability();
     this.closeOwnedWindow(window);
   }

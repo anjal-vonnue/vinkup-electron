@@ -16,7 +16,7 @@ vi.mock('../lib/IsfullscreenActive', () => ({
   isFullscreenActive: isFullscreenActiveMock,
 }));
 
-describe('useFlagTracking secondary-reference exception', () => {
+describe('useFlagTracking allowed overlay content exception', () => {
   let focusListeners: Array<(isFocused: boolean) => void>;
   let visibilityDescriptor: PropertyDescriptor | undefined;
 
@@ -29,8 +29,8 @@ describe('useFlagTracking secondary-reference exception', () => {
       value: 'visible',
     });
     const windowApi = {
-      isReferenceScreenFocused: vi.fn(() => Promise.resolve(false)),
-      onReferenceScreenFocusChange: vi.fn((listener: (isFocused: boolean) => void) => {
+      isAllowedOverlayContentFocused: vi.fn(() => Promise.resolve(false)),
+      onAllowedOverlayContentFocusChange: vi.fn((listener: (isFocused: boolean) => void) => {
         focusListeners.push(listener);
         return () => {
           focusListeners = focusListeners.filter((registered) => registered !== listener);
@@ -54,7 +54,7 @@ describe('useFlagTracking secondary-reference exception', () => {
     vi.useRealTimers();
   });
 
-  it('does not log or warn when focus moves to the active reference overlay', async () => {
+  it('does not log or warn when focus moves to approved content on an overlay', async () => {
     const onWarning = vi.fn();
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     renderHook(() => useFlagTracking({ taskId: 'task-1', onWarning }));
@@ -67,6 +67,33 @@ describe('useFlagTracking secondary-reference exception', () => {
     });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(600);
+    });
+
+    expect(logFlagEvent).not.toHaveBeenCalled();
+    expect(onWarning).not.toHaveBeenCalled();
+  });
+
+  it('cancels the pending blur flag when approved overlay content receives focus', async () => {
+    const onWarning = vi.fn();
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    renderHook(() => useFlagTracking({ taskId: 'task-1', onWarning }));
+
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    act(() => {
+      focusListeners[0]?.(true);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    hasFocus.mockReturnValue(true);
+    act(() => {
+      focusListeners[0]?.(false);
+      window.dispatchEvent(new Event('focus'));
     });
 
     expect(logFlagEvent).not.toHaveBeenCalled();

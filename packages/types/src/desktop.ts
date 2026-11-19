@@ -194,9 +194,9 @@ export interface DesktopApi {
     setFullscreen: (value: boolean) => Promise<boolean>;
     isFullscreen: () => Promise<boolean>;
     setDisplayTheme: (theme: 'light' | 'dark') => Promise<void>;
-    isReferenceScreenFocused: () => Promise<boolean>;
+    isAllowedOverlayContentFocused: () => Promise<boolean>;
     /** Returns an unsubscribe function. */
-    onReferenceScreenFocusChange: (listener: (isFocused: boolean) => void) => () => void;
+    onAllowedOverlayContentFocusChange: (listener: (isFocused: boolean) => void) => () => void;
     getBrowserAvailability: () => Promise<BrowserAvailability>;
     /** Returns an unsubscribe function. */
     onBrowserAvailabilityChange: (

@@ -337,7 +337,7 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
-  it('reports reference-screen focus only for an active, focused overlay', async () => {
+  it('reports allowed overlay focus for active references and Resources content', async () => {
     const mainWindow = new FakeWindow();
     const onReferenceFocusChange = vi.fn();
     const manager = new DisplayWindowManager(
@@ -354,14 +354,25 @@ describe('DisplayWindowManager focus alerts', () => {
     expect(overlay).toBeDefined();
 
     manager.setOverlayReferencesActive(overlay?.webContents as unknown as WebContents, true);
-    expect(manager.isReferenceScreenFocused()).toBe(false);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(false);
 
     overlay?.setFocused(true);
-    expect(manager.isReferenceScreenFocused()).toBe(true);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(true);
     expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
 
     overlay?.setFocused(false);
-    expect(manager.isReferenceScreenFocused()).toBe(false);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(false);
+    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+
+    manager.setOverlayReferencesActive(overlay?.webContents as unknown as WebContents, false);
+    manager.setOverlayResourcesActive(overlay?.webContents as unknown as WebContents, true);
+    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, true);
+    overlay?.setFocused(true);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(true);
+    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
+
+    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, false);
+    expect(manager.isAllowedOverlayContentFocused()).toBe(false);
     expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
     manager.dispose();
   });
@@ -486,6 +497,34 @@ describe('DisplayWindowManager focus alerts', () => {
     overlay?.setFocused(false);
     mainWindow.emit('blur');
     await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(true);
+    manager.dispose();
+  });
+
+  it('treats the focused main Resources browser as Vinkup and alerts after it loses focus', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    await vi.advanceTimersByTimeAsync(800);
+    mainWindow.focused = false;
+    manager.setMainResourcesActive(true);
+    manager.setMainResourcesFocused(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(false);
+
+    manager.setMainResourcesFocused(false);
+    await vi.advanceTimersByTimeAsync(1_300);
 
     expect(createdWindows.some(({ options }) => isAlertWindow(options))).toBe(true);
     manager.dispose();

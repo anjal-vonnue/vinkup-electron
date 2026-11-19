@@ -138,10 +138,15 @@ function createResourcesBrowser(
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.send(channel, payload);
     }
-  }
+  },
+  trackMainWindowFocus = true
 ): ResourcesBrowser {
   return new ResourcesBrowser(window, activeResourcesAllowlist, {
     onState: (state) => sendEvent('resources:state-changed', state),
+    onFocusChange: (focused) => {
+      if (trackMainWindowFocus) displayWindowManager?.setMainResourcesFocused(focused);
+      else displayWindowManager?.setOverlayResourcesFocused(window.webContents, focused);
+    },
     onFocusAddress: () => sendEvent('resources:focus-address'),
     onOpenFind: () => sendEvent('resources:open-find'),
     onFindResult: (result) => sendEvent('resources:find-result', result),
@@ -162,7 +167,7 @@ function createDisplayWindowManager(
     overlayServer.url,
     (isFocused) => {
       if (!window.isDestroyed()) {
-        window.webContents.send('window:reference-screen-focus-changed', isFocused);
+        window.webContents.send('window:allowed-overlay-content-focus-changed', isFocused);
       }
     }
   );
@@ -423,10 +428,10 @@ function registerIpcHandlers(): void {
     return displayWindowManager?.setDisplayTheme(theme);
   });
 
-  ipcMain.handle('window:is-reference-screen-focused', (event) => {
+  ipcMain.handle('window:is-allowed-overlay-content-focused', (event) => {
     assertTrustedSender(event);
     assertMainWindowSender(event);
-    return displayWindowManager?.isReferenceScreenFocused() ?? false;
+    return displayWindowManager?.isAllowedOverlayContentFocused() ?? false;
   });
 
   ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
@@ -736,11 +741,15 @@ function getSecondaryResourcesBrowser(event: IpcMainInvokeEvent): ResourcesBrows
   const existing = secondaryResourcesBrowsers.get(overlay);
   if (existing) return existing;
 
-  const browser = createResourcesBrowser(overlay, (channel, payload) => {
-    if (overlay.isDestroyed() || overlay.webContents.isDestroyed()) return;
-    const secondaryChannel = channel.replace(/^resources:/, 'secondary-resources:');
-    overlay.webContents.send(secondaryChannel, payload);
-  });
+  const browser = createResourcesBrowser(
+    overlay,
+    (channel, payload) => {
+      if (overlay.isDestroyed() || overlay.webContents.isDestroyed()) return;
+      const secondaryChannel = channel.replace(/^resources:/, 'secondary-resources:');
+      overlay.webContents.send(secondaryChannel, payload);
+    },
+    false
+  );
   secondaryResourcesBrowsers.set(overlay, browser);
   overlay.once('closed', () => {
     browser.dispose();

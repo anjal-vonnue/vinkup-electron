@@ -43,15 +43,15 @@ const api: DesktopApi = {
     isFullscreen: () => ipcRenderer.invoke('window:is-fullscreen') as Promise<boolean>,
     setDisplayTheme: (theme) =>
       ipcRenderer.invoke('window:set-display-theme', theme) as Promise<void>,
-    isReferenceScreenFocused: () =>
-      ipcRenderer.invoke('window:is-reference-screen-focused') as Promise<boolean>,
-    onReferenceScreenFocusChange: (listener: (isFocused: boolean) => void) => {
+    isAllowedOverlayContentFocused: () =>
+      ipcRenderer.invoke('window:is-allowed-overlay-content-focused') as Promise<boolean>,
+    onAllowedOverlayContentFocusChange: (listener: (isFocused: boolean) => void) => {
       const handler = (_event: IpcRendererEvent, isFocused: boolean): void => {
         listener(isFocused);
       };
-      ipcRenderer.on('window:reference-screen-focus-changed', handler);
+      ipcRenderer.on('window:allowed-overlay-content-focus-changed', handler);
       return () => {
-        ipcRenderer.removeListener('window:reference-screen-focus-changed', handler);
+        ipcRenderer.removeListener('window:allowed-overlay-content-focus-changed', handler);
       };
     },
     getBrowserAvailability: () =>
