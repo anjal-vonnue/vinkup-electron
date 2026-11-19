@@ -5,7 +5,7 @@ import { createServer as createTcpServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceEvent } from '@itp/types';
+import type { TerminalExitEvent, WorkspaceEvent } from '@itp/types';
 import { bundleModule, resolveWorkspacePath } from './bundler';
 import { WorkspaceManager } from './manager';
 import {
@@ -483,11 +483,11 @@ describe('WorkspaceManager', () => {
 
     const { terminalId } = await manager.openTerminal({ taskId: 'task_term', cols: 80, rows: 24 });
     // The shell must evaluate this, so seeing 42 proves the keys reached the PTY.
-    await manager.writeTerminal(terminalId, 'echo $((6*7))\r');
+    await manager.writeTerminal('task_term', terminalId, 'echo $((6*7))\r');
 
     await vi.waitFor(() => expect(output.join('')).toContain('42'), { timeout: 15_000 });
 
-    await manager.closeTerminal(terminalId);
+    await manager.closeTerminal('task_term', terminalId);
     await manager.close('task_term');
   });
 
@@ -526,19 +526,208 @@ describe('WorkspaceManager', () => {
     const closed = () =>
       events.filter((event) => event.type === 'server-closed' && event.port === port);
 
-    await manager.writeTerminal(terminalId, `node server.mjs ${port}\r`);
+    await manager.writeTerminal(taskId, terminalId, `node server.mjs ${port}\r`);
     await vi.waitFor(() => expect(ready()).toHaveLength(1), { timeout: 20_000 });
 
     // Prisma Studio's usual stop: Ctrl+C in the terminal, which closes the port.
-    await manager.writeTerminal(terminalId, '\u0003');
+    await manager.writeTerminal(taskId, terminalId, '\u0003');
     await vi.waitFor(() => expect(closed()).toHaveLength(1), { timeout: 20_000 });
 
     // Restarting on the same port, as Prisma Studio does, must open the Preview tab again.
-    await manager.writeTerminal(terminalId, `node server.mjs ${port}\r`);
+    await manager.writeTerminal(taskId, terminalId, `node server.mjs ${port}\r`);
     await vi.waitFor(() => expect(ready()).toHaveLength(2), { timeout: 20_000 });
 
-    await manager.writeTerminal(terminalId, '\u0003');
-    await manager.closeTerminal(terminalId);
+    await manager.writeTerminal(taskId, terminalId, '\u0003');
+    await manager.closeTerminal(taskId, terminalId);
+    await manager.close(taskId);
+  }, 45_000);
+
+  it('assigns stable names, enforces the limit and rejects cross-workspace terminal ids', async () => {
+    const baseDir = await temporaryRoot();
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: () => undefined,
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    const taskId = 'task_multi';
+    await manager.open({ taskId, files: { 'index.js': 'console.log(1)' } });
+
+    const opened: Array<{ terminalId: string; name: string }> = [];
+    for (let index = 0; index < 4; index += 1) {
+      opened.push(await manager.openTerminal({ taskId, cols: 80, rows: 24 }));
+    }
+    expect(opened.map((session) => session.name)).toEqual(['T1', 'T2', 'T3', 'T4']);
+    expect(new Set(opened.map((session) => session.terminalId)).size).toBe(4);
+
+    await expect(manager.openTerminal({ taskId, cols: 80, rows: 24 })).rejects.toThrow(
+      /Maximum of 4 terminal sessions/i
+    );
+    await expect(
+      manager.writeTerminal('task_other', opened[0].terminalId, 'echo nope\r')
+    ).rejects.toThrow(/Open the workspace/);
+    await expect(
+      manager.writeTerminal(taskId, '99999999-9999-4999-8999-999999999999', 'echo nope\r')
+    ).rejects.toThrow(/not open in this workspace/i);
+    await expect(
+      manager.resizeTerminal(taskId, opened[0].terminalId, Number.NaN, 24)
+    ).rejects.toThrow(/Invalid terminal size/);
+
+    await manager.close(taskId);
+  }, 20_000);
+
+  it('types dev commands into the selected terminal, not the first one', async () => {
+    const baseDir = await temporaryRoot();
+    const output = new Map<string, string[]>();
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: () => undefined,
+      emitTerminalData: (event) => {
+        const list = output.get(event.terminalId) ?? [];
+        list.push(event.data);
+        output.set(event.terminalId, list);
+      },
+      emitTerminalExit: () => undefined,
+    });
+    const taskId = 'task_target';
+    await manager.open({ taskId, files: { 'index.js': 'console.log(1)' } });
+    const first = await manager.openTerminal({ taskId, cols: 80, rows: 24 });
+    const second = await manager.openTerminal({ taskId, cols: 80, rows: 24 });
+    await vi.waitFor(() => expect(output.get(first.terminalId)?.join('')).toBeTruthy());
+    await vi.waitFor(() => expect(output.get(second.terminalId)?.join('')).toBeTruthy());
+
+    await manager.dev(taskId, 'echo DEV_IN_SECOND', second.terminalId);
+    await vi.waitFor(
+      () => expect(output.get(second.terminalId)?.join('')).toContain('DEV_IN_SECOND'),
+      {
+        timeout: 15_000,
+      }
+    );
+    expect(output.get(first.terminalId)?.join('') ?? '').not.toContain('DEV_IN_SECOND');
+
+    await manager.dev(taskId, 'echo DEV_IN_FIRST', first.terminalId);
+    await vi.waitFor(
+      () => expect(output.get(first.terminalId)?.join('')).toContain('DEV_IN_FIRST'),
+      {
+        timeout: 15_000,
+      }
+    );
+    expect(output.get(second.terminalId)?.join('') ?? '').not.toContain('DEV_IN_FIRST');
+
+    await manager.close(taskId);
+  }, 30_000);
+
+  it('closes only the preview server owned by the terminal being closed', async () => {
+    const baseDir = await temporaryRoot();
+    const events: WorkspaceEvent[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: (event) => events.push(event),
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    const taskId = 'task_owners';
+    const firstPort = await freePort();
+    const secondPort = await freePort();
+    await manager.open({
+      taskId,
+      files: {
+        'server.mjs': [
+          "import { createServer } from 'node:http';",
+          'const port = Number(process.argv[2]);',
+          "createServer((request, response) => response.end('ok')).listen(port, '127.0.0.1', () => {",
+          "  console.log('Server running at http://localhost:' + port);",
+          '});',
+          '',
+        ].join('\n'),
+      },
+    });
+    const first = await manager.openTerminal({ taskId, cols: 80, rows: 24 });
+    const second = await manager.openTerminal({ taskId, cols: 80, rows: 24 });
+
+    await manager.writeTerminal(taskId, first.terminalId, `node server.mjs ${firstPort}\r`);
+    await manager.writeTerminal(taskId, second.terminalId, `node server.mjs ${secondPort}\r`);
+    await vi.waitFor(
+      () =>
+        expect(
+          events.some((event) => event.type === 'server-ready' && event.port === firstPort)
+        ).toBe(true),
+      { timeout: 20_000 }
+    );
+    await vi.waitFor(
+      () =>
+        expect(
+          events.some((event) => event.type === 'server-ready' && event.port === secondPort)
+        ).toBe(true),
+      { timeout: 20_000 }
+    );
+
+    await manager.closeTerminal(taskId, first.terminalId);
+    await vi.waitFor(
+      () =>
+        expect(
+          events.some((event) => event.type === 'server-closed' && event.port === firstPort)
+        ).toBe(true),
+      { timeout: 20_000 }
+    );
+    expect(
+      events.some((event) => event.type === 'server-closed' && event.port === secondPort)
+    ).toBe(false);
+
+    const stillServing = await fetch(`http://127.0.0.1:${secondPort}`);
+    expect(stillServing.ok).toBe(true);
+
+    await manager.closeTerminal(taskId, second.terminalId);
+    await manager.close(taskId);
+  }, 60_000);
+
+  it("clears a terminated terminal's server and reports its exit code", async () => {
+    const baseDir = await temporaryRoot();
+    const events: WorkspaceEvent[] = [];
+    const exits: TerminalExitEvent[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: (event) => events.push(event),
+      emitTerminalData: () => undefined,
+      emitTerminalExit: (event) => exits.push(event),
+    });
+    const taskId = 'task_exit';
+    const port = await freePort();
+    await manager.open({
+      taskId,
+      files: {
+        'server.mjs': [
+          "import { createServer } from 'node:http';",
+          `const port = ${port};`,
+          "createServer((request, response) => response.end('ok')).listen(port, '127.0.0.1', () => {",
+          "  console.log('Server running at http://localhost:' + port);",
+          '});',
+          '',
+        ].join('\n'),
+      },
+    });
+    const terminal = await manager.openTerminal({ taskId, cols: 80, rows: 24 });
+    await manager.writeTerminal(taskId, terminal.terminalId, `node server.mjs ${port}\r`);
+    await vi.waitFor(
+      () =>
+        expect(events.some((event) => event.type === 'server-ready' && event.port === port)).toBe(
+          true
+        ),
+      { timeout: 20_000 }
+    );
+
+    await manager.writeTerminal(taskId, terminal.terminalId, '\u0003');
+    await manager.writeTerminal(taskId, terminal.terminalId, 'exit 7\r');
+    await vi.waitFor(() => expect(exits).toHaveLength(1), { timeout: 20_000 });
+    expect(exits[0]).toMatchObject({ terminalId: terminal.terminalId, exitCode: 7 });
+    await vi.waitFor(
+      () =>
+        expect(events.some((event) => event.type === 'server-closed' && event.port === port)).toBe(
+          true
+        ),
+      { timeout: 20_000 }
+    );
+
     await manager.close(taskId);
   }, 45_000);
 });

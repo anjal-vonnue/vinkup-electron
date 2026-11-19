@@ -98,22 +98,25 @@ export function registerWorkspaceIpc({ manager, assertTrustedSender }: Workspace
     return manager.openTerminal(input);
   });
 
-  ipcMain.handle('terminal:write', async (event, terminalId: unknown, data: unknown) => {
-    assertTrustedSender(event);
-    await manager.writeTerminal(terminalId, data);
-  });
-
   ipcMain.handle(
-    'terminal:resize',
-    async (event, terminalId: unknown, cols: unknown, rows: unknown) => {
+    'terminal:write',
+    async (event, taskId: unknown, terminalId: unknown, data: unknown) => {
       assertTrustedSender(event);
-      await manager.resizeTerminal(terminalId, cols, rows);
+      await manager.writeTerminal(taskId, terminalId, data);
     }
   );
 
-  ipcMain.handle('terminal:close', async (event, terminalId: unknown) => {
+  ipcMain.handle(
+    'terminal:resize',
+    async (event, taskId: unknown, terminalId: unknown, cols: unknown, rows: unknown) => {
+      assertTrustedSender(event);
+      await manager.resizeTerminal(taskId, terminalId, cols, rows);
+    }
+  );
+
+  ipcMain.handle('terminal:close', async (event, taskId: unknown, terminalId: unknown) => {
     assertTrustedSender(event);
-    await manager.closeTerminal(terminalId);
+    await manager.closeTerminal(taskId, terminalId);
   });
 
   ipcMain.handle('lighthouse:run', async (event, taskId: unknown) => {
@@ -128,13 +131,16 @@ export function registerWorkspaceIpc({ manager, assertTrustedSender }: Workspace
     await manager.install(taskId);
   });
 
-  ipcMain.handle('run:dev', async (event, taskId: unknown, command: unknown) => {
-    assertTrustedSender(event);
-    await manager.dev(taskId, command);
-  });
+  ipcMain.handle(
+    'run:dev',
+    async (event, taskId: unknown, command: unknown, terminalId?: unknown) => {
+      assertTrustedSender(event);
+      await manager.dev(taskId, command, terminalId);
+    }
+  );
 
-  ipcMain.handle('run:stop', async (event, taskId: unknown) => {
+  ipcMain.handle('run:stop', async (event, taskId: unknown, terminalId?: unknown) => {
     assertTrustedSender(event);
-    await manager.stop(taskId);
+    await manager.stop(taskId, terminalId);
   });
 }

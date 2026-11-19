@@ -1,6 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import { Globe, Monitor, RotateCcw, SquareTerminal } from 'lucide-react';
-import type { Terminal } from '@xterm/xterm';
 import type { TaskResponse } from '@itp/types';
 import ResultPaneFrame from '../../components/ResultPaneFrame';
 import { useMarkWork } from '../../pages/TaskPage/state/WorkActivityContext';
@@ -10,12 +9,17 @@ import NodePreview from '../node/NodePreview';
 import type { LocalNodeStatus } from './useLocalNodeSession';
 import { useLocalNodeSession } from './useLocalNodeSession';
 import { useLocalWorkspace } from './useLocalWorkspace';
+import TerminalSessionTabs from './TerminalSessionTabs';
 import styles from './LocalNodeRuntime.module.css';
 
 type LocalNodeRuntimeProps = { task: TaskResponse; isVisible: boolean };
 
 // xterm is only downloaded for Node tasks (and doesn't touch <canvas> on other pages or in tests).
 const TerminalView = lazy(() => import('../node/TerminalView'));
+
+function previewTabId(port: number): string {
+  return `preview:${port}`;
+}
 
 function runnerFor(
   status: LocalNodeStatus,
@@ -41,13 +45,7 @@ export default function LocalNodeRuntime({ task, isVisible }: LocalNodeRuntimePr
   const workspace = useLocalWorkspace(task.id);
   const markWork = useMarkWork();
 
-  const [terminal, setTerminal] = useState<Terminal | null>(null);
   const [activeTab, setActiveTab] = useState('terminal');
-  useEffect(() => {
-    if (!terminal) return;
-    const subscription = terminal.onKey(() => markWork());
-    return () => subscription.dispose();
-  }, [terminal, markWork]);
 
   const blockedError =
     workspace.status === 'error'
@@ -56,13 +54,36 @@ export default function LocalNodeRuntime({ task, isVisible }: LocalNodeRuntimePr
 
   const session = useLocalNodeSession({
     taskId: task.id,
-    enabled: workspace.status === 'ready' && blockedError === null && terminal !== null,
-    terminal,
+    enabled: workspace.status === 'ready' && blockedError === null,
     files: state.files,
     blockedError,
-    onServerReady: () => setActiveTab('preview'),
+    onServerReady: (server) => setActiveTab(previewTabId(server.port)),
+    onServerClosed: (port, remaining) =>
+      setActiveTab((current) => {
+        if (current !== previewTabId(port)) return current;
+        const next = remaining[remaining.length - 1];
+        return next ? previewTabId(next.port) : 'terminal';
+      }),
+    onTerminalActivity: markWork,
   });
-  const { status, errorMessage, server, runCommand, resize, retry } = session;
+  const {
+    status,
+    errorMessage,
+    servers,
+    terminals,
+    activeTerminalKey,
+    terminalError,
+    isCreatingTerminal,
+    registerTerminal,
+    createTerminal,
+    selectTerminal,
+    closeTerminal,
+    retryTerminal,
+    focusActiveTerminal,
+    runCommand,
+    resize,
+    retry,
+  } = session;
 
   const { canRun, label, title } = runnerFor(status, task.runCommand, errorMessage);
   const flush = workspace.flush;
@@ -74,8 +95,8 @@ export default function LocalNodeRuntime({ task, isVisible }: LocalNodeRuntimePr
     void flush()
       .catch(() => undefined)
       .then(() => runCommand(command));
-    terminal?.focus();
-  }, [flush, task.runCommand, runCommand, terminal]);
+    focusActiveTerminal();
+  }, [flush, focusActiveTerminal, runCommand, task.runCommand]);
 
   useRegisterRunner({
     canRun,
@@ -85,7 +106,15 @@ export default function LocalNodeRuntime({ task, isVisible }: LocalNodeRuntimePr
     run,
   });
 
-  const shownTab = server ? activeTab : 'terminal';
+  // A stopped Preview server must not leave the pane stranded on a closed tab; the
+  // onServerClosed callback selects another live server (or Terminal) when that happens.
+  const shownTab =
+    activeTab === 'terminal' || servers.some((server) => previewTabId(server.port) === activeTab)
+      ? activeTab
+      : 'terminal';
+
+  const activeSession = terminals.find((terminal) => terminal.key === activeTerminalKey);
+  const canRetryTerminal = activeSession?.status === 'error' || activeSession?.status === 'exited';
 
   const pill =
     status === 'ready' ? (
@@ -130,22 +159,70 @@ export default function LocalNodeRuntime({ task, isVisible }: LocalNodeRuntimePr
             </button>
           </div>
         )}
-        {/* Kept mounted (hidden) while Preview shows: the terminal keeps its history and shell. */}
-        <div className={styles.view} hidden={shownTab !== 'terminal'}>
-          <Suspense fallback={null}>
-            <TerminalView
-              taskId={task.id}
-              isVisible={isVisible && shownTab === 'terminal'}
-              onReady={setTerminal}
-              onResize={resize}
-            />
-          </Suspense>
-        </div>
-        {server && (
-          <div className={styles.view} hidden={shownTab !== 'preview'}>
-            <NodePreview url={server.url} port={server.port} />
+        {terminalError && (
+          <div className={styles.terminalBanner} role="status">
+            <span>{terminalError}</span>
+            {canRetryTerminal && activeSession && (
+              <button
+                type="button"
+                className={styles.retry}
+                onClick={() => retryTerminal(activeSession.key)}
+              >
+                <RotateCcw size={12} aria-hidden="true" />
+                Retry
+              </button>
+            )}
           </div>
         )}
+
+        {/* Every session stays mounted (hidden when inactive) so its process and scrollback survive. */}
+        <div className={styles.terminalArea} hidden={shownTab !== 'terminal'}>
+          <TerminalSessionTabs
+            sessions={terminals}
+            activeKey={activeTerminalKey}
+            isCreating={isCreatingTerminal}
+            onSelect={selectTerminal}
+            onNew={createTerminal}
+            onClose={closeTerminal}
+          />
+          <div className={styles.stack}>
+            {terminals.length === 0 ? (
+              <div className={styles.loading}>Starting terminal…</div>
+            ) : (
+              terminals.map((terminal) => (
+                <div
+                  key={terminal.key}
+                  className={styles.view}
+                  hidden={terminal.key !== activeTerminalKey}
+                >
+                  <Suspense fallback={<div className={styles.loading}>Loading terminal…</div>}>
+                    <TerminalView
+                      taskId={task.id}
+                      isVisible={
+                        isVisible &&
+                        shownTab === 'terminal' &&
+                        terminal.key === activeTerminalKey &&
+                        terminal.status === 'ready'
+                      }
+                      onReady={(instance) => registerTerminal(terminal.key, instance)}
+                      onResize={(cols, rows) => resize(terminal.key, cols, rows)}
+                    />
+                  </Suspense>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {servers.map((server) => (
+          <div
+            key={server.port}
+            className={styles.view}
+            hidden={shownTab !== previewTabId(server.port)}
+          >
+            <NodePreview url={server.url} port={server.port} />
+          </div>
+        ))}
       </>
     );
   }
@@ -154,16 +231,12 @@ export default function LocalNodeRuntime({ task, isVisible }: LocalNodeRuntimePr
     <ResultPaneFrame
       tabs={[
         { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
-        ...(server
-          ? [
-              {
-                id: 'preview',
-                label: 'Preview',
-                icon: Globe,
-                badge: { text: `:${server.port}`, tone: 'neutral' as const },
-              },
-            ]
-          : []),
+        ...servers.map((server, index) => ({
+          id: previewTabId(server.port),
+          label: index === 0 ? 'Preview' : `Preview ${index + 1}`,
+          icon: Globe,
+          badge: { text: `:${server.port}`, tone: 'neutral' as const },
+        })),
       ]}
       activeTab={shownTab}
       onTabChange={setActiveTab}

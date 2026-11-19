@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type {
-  TerminalDataEvent,
-  TerminalExitEvent,
-  WorkspaceEnvironment,
-  WorkspaceEvent,
-  WorkspaceOpenInput,
-  WorkspaceOpenResult,
+import {
+  MAX_TERMINALS_PER_TASK,
+  type TerminalDataEvent,
+  type TerminalExitEvent,
+  type WorkspaceEnvironment,
+  type WorkspaceEvent,
+  type WorkspaceOpenInput,
+  type WorkspaceOpenResult,
 } from '@itp/types';
 import { hostProcessEnv, resolveHostEnvironment, type HostEnvironment } from './env';
 import {
@@ -35,7 +36,6 @@ import { openTerminal, type TerminalProcess } from './pty';
 import { requiresPostgres, resolvePostgresEnvironment, type PostgresEnvironment } from './postgres';
 import { startWorkspaceServer, type WorkspaceStaticServer } from './staticServer';
 
-const MAX_TERMINALS_PER_TASK = 4;
 const MAX_COMMAND_CHARS = 500;
 const MAX_TERMINAL_WRITE_CHARS = 16_384;
 const PORT_TIMEOUT_MS = 10_000;
@@ -48,6 +48,14 @@ const ANSI_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`
 type TerminalEntry = {
   terminal: TerminalProcess;
   scan: PortWatcher;
+  /** Stable, terminal-id-independent label shown in the renderer's tab bar. */
+  name: string;
+};
+
+type ServerEntry = {
+  url: string;
+  /** null when the fallback Run process owns the server (no shell was open). */
+  ownerId: string | null;
 };
 
 type WorkspaceRun = {
@@ -61,12 +69,13 @@ type WorkspaceSession = {
   watcher: WorkspaceWatcher;
   server: WorkspaceStaticServer;
   terminals: Map<string, TerminalEntry>;
+  nextTerminalNumber: number;
   install: WorkspaceProcess | null;
   /** package.json that the last successful `npm install` covered, so it can be skipped. */
   installedPackageJson: string | null;
   run: WorkspaceRun | null;
-  /** localhost ports that currently accept connections */
-  servers: Map<number, string>;
+  /** localhost ports that currently accept connections, with the terminal that found them. */
+  servers: Map<number, ServerEntry>;
   portMonitors: Map<number, ReturnType<typeof setInterval>>;
   pendingPorts: Set<number>;
   /** Set for Prisma tasks: the course database and the test database URLs. */
@@ -191,6 +200,7 @@ export class WorkspaceManager {
           watcher,
           server,
           terminals: new Map(),
+          nextTerminalNumber: 1,
           install: null,
           installedPackageJson: null,
           run: null,
@@ -314,7 +324,7 @@ export class WorkspaceManager {
     });
   }
 
-  async dev(taskIdValue: unknown, commandValue: unknown): Promise<void> {
+  async dev(taskIdValue: unknown, commandValue: unknown, terminalIdValue?: unknown): Promise<void> {
     const taskId = assertTaskId(taskIdValue);
     if (
       typeof commandValue !== 'string' ||
@@ -328,27 +338,32 @@ export class WorkspaceManager {
 
     return this.exclusive(taskId, async () => {
       const session = this.requireSession(taskId);
-      this.clearServers(session);
-      this.resetScanners(session);
+      // An explicit id must belong to this workspace; omitting it keeps the old first-shell
+      // behaviour for callers that predate multiple sessions.
+      const target =
+        this.optionalTerminalFor(session, terminalIdValue) ??
+        (terminalIdValue == null ? [...session.terminals.values()][0] : null);
 
       if (session.run) {
         session.run.process.stop();
         session.run = null;
       }
 
-      const terminal = [...session.terminals.values()][0];
-      if (terminal) {
+      if (target) {
+        this.clearServers(session, target.terminal.id);
+        target.scan = this.scannerFor(session, target.terminal.id);
         // Ctrl+C stops whatever is already running; the command then appears as if typed.
-        terminal.terminal.write('\u0003');
+        target.terminal.write('\u0003');
         await delay(COMMAND_DELAY_MS);
-        if (session.closed) return;
-        terminal.terminal.write(`${command}\n`);
+        if (session.closed || !session.terminals.has(target.terminal.id)) return;
+        target.terminal.write(`${command}\n`);
         return;
       }
 
+      this.clearServers(session, null);
       const host = await resolveHostEnvironment();
       const { command: executable, args } = splitCommand(command);
-      const scan = this.scannerFor(session);
+      const scan = this.scannerFor(session, null);
       const process = spawnWorkspaceProcess({
         cwd: session.root,
         command: executable,
@@ -378,17 +393,25 @@ export class WorkspaceManager {
     });
   }
 
-  async stop(taskIdValue: unknown): Promise<void> {
+  async stop(taskIdValue: unknown, terminalIdValue?: unknown): Promise<void> {
     const taskId = assertTaskId(taskIdValue);
     return this.exclusive(taskId, () => {
       const session = this.sessions.get(taskId);
       if (!session) return;
 
+      const target = this.optionalTerminalFor(session, terminalIdValue);
+      if (target) {
+        this.clearServers(session, target.terminal.id);
+        target.scan = this.scannerFor(session, target.terminal.id);
+        target.terminal.write('\u0003');
+        return;
+      }
+
+      // Omitting the id keeps the original Stop-the-whole-workspace behaviour.
       if (session.run) {
         session.run.process.stop();
         session.run = null;
       }
-
       this.clearServers(session);
       this.resetScanners(session);
       for (const entry of session.terminals.values()) {
@@ -397,19 +420,22 @@ export class WorkspaceManager {
     });
   }
 
-  async openTerminal(input: unknown): Promise<{ terminalId: string }> {
+  async openTerminal(input: unknown): Promise<{ terminalId: string; name: string }> {
     const parsed = parseTerminalInput(input);
     const taskId = assertTaskId(parsed.taskId);
     return this.exclusive(taskId, async () => {
       const session = this.requireSession(taskId);
       if (session.terminals.size >= MAX_TERMINALS_PER_TASK) {
-        throw new Error('Too many terminals are open for this task.');
+        throw new Error(
+          `Maximum of ${MAX_TERMINALS_PER_TASK} terminal sessions reached. Close one first.`
+        );
       }
 
       const host = await resolveHostEnvironment();
       if (session.closed) throw new Error('The workspace is closed.');
 
       const terminalId = randomUUID();
+      const name = `T${session.nextTerminalNumber++}`;
       const entry: TerminalEntry = {
         terminal: openTerminal({
           id: terminalId,
@@ -420,67 +446,80 @@ export class WorkspaceManager {
           rows: parsed.rows,
           onData: (data) => {
             if (session.closed) return;
-            this.callbacks.emitTerminalData({ terminalId, data });
+            this.callbacks.emitTerminalData({ taskId, terminalId, data });
             entry.scan(stripAnsi(data));
           },
           onExit: (exitCode) => {
             session.terminals.delete(terminalId);
             if (session.closed) return;
-            this.callbacks.emitTerminalExit({ terminalId, exitCode });
+            // A dev server started from this shell dies with it. Only its own ports close;
+            // servers announced by other terminals keep their Preview state.
+            this.clearServers(session, terminalId);
+            this.callbacks.emitTerminalExit({ taskId, terminalId, exitCode });
           },
         }),
-        scan: this.scannerFor(session),
+        scan: this.scannerFor(session, terminalId),
+        name,
       };
       session.terminals.set(terminalId, entry);
-      return { terminalId };
+      return { terminalId, name };
     });
   }
 
-  async writeTerminal(terminalIdValue: unknown, dataValue: unknown): Promise<void> {
-    const terminalId = parseTerminalId(terminalIdValue);
+  async writeTerminal(
+    taskIdValue: unknown,
+    terminalIdValue: unknown,
+    dataValue: unknown
+  ): Promise<void> {
+    const taskId = assertTaskId(taskIdValue);
     if (typeof dataValue !== 'string' || dataValue.length > MAX_TERMINAL_WRITE_CHARS) {
-      return Promise.reject(new Error('Invalid terminal input.'));
+      throw new Error('Invalid terminal input.');
     }
-    const entry = this.findTerminal(terminalId);
-    entry?.terminal.write(dataValue);
+    this.requireTerminal(this.requireSession(taskId), terminalIdValue).terminal.write(dataValue);
     return Promise.resolve();
   }
 
   async resizeTerminal(
+    taskIdValue: unknown,
     terminalIdValue: unknown,
     colsValue: unknown,
     rowsValue: unknown
   ): Promise<void> {
-    const terminalId = parseTerminalId(terminalIdValue);
+    const taskId = assertTaskId(taskIdValue);
     const cols = parseDimension(colsValue);
     const rows = parseDimension(rowsValue);
-    const entry = this.findTerminal(terminalId);
-    entry?.terminal.resize(cols, rows);
+    this.requireTerminal(this.requireSession(taskId), terminalIdValue).terminal.resize(cols, rows);
     return Promise.resolve();
   }
 
-  async closeTerminal(terminalIdValue: unknown): Promise<void> {
+  async closeTerminal(taskIdValue: unknown, terminalIdValue: unknown): Promise<void> {
+    const taskId = assertTaskId(taskIdValue);
+    const session = this.requireSession(taskId);
     const terminalId = parseTerminalId(terminalIdValue);
-    for (const session of this.sessions.values()) {
-      const entry = session.terminals.get(terminalId);
-      if (!entry) continue;
-      session.terminals.delete(terminalId);
-      entry.terminal.kill();
-      // A dev server started from the shell dies with it. Without this, the session keeps
-      // the stale port when only navigation closed the terminal, and the next server on
-      // that port would not be announced again.
-      if (session.terminals.size === 0) this.clearServers(session);
-      return Promise.resolve();
-    }
+    const entry = session.terminals.get(terminalId);
+    if (!entry) throw new Error('Terminal is not open in this workspace.');
+
+    session.terminals.delete(terminalId);
+    entry.terminal.kill();
+    // The kill callback also runs on exit; clearing here keeps the UI response immediate and
+    // is idempotent because the owned port set has already been removed from the map.
+    this.clearServers(session, terminalId);
     return Promise.resolve();
   }
 
-  private findTerminal(terminalId: string): TerminalEntry | undefined {
-    for (const session of this.sessions.values()) {
-      const entry = session.terminals.get(terminalId);
-      if (entry) return entry;
-    }
-    return undefined;
+  private requireTerminal(session: WorkspaceSession, terminalIdValue: unknown): TerminalEntry {
+    const terminalId = parseTerminalId(terminalIdValue);
+    const entry = session.terminals.get(terminalId);
+    if (!entry) throw new Error('Terminal is not open in this workspace.');
+    return entry;
+  }
+
+  private optionalTerminalFor(
+    session: WorkspaceSession,
+    terminalIdValue: unknown
+  ): TerminalEntry | null {
+    if (terminalIdValue === undefined || terminalIdValue === null) return null;
+    return this.requireTerminal(session, terminalIdValue);
   }
 
   private requireSession(taskId: string): WorkspaceSession {
@@ -489,20 +528,23 @@ export class WorkspaceManager {
     return session;
   }
 
-  private scannerFor(session: WorkspaceSession): PortWatcher {
-    const scan = createPortWatcher((port) => {
-      void this.announcePort(session, port);
+  private scannerFor(session: WorkspaceSession, ownerId: string | null): PortWatcher {
+    return createPortWatcher((port) => {
+      void this.announcePort(session, port, ownerId);
     });
-    return scan;
   }
 
   private resetScanners(session: WorkspaceSession): void {
     for (const entry of session.terminals.values()) {
-      entry.scan = this.scannerFor(session);
+      entry.scan = this.scannerFor(session, entry.terminal.id);
     }
   }
 
-  private async announcePort(session: WorkspaceSession, port: number): Promise<void> {
+  private async announcePort(
+    session: WorkspaceSession,
+    port: number,
+    ownerId: string | null
+  ): Promise<void> {
     if (session.closed || session.servers.has(port) || session.pendingPorts.has(port)) return;
     session.pendingPorts.add(port);
     try {
@@ -510,8 +552,14 @@ export class WorkspaceManager {
       if (!listening || session.closed || session.servers.has(port)) return;
 
       const url = `http://localhost:${port}`;
-      session.servers.set(port, url);
-      this.callbacks.emitEvent({ type: 'server-ready', taskId: session.taskId, port, url });
+      session.servers.set(port, { url, ownerId });
+      this.callbacks.emitEvent({
+        type: 'server-ready',
+        taskId: session.taskId,
+        port,
+        url,
+        terminalId: ownerId ?? undefined,
+      });
       this.monitorPort(session, port);
     } finally {
       session.pendingPorts.delete(port);
@@ -532,31 +580,54 @@ export class WorkspaceManager {
         if (misses < 2) return;
         clearInterval(timer);
         session.portMonitors.delete(port);
-        if (session.servers.delete(port)) {
-          // The next `npm run dev` may reuse the same port (Prisma Studio does), and it is
-          // often typed in the terminal rather than started with Run, so the scanner has to
-          // treat the port as new again or the Preview tab never comes back.
-          for (const entry of session.terminals.values()) entry.scan.forget(port);
-          this.callbacks.emitEvent({
-            type: 'server-closed',
-            taskId: session.taskId,
-            port,
-          });
-        }
+        const server = session.servers.get(port);
+        if (!server) return;
+        session.servers.delete(port);
+        this.forgetPort(session, port);
+        this.callbacks.emitEvent({
+          type: 'server-closed',
+          taskId: session.taskId,
+          port,
+          terminalId: server.ownerId ?? undefined,
+        });
       });
     }, PORT_POLL_MS);
     timer.unref?.();
     session.portMonitors.set(port, timer);
   }
 
-  private clearServers(session: WorkspaceSession): void {
-    for (const timer of session.portMonitors.values()) clearInterval(timer);
-    session.portMonitors.clear();
-    const ports = [...session.servers.keys()];
-    session.servers.clear();
-    for (const port of ports) {
-      this.callbacks.emitEvent({ type: 'server-closed', taskId: session.taskId, port });
+  /**
+   * Closes servers owned by one terminal, the fallback Run process, or everything. A port is
+   * forgotten by every terminal so a later server can reuse it and be announced again.
+   */
+  private clearServers(session: WorkspaceSession, ownerId?: string | null): void {
+    if (ownerId === undefined) {
+      for (const timer of session.portMonitors.values()) clearInterval(timer);
+      session.portMonitors.clear();
     }
+
+    const closing = [...session.servers.entries()].filter(
+      ([, server]) => ownerId === undefined || server.ownerId === ownerId
+    );
+    for (const [port, server] of closing) {
+      const timer = session.portMonitors.get(port);
+      if (timer) clearInterval(timer);
+      session.portMonitors.delete(port);
+      session.servers.delete(port);
+      this.forgetPort(session, port);
+      this.callbacks.emitEvent({
+        type: 'server-closed',
+        taskId: session.taskId,
+        port,
+        terminalId: server.ownerId ?? undefined,
+      });
+    }
+  }
+
+  private forgetPort(session: WorkspaceSession, port: number): void {
+    // The next server on this port may be started from a different terminal, so no scanner
+    // may still remember the old URL.
+    for (const entry of session.terminals.values()) entry.scan.forget(port);
   }
 
   /** The task's environment, plus its PostgreSQL URLs for Prisma tasks. */

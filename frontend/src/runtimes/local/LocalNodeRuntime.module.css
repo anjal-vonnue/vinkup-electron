@@ -13,6 +13,45 @@
   display: none;
 }
 
+.terminalArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminalArea[hidden] {
+  display: none;
+}
+
+.stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.terminalBanner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background-color: var(--color-bg-pill-inactive);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-divider);
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -100,4 +139,8 @@
   font-size: 12px;
   color: var(--color-status-error-text);
   text-decoration: underline;
+}
+
+.terminalBanner .retry {
+  color: var(--color-text-primary);
 }

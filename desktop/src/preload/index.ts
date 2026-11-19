@@ -9,6 +9,7 @@ import type {
   ResourcesFindResult,
   TerminalDataEvent,
   TerminalExitEvent,
+  TerminalOpenResult,
   WorkspaceEnvironment,
   WorkspaceEvent,
   WorkspaceOpenInput,
@@ -105,13 +106,13 @@ const api: DesktopApi = {
     },
   },
   terminal: {
-    open: (input) => ipcRenderer.invoke('terminal:open', input) as Promise<{ terminalId: string }>,
-    write: (terminalId: string, data: string) =>
-      ipcRenderer.invoke('terminal:write', terminalId, data) as Promise<void>,
-    resize: (terminalId: string, cols: number, rows: number) =>
-      ipcRenderer.invoke('terminal:resize', terminalId, cols, rows) as Promise<void>,
-    close: (terminalId: string) =>
-      ipcRenderer.invoke('terminal:close', terminalId) as Promise<void>,
+    open: (input) => ipcRenderer.invoke('terminal:open', input) as Promise<TerminalOpenResult>,
+    write: (taskId: string, terminalId: string, data: string) =>
+      ipcRenderer.invoke('terminal:write', taskId, terminalId, data) as Promise<void>,
+    resize: (taskId: string, terminalId: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('terminal:resize', taskId, terminalId, cols, rows) as Promise<void>,
+    close: (taskId: string, terminalId: string) =>
+      ipcRenderer.invoke('terminal:close', taskId, terminalId) as Promise<void>,
     onData: (listener: (event: TerminalDataEvent) => void) => {
       const handler = (_event: IpcRendererEvent, payload: TerminalDataEvent): void => {
         listener(payload);
@@ -137,9 +138,10 @@ const api: DesktopApi = {
   },
   run: {
     install: (taskId: string) => ipcRenderer.invoke('run:install', taskId) as Promise<void>,
-    dev: (taskId: string, command: string) =>
-      ipcRenderer.invoke('run:dev', taskId, command) as Promise<void>,
-    stop: (taskId: string) => ipcRenderer.invoke('run:stop', taskId) as Promise<void>,
+    dev: (taskId: string, command: string, terminalId?: string) =>
+      ipcRenderer.invoke('run:dev', taskId, command, terminalId) as Promise<void>,
+    stop: (taskId: string, terminalId?: string) =>
+      ipcRenderer.invoke('run:stop', taskId, terminalId) as Promise<void>,
   },
   resources: {
     getAllowlist: () =>

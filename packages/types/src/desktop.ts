@@ -74,8 +74,20 @@ export type WorkspaceEvent =
       data: string;
     }
   | { type: 'run-exited'; taskId: string; kind: WorkspaceRunKind; exitCode: number }
-  | { type: 'server-ready'; taskId: string; port: number; url: string }
-  | { type: 'server-closed'; taskId: string; port: number };
+  | {
+      type: 'server-ready';
+      taskId: string;
+      port: number;
+      url: string;
+      /** Terminal that printed the URL; absent for servers started by Run before a shell opened. */
+      terminalId?: string;
+    }
+  | {
+      type: 'server-closed';
+      taskId: string;
+      port: number;
+      terminalId?: string;
+    };
 
 export type WorkspaceEnvironment = {
   /** e.g. "24.18.0"; null when Node is missing. */
@@ -106,17 +118,24 @@ export type TerminalOpenInput = {
 
 export type TerminalOpenResult = {
   terminalId: string;
+  /** Stable display name assigned by main, independent of the generated terminal id. */
+  name: string;
 };
 
 export type TerminalDataEvent = {
+  taskId: string;
   terminalId: string;
   data: string;
 };
 
 export type TerminalExitEvent = {
+  taskId: string;
   terminalId: string;
   exitCode: number;
 };
+
+/** Main enforces this limit; the renderer uses it to explain why a new tab is unavailable. */
+export const MAX_TERMINALS_PER_TASK = 4;
 
 export type LighthouseCategory = 'performance' | 'accessibility' | 'best-practices' | 'seo';
 
@@ -151,9 +170,10 @@ export interface WorkspaceApi {
 
 export interface TerminalApi {
   open: (input: TerminalOpenInput) => Promise<TerminalOpenResult>;
-  write: (terminalId: string, data: string) => Promise<void>;
-  resize: (terminalId: string, cols: number, rows: number) => Promise<void>;
-  close: (terminalId: string) => Promise<void>;
+  /** All operations carry the task id so main can reject another workspace's terminal id. */
+  write: (taskId: string, terminalId: string, data: string) => Promise<void>;
+  resize: (taskId: string, terminalId: string, cols: number, rows: number) => Promise<void>;
+  close: (taskId: string, terminalId: string) => Promise<void>;
   /** Returns an unsubscribe function. */
   onData: (listener: (event: TerminalDataEvent) => void) => () => void;
   /** Returns an unsubscribe function. */
@@ -163,9 +183,10 @@ export interface TerminalApi {
 export interface RunApi {
   /** Runs `npm install` in the task workspace; output arrives as run-output events. */
   install: (taskId: string) => Promise<void>;
-  /** Types the command into the task's shell (or spawns it when no shell is open). */
-  dev: (taskId: string, command: string) => Promise<void>;
-  stop: (taskId: string) => Promise<void>;
+  /** Types the command into the selected shell (or spawns it when no shell is open). */
+  dev: (taskId: string, command: string, terminalId?: string) => Promise<void>;
+  /** Stops the dev server owned by the selected terminal (legacy: all when omitted). */
+  stop: (taskId: string, terminalId?: string) => Promise<void>;
 }
 
 /**
