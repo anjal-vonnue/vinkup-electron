@@ -1,0 +1,44 @@
+/* Drag handle that sits in its own 8px grid track between two panes. */
+
+.resizer {
+  position: relative;
+  z-index: 2;
+  min-height: 0;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+/* The visible divider: 1px at rest, thicker and purple when hovered, focused or dragged. */
+.resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background-color: var(--color-border-divider);
+  transition:
+    width 0.12s ease,
+    background-color 0.12s ease;
+}
+
+.resizer:hover::before,
+.resizer:focus-visible::before,
+.resizer[data-active='true']::before {
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--color-accent-purple, #7c41e4);
+}
+
+.resizer:focus-visible {
+  outline: 2px solid var(--color-accent-purple, #7c41e4);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resizer::before {
+    transition: none;
+  }
+}

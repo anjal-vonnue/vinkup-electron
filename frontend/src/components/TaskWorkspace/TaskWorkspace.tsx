@@ -6,6 +6,19 @@ import type { ReviewStatus, TaskResponse } from '@itp/types';
 import { getTaskCode, getTaskReview, saveTaskCode, submitTask } from '../../api/tasks';
 import { applyRuntimeSettings } from '../../lib/monacoSetup';
 import {
+  DEFAULT_SIDEBAR_PX,
+  HANDLE_PX,
+  MAX_SIDEBAR_PX,
+  MIN_PANE_PX,
+  MIN_RESULT_PX,
+  MIN_SIDEBAR_PX,
+  buildColumns,
+  clamp,
+  readSizes,
+  writeSizes,
+  type PaneSizes,
+} from '../../lib/paneLayout';
+import {
   selectFileCount,
   selectFilesForSave,
   selectIsDirty,
@@ -28,6 +41,7 @@ import ConfirmDialog from '../ConfirmDialog';
 import EditorPane from '../EditorPane';
 import FilesPanel from '../FilesPanel';
 import InstructionsPanel from '../InstructionsPanel';
+import PaneResizer from '../PaneResizer';
 import SaveIndicator from '../SaveIndicator';
 import SubmitTaskButton from '../SubmitTaskButton';
 import TaskFeedbackModal from '../TaskFeedbackModal';
@@ -38,6 +52,8 @@ import styles from './TaskWorkspace.module.css';
 type TaskWorkspaceProps = {
   task: TaskResponse;
 };
+
+type ResizableKind = 'sidebar' | 'result';
 
 export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   const state = useWorkspaceState();
@@ -189,14 +205,135 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
     [dispatch]
   );
 
-  const gridColumns = [
-    state.visiblePanes.sidebar &&
-      (state.visiblePanes.code || state.visiblePanes.result ? '320px' : 'minmax(0, 1fr)'),
-    state.visiblePanes.code && 'minmax(0, 1fr)',
-    state.visiblePanes.result && 'minmax(0, 1fr)',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  /* ---- Resizable panes -------------------------------------------------------------- */
+
+  const rowRef = useRef<HTMLDivElement>(null);
+  const sidebarPaneRef = useRef<HTMLDivElement>(null);
+  const resultPaneRef = useRef<HTMLDivElement>(null);
+
+  const [paneSizes, setPaneSizes] = useState<PaneSizes>(readSizes);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const sizesRef = useRef(paneSizes);
+  useEffect(() => {
+    sizesRef.current = paneSizes;
+  });
+
+  const dragRef = useRef<{ kind: ResizableKind; startWidth: number; draft: PaneSizes } | null>(
+    null
+  );
+
+  const commitSizes = useCallback((next: PaneSizes) => {
+    sizesRef.current = next;
+    setPaneSizes(next);
+    writeSizes(next);
+  }, []);
+
+  /** The sizes after giving `kind` this width, or null if the window is too small to resize. */
+  const sizesForWidth = useCallback((kind: ResizableKind, width: number): PaneSizes | null => {
+    const row = rowRef.current;
+    if (!row) return null;
+
+    const { sidebar, code, result } = stateRef.current.visiblePanes;
+    const hasMain = code || result;
+    const rowWidth = row.getBoundingClientRect().width;
+    const handles = (sidebar && hasMain ? 1 : 0) + (code && result ? 1 : 0);
+    const handleSpace = handles * HANDLE_PX;
+
+    let min: number;
+    let max: number;
+
+    if (kind === 'sidebar') {
+      const others = (code ? MIN_PANE_PX : 0) + (result ? MIN_RESULT_PX : 0);
+      min = MIN_SIDEBAR_PX;
+      max = Math.min(MAX_SIDEBAR_PX, rowWidth - others - handleSpace);
+    } else {
+      const sidebarWidth = sidebar
+        ? (sidebarPaneRef.current?.getBoundingClientRect().width ?? 0)
+        : 0;
+      min = MIN_RESULT_PX;
+      max = rowWidth - sidebarWidth - handleSpace - MIN_PANE_PX;
+    }
+
+    if (max < min) return null;
+
+    const next = Math.round(clamp(width, min, max));
+    const base = sizesRef.current;
+
+    return kind === 'sidebar' ? { ...base, sidebar: next } : { ...base, result: next };
+  }, []);
+
+  const paneFor = useCallback(
+    (kind: ResizableKind) => (kind === 'sidebar' ? sidebarPaneRef.current : resultPaneRef.current),
+    []
+  );
+
+  const beginResize = useCallback(
+    (kind: ResizableKind) => {
+      const pane = paneFor(kind);
+      if (!pane) return;
+
+      dragRef.current = {
+        kind,
+        startWidth: pane.getBoundingClientRect().width,
+        draft: sizesRef.current,
+      };
+      setIsResizing(true);
+    },
+    [paneFor]
+  );
+
+  // While dragging, write the grid straight to the DOM. Re-rendering the whole workspace
+  // (Monaco, the runtime) on every pointer move would make the drag feel heavy.
+  const resize = useCallback(
+    (deltaX: number) => {
+      const drag = dragRef.current;
+      const row = rowRef.current;
+      if (!drag || !row) return;
+
+      // The sidebar grows as the boundary moves right; the result pane shrinks.
+      const width = drag.kind === 'sidebar' ? drag.startWidth + deltaX : drag.startWidth - deltaX;
+      const next = sizesForWidth(drag.kind, width);
+      if (!next) return;
+
+      drag.draft = next;
+      row.style.gridTemplateColumns = buildColumns(stateRef.current.visiblePanes, next);
+    },
+    [sizesForWidth]
+  );
+
+  const endResize = useCallback(() => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setIsResizing(false);
+
+    if (drag) commitSizes(drag.draft);
+  }, [commitSizes]);
+
+  const nudge = useCallback(
+    (kind: ResizableKind, deltaX: number) => {
+      const pane = paneFor(kind);
+      if (!pane) return;
+
+      const current = pane.getBoundingClientRect().width;
+      const next = sizesForWidth(kind, kind === 'sidebar' ? current + deltaX : current - deltaX);
+      if (next) commitSizes(next);
+    },
+    [commitSizes, paneFor, sizesForWidth]
+  );
+
+  const resetSize = useCallback(
+    (kind: ResizableKind) => {
+      const base = sizesRef.current;
+      commitSizes(
+        kind === 'sidebar' ? { ...base, sidebar: DEFAULT_SIDEBAR_PX } : { ...base, result: null }
+      );
+    },
+    [commitSizes]
+  );
+
+  const { sidebar: showSidebar, code: showCode, result: showResult } = state.visiblePanes;
+  const gridColumns = buildColumns(state.visiblePanes, paneSizes);
 
   return (
     <WorkActivityContext.Provider value={markWork}>
@@ -224,9 +361,13 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
             />
           }
         />
-        <div className={styles.paneRow} style={{ gridTemplateColumns: gridColumns }}>
-          {state.visiblePanes.sidebar && (
-            <div className={styles.pane} data-testid="sidebar-pane">
+        <div
+          ref={rowRef}
+          className={isResizing ? `${styles.paneRow} ${styles.resizing}` : styles.paneRow}
+          style={{ gridTemplateColumns: gridColumns }}
+        >
+          {showSidebar && (
+            <div className={styles.pane} data-testid="sidebar-pane" ref={sidebarPaneRef}>
               <WorkspaceSidebar
                 activeTab={state.sidebarTab}
                 onTabChange={(tab) => dispatch({ type: 'sidebarTabChanged', tab })}
@@ -237,25 +378,51 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
               />
             </div>
           )}
+
+          {showSidebar && (showCode || showResult) && (
+            <PaneResizer
+              label="Resize sidebar"
+              valueNow={clamp(paneSizes.sidebar, MIN_SIDEBAR_PX, MAX_SIDEBAR_PX)}
+              valueMin={MIN_SIDEBAR_PX}
+              valueMax={MAX_SIDEBAR_PX}
+              onResizeStart={() => beginResize('sidebar')}
+              onResize={resize}
+              onResizeEnd={endResize}
+              onNudge={(deltaX) => nudge('sidebar', deltaX)}
+              onReset={() => resetSize('sidebar')}
+            />
+          )}
+
           {/* Always mounted, hidden with CSS when toggled off — unmounting Monaco would lose undo history. */}
           <div
-            className={
-              state.visiblePanes.code ? styles.pane : `${styles.pane} ${styles.paneHidden}`
-            }
+            className={showCode ? styles.pane : `${styles.pane} ${styles.paneHidden}`}
             data-testid="code-pane"
           >
             <EditorPane taskId={task.id} onSave={() => void autosave.flush()} onRun={handleRun} />
           </div>
 
+          {showCode && showResult && (
+            <PaneResizer
+              label="Resize result pane"
+              valueNow={paneSizes.result ?? undefined}
+              valueMin={MIN_RESULT_PX}
+              onResizeStart={() => beginResize('result')}
+              onResize={resize}
+              onResizeEnd={endResize}
+              onNudge={(deltaX) => nudge('result', deltaX)}
+              onReset={() => resetSize('result')}
+            />
+          )}
+
           {/* Always mounted, hidden with CSS when toggled off — the node runtime's terminal
             and running server must survive the pane being hidden. */}
           <div
-            className={
-              state.visiblePanes.result ? styles.pane : `${styles.pane} ${styles.paneHidden}`
-            }
+            className={showResult ? styles.pane : `${styles.pane} ${styles.paneHidden}`}
             data-testid="result-pane"
+            data-pane="result"
+            ref={resultPaneRef}
           >
-            <RuntimeHost task={task} isVisible={state.visiblePanes.result} />
+            <RuntimeHost task={task} isVisible={showResult} />
           </div>
         </div>
 
