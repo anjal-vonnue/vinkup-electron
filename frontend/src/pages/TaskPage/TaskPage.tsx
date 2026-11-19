@@ -10,6 +10,7 @@ import { useTaskData } from './hooks/useTaskData';
 import { EditorProvider } from './state/EditorContext';
 import { WorkspaceProvider } from './state/WorkspaceContext';
 import { RunnerProvider } from '../../runtimes/runnerContext';
+import { useWorkspaceSession } from '../../context/WorkspaceSessionContext';
 import styles from './TaskPage.module.css';
 
 type TaskData = ReturnType<typeof useTaskData>;
@@ -50,6 +51,8 @@ function DashboardLink() {
 }
 
 function TaskPageBody({ data }: { data: TaskData }) {
+  const { restoreWorkspace } = useWorkspaceSession();
+
   if (data.status === 'loading') {
     return <TaskPageSkeleton />;
   }
@@ -94,7 +97,12 @@ function TaskPageBody({ data }: { data: TaskData }) {
   }
 
   return (
-    <WorkspaceProvider key={data.task.id} code={data.code}>
+    <WorkspaceProvider
+      key={data.task.id}
+      taskId={data.task.id}
+      code={data.code}
+      initialState={restoreWorkspace(data.task.id) ?? undefined}
+    >
       <EditorProvider>
         <RunnerProvider>
           <TaskWorkspace task={data.task} />
@@ -107,6 +115,12 @@ function TaskPageBody({ data }: { data: TaskData }) {
 export default function TaskPage() {
   const { taskId } = useParams();
   const data = useTaskData(taskId);
+  const { activeTaskId, exitWorkspace } = useWorkspaceSession();
+
+  // A stale session for a task that cannot be opened would redirect Home in a loop.
+  useEffect(() => {
+    if (data.status === 'error' && taskId && activeTaskId === taskId) exitWorkspace();
+  }, [data.status, taskId, activeTaskId, exitWorkspace]);
 
   const pageTitle =
     data.status === 'success' ? `${data.task.title} · Task ${data.task.sequenceOrder}` : null;

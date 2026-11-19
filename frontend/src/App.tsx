@@ -4,6 +4,8 @@ import { PublicOnlyRoute } from './routes/PublicOnlyRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { AuthProvider } from './context/AuthProvider';
 import { ActivityProvider } from './context/ActivityProvider';
+import { WorkspaceSessionProvider } from './context/WorkspaceSessionContext';
+import { WorkspaceAwareHome } from './routes/WorkspaceAwareHome';
 // import FullscreenGate from './components/FullscreenGate';
 import LoginPage from './pages/LoginPage/LoginPage';
 import ProfilePage from './pages/ProfilePage';
@@ -41,64 +43,73 @@ export default function App() {
     <AuthProvider>
       {/* <FullscreenGate> */}
       <ActivityProvider>
-        <Routes>
-          <Route element={<ProtectedRoute />}>
-            <Route element={<RoleRoute role="trainee" />}>
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/help" element={<HelpPage />}></Route>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/typing-test" element={<TypingTestPage />} />
-              <Route path="/journal" element={<JournalPage />} />
-              <Route path="/resources" element={<ResourcesPage />} />
-              <Route path="/certificates/:courseId" element={<CertificatePage />} />
-              <Route
-                path="/tasks/:taskId"
-                element={
-                  <Suspense fallback={<TaskPageSkeleton />}>
-                    <TaskPage />
-                  </Suspense>
-                }
-              />
-              <Route path="/days/:dayId" element={<DayOverviewPage />} />
-              <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
-            </Route>
+        <WorkspaceSessionProvider>
+          <Routes>
+            <Route element={<ProtectedRoute />}>
+              <Route element={<RoleRoute role="trainee" />}>
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/help" element={<HelpPage />}></Route>
+                <Route
+                  path="/"
+                  element={
+                    <WorkspaceAwareHome>
+                      <DashboardPage />
+                    </WorkspaceAwareHome>
+                  }
+                />
+                <Route path="/typing-test" element={<TypingTestPage />} />
+                <Route path="/journal" element={<JournalPage />} />
+                <Route path="/resources" element={<ResourcesPage />} />
+                <Route path="/certificates/:courseId" element={<CertificatePage />} />
+                <Route
+                  path="/tasks/:taskId"
+                  element={
+                    <Suspense fallback={<TaskPageSkeleton />}>
+                      <TaskPage />
+                    </Suspense>
+                  }
+                />
+                <Route path="/days/:dayId" element={<DayOverviewPage />} />
+                <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
+              </Route>
 
-            <Route element={<RoleRoute role="mentor" />}>
-              <Route
-                path="/admin"
-                element={
-                  <Suspense fallback={<LoaderOverlay fullPage />}>
-                    <AdminTraineesPage />
-                  </Suspense>
-                }
-              ></Route>
+              <Route element={<RoleRoute role="mentor" />}>
+                <Route
+                  path="/admin"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <AdminTraineesPage />
+                    </Suspense>
+                  }
+                ></Route>
 
-              <Route
-                path="/admin/trainees/:traineeId"
-                element={
-                  <Suspense fallback={<LoaderOverlay fullPage />}>
-                    <AdminTraineePage />
-                  </Suspense>
-                }
-              ></Route>
-            </Route>
+                <Route
+                  path="/admin/trainees/:traineeId"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <AdminTraineePage />
+                    </Suspense>
+                  }
+                ></Route>
+              </Route>
 
-            <Route element={<RoleRoute role="manager" />}>
-              <Route
-                path="/manager"
-                element={
-                  <Suspense fallback={<LoaderOverlay fullPage />}>
-                    <ManagerPage />
-                  </Suspense>
-                }
-              />
+              <Route element={<RoleRoute role="manager" />}>
+                <Route
+                  path="/manager"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <ManagerPage />
+                    </Suspense>
+                  }
+                />
+              </Route>
             </Route>
-          </Route>
-          <Route element={<PublicOnlyRoute />}>
-            <Route path="/login" element={<LoginPage />} />
-          </Route>
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+            <Route element={<PublicOnlyRoute />}>
+              <Route path="/login" element={<LoginPage />} />
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </WorkspaceSessionProvider>
       </ActivityProvider>
       {/* </FullscreenGate> */}
     </AuthProvider>
