@@ -293,6 +293,26 @@ describe('workspace navigation (trainee)', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('turns the Home chip yellow only in the workspace editor', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/workspaceActive/);
+
+    await openFirstTask(user);
+    expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/workspaceActive/);
+
+    await user.click(screen.getByRole('button', { name: /back to tasks/i }));
+    expect(await screen.findByText('Day overview section')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/active/);
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/workspaceActive/);
+
+    await user.click(screen.getByRole('link', { name: 'Journal' }));
+    await screen.findByTestId('section-journal');
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/workspaceActive/);
+    expect(screen.getByRole('link', { name: 'Journal' }).className).toMatch(/active/);
+  });
+
   it('clears the preserved workspace on Back to tasks', async () => {
     const user = userEvent.setup();
     renderApp();
