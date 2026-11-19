@@ -480,8 +480,9 @@ export class DisplayWindowManager {
     ) {
       return;
     }
-    this.mainWindow.setFullScreen(true);
-    this.keepOnAllWorkspaces(this.mainWindow);
+    void this.restoreMainWindowForFocus().catch((error: unknown) => {
+      console.error('[desktop] Failed to restore fullscreen after leaving fullscreen', error);
+    });
   };
 
   private readonly onMainWindowClosed = (): void => {
@@ -746,6 +747,41 @@ export class DisplayWindowManager {
       }
       window.setFullScreen(fullscreen);
     });
+  }
+
+  private async restoreMinimizedWindow(window: BrowserWindow): Promise<void> {
+    if (!window.isMinimized()) return;
+
+    await new Promise<void>((resolve, reject) => {
+      const onRestored = (): void => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      const timeout = setTimeout(() => {
+        window.removeListener('restore', onRestored);
+        if (isAlive(window) && !window.isMinimized()) {
+          resolve();
+        } else {
+          reject(new Error('Timed out waiting for the main window to be restored.'));
+        }
+      }, FULLSCREEN_CHANGE_TIMEOUT_MS);
+      window.once('restore', onRestored);
+      window.restore();
+    });
+  }
+
+  private async restoreMainWindowForFocus(): Promise<void> {
+    const window = this.mainWindow;
+    if (!isAlive(window) || this.isQuitting) return;
+
+    await this.restoreMinimizedWindow(window);
+    if (!isAlive(window) || this.isQuitting || !this.isProtectionEnabledForCurrentUser()) {
+      return;
+    }
+
+    if (!window.isFullScreen()) await this.setFullscreen(true);
+    if (!isAlive(window) || this.isQuitting) return;
+    this.keepMainWindowOnCorrectWorkspaces();
   }
 
   private async restoreProtectionAfterAuthentication(): Promise<void> {
@@ -1051,12 +1087,20 @@ export class DisplayWindowManager {
   }
 
   private dismissAlerts(): void {
+    void this.dismissAlertsAndRestore().catch((error: unknown) => {
+      console.error('[desktop] Failed to restore the app after the focus alert', error);
+    });
+  }
+
+  private async dismissAlertsAndRestore(): Promise<void> {
     const returnDisplay = screen
       .getAllDisplays()
       .find((display) => display.id === this.alertReturnDisplayId);
     this.clearAlerts();
     this.alertDismissedAt = Date.now();
     this.focusLostAt = null;
+    if (!isAlive(this.mainWindow) || this.isQuitting) return;
+    await this.restoreMainWindowForFocus();
     if (!isAlive(this.mainWindow) || this.isQuitting) return;
     this.mainWindow.show();
     this.keepOnAllWorkspaces(this.mainWindow);

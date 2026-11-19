@@ -42,6 +42,7 @@ class FakeWindow extends EventEmitter {
   destroyed = false;
   focused = false;
   visible = false;
+  minimized = false;
   fullscreen = true;
   focusable = true;
   bounds: Electron.Rectangle = { x: 0, y: 0, width: 1280, height: 720 };
@@ -71,6 +72,16 @@ class FakeWindow extends EventEmitter {
 
   isFullScreen(): boolean {
     return this.fullscreen;
+  }
+
+  isMinimized(): boolean {
+    return this.minimized;
+  }
+
+  restore(): void {
+    this.minimized = false;
+    this.visible = true;
+    this.emit('restore');
   }
 
   setFullScreen(value: boolean): void {
@@ -522,10 +533,83 @@ describe('DisplayWindowManager focus alerts', () => {
 
     mainWindow.setBounds({ x: 0, y: 0, width: 1280, height: 720 });
     manager.handleAlertChoice('back');
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(mainWindow.getBounds().x).toBe(1280);
+    });
 
     expect(mainWindow.getBounds().x).toBe(1280);
+    expect(mainWindow.isFullScreen()).toBe(true);
+    manager.dispose();
+  });
+
+  it('restores a minimized main window to fullscreen when Go back is selected', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(800);
+
+    mainWindow.minimized = true;
+    mainWindow.visible = false;
+    mainWindow.fullscreen = false;
+    mainWindow.focused = false;
+    vi.spyOn(mainWindow, 'restore').mockImplementation(() => {
+      setTimeout(() => {
+        mainWindow.minimized = false;
+        mainWindow.visible = true;
+        mainWindow.emit('restore');
+      }, 100);
+    });
+    vi.spyOn(mainWindow, 'setFullScreen').mockImplementation((value) => {
+      setTimeout(() => {
+        mainWindow.fullscreen = value;
+        mainWindow.emit(value ? 'enter-full-screen' : 'leave-full-screen');
+      }, 100);
+    });
+    manager.handleAlertChoice('back');
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(mainWindow.isMinimized()).toBe(false);
+    expect(mainWindow.isFullScreen()).toBe(false);
+    expect(mainWindow.isFocused()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.waitFor(() => expect(mainWindow.isFocused()).toBe(true));
+    expect(mainWindow.isFullScreen()).toBe(true);
+    manager.dispose();
+  });
+
+  it('re-enters fullscreen when the system exits fullscreen for tiling', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.minimized = true;
+    mainWindow.visible = false;
+
+    mainWindow.setFullScreen(false);
+
+    expect(mainWindow.isMinimized()).toBe(false);
+    expect(mainWindow.isVisible()).toBe(true);
+    await vi.waitFor(() => expect(mainWindow.isFullScreen()).toBe(true));
     expect(mainWindow.isFullScreen()).toBe(true);
     manager.dispose();
   });
