@@ -12,6 +12,7 @@ const SHORTCUTS = new Set([
   '<super>down',
   '<super>h',
   '<super>d',
+  '<super>p',
   '<super>kp_1',
   '<super>kp_2',
   '<super>kp_3',

@@ -17,6 +17,7 @@ const initialSettings = new Map([
   ['org.gnome.desktop.wm.keybindings.show-desktop', "['<Super>d']"],
   ['org.gnome.desktop.wm.keybindings.maximize', "['<Super>Up']"],
   ['org.gnome.desktop.wm.keybindings.unmaximize', "['<Super>Down', '<Alt>F5']"],
+  ['org.gnome.mutter.keybindings.switch-monitor', "['<Super>p', 'XF86Display']"],
   ['org.gnome.shell.extensions.tiling-assistant.tile-left-half', "['<Super>Left', '<Super>KP_4']"],
   [
     'org.gnome.shell.extensions.tiling-assistant.tile-right-half',
@@ -95,6 +96,7 @@ describe('GnomeShortcutProtection', () => {
     );
     expect(settings.get('org.gnome.desktop.wm.keybindings.maximize')).toBe('[]');
     expect(settings.get('org.gnome.desktop.wm.keybindings.unmaximize')).toBe("['<Alt>F5']");
+    expect(settings.get('org.gnome.mutter.keybindings.switch-monitor')).toBe("['XF86Display']");
     expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-left-half')).toBe('[]');
     expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-right-half')).toBe('[]');
     expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-maximize')).toBe('[]');
