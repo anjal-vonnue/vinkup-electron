@@ -123,12 +123,20 @@
 }
 
 .feedbackSnippet {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
   font-size: 0.85rem;
   color: var(--color-text-secondary);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 50ch;
+  max-height: 3.2em;
+  line-height: 1.6;
+}
+
+.feedbackSnippet > :global(div) {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .reviewerNote {

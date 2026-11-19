@@ -99,6 +99,28 @@ describe('ReworkBanner', () => {
     expect(onOpenFeedback).toHaveBeenCalledWith(mockTasks[0]);
   });
 
+  it('renders Markdown feedback in the banner preview', () => {
+    render(
+      <ReworkBanner
+        tasks={[
+          {
+            ...mockTasks[0],
+            latestReview: {
+              ...mockTasks[0].latestReview!,
+              feedback: '## Required changes\n\n- Fix the heading\n- Add spacing',
+            },
+          },
+        ]}
+        onOpenFeedback={vi.fn()}
+        onOpenTask={vi.fn()}
+        initialExpanded
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Required changes' })).toBeInTheDocument();
+    expect(screen.getByRole('list').querySelectorAll('li')).toHaveLength(2);
+  });
+
   it('calls onOpenTask when Go to Task is clicked in expanded state', () => {
     const onOpenTask = vi.fn();
     render(
