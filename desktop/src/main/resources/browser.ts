@@ -48,6 +48,8 @@ export interface ResourcesBrowserEvents {
 export class ResourcesBrowser {
   private view: WebContentsView | null = null;
   private allowlist: ResourcesAllowlist;
+  /** Loopback ports the app currently serves; everything else local is refused. */
+  private localPorts: ReadonlySet<number> = new Set();
   private state: ResourcesBrowserState = { ...EMPTY_BROWSER_STATE };
   private lastBounds: ResourcesBrowserBounds | null = null;
   private attached = false;
@@ -75,6 +77,11 @@ export class ResourcesBrowser {
 
   setAllowlist(allowlist: ResourcesAllowlist): void {
     this.allowlist = allowlist;
+  }
+
+  /** Updates which loopback ports the browser may open (see `LocalServicePorts`). */
+  setLocalPorts(ports: ReadonlySet<number>): void {
+    this.localPorts = ports;
   }
 
   open(bounds: ResourcesBrowserBounds): ResourcesBrowserState {
@@ -123,7 +130,7 @@ export class ResourcesBrowser {
   }
 
   navigate(input: string): ResourcesBrowserState {
-    const target = resolveNavigationInput(input, this.allowlist);
+    const target = resolveNavigationInput(input, this.allowlist, this.localPorts);
 
     if (target.kind === 'invalid') {
       this.update({
@@ -344,7 +351,7 @@ export class ResourcesBrowser {
     contents.setWindowOpenHandler(({ url }) => {
       // Treat `target="_blank"` as a normal navigation so it still hits the
       // allowlist and never opens an unmanaged window.
-      if (isAllowedNavigationUrl(url, this.allowlist)) {
+      if (isAllowedNavigationUrl(url, this.allowlist, this.localPorts)) {
         this.loadInPlace(url);
       } else {
         this.block(url);
@@ -353,7 +360,7 @@ export class ResourcesBrowser {
     });
 
     contents.on('will-navigate', (event, url) => {
-      if (isAllowedNavigationUrl(url, this.allowlist)) return;
+      if (isAllowedNavigationUrl(url, this.allowlist, this.localPorts)) return;
       event.preventDefault();
       // this.block(url);
       // Keep the current approved page visible when it tries to navigate to an
@@ -363,7 +370,7 @@ export class ResourcesBrowser {
     });
 
     contents.on('will-redirect', (event, url) => {
-      if (isAllowedNavigationUrl(url, this.allowlist)) return;
+      if (isAllowedNavigationUrl(url, this.allowlist, this.localPorts)) return;
       event.preventDefault();
       // this.block(url);
       // Keep the current approved page visible when it tries to navigate to an

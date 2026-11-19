@@ -206,6 +206,31 @@ describe('ResourcesPage', () => {
     expect(screen.getByRole('button', { name: 'Copy access request' })).toBeInTheDocument();
   });
 
+  it('explains a local port the app is not serving', async () => {
+    installDesktopApi({
+      isHome: false,
+      isBlocked: true,
+      blockedUrl: 'http://localhost:8080/',
+      blockedHost: 'localhost:8080',
+    });
+
+    render(
+      <MemoryRouter>
+        <ResourcesPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('This local server is not available')).toBeInTheDocument();
+    expect(
+      screen.getByText(/only opens local ports used by its own services/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Start the backend, the React app or Prisma Studio/i)
+    ).toBeInTheDocument();
+    // A mentor cannot approve another program's port, so no access request.
+    expect(screen.queryByRole('button', { name: 'Copy access request' })).not.toBeInTheDocument();
+  });
+
   it('explains an offline load failure', async () => {
     installDesktopApi({
       isHome: false,

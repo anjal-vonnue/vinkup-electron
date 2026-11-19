@@ -33,6 +33,16 @@
     status.dataset.error = String(isError);
   }
 
+  function isLocalHost(host) {
+    if (!host) return false;
+    const name = host
+      .trim()
+      .toLowerCase()
+      .replace(/:\d+$/, '')
+      .replace(/^\[|\]$/g, '');
+    return name === 'localhost' || name === '127.0.0.1' || name === '::1';
+  }
+
   function renderAllowlist(allowlist) {
     siteList.replaceChildren();
     for (const category of allowlist.categories) {
@@ -99,7 +109,10 @@
     homeView.hidden = !state.isHome || state.error !== null || state.isBlocked;
     errorView.hidden = !state.isBlocked && state.error === null;
     if (state.isBlocked) {
-      errorView.textContent = `${state.blockedHost ?? 'This address'} is not an approved learning resource.`;
+      const host = state.blockedHost ?? 'This address';
+      errorView.textContent = isLocalHost(host)
+        ? `${host} is not available. Start the backend, React app or Prisma Studio, then try again.`
+        : `${host} is not an approved learning resource.`;
       setStatus('This site is blocked by the learning resources policy.', true);
     } else if (state.error) {
       errorView.textContent = state.error;
