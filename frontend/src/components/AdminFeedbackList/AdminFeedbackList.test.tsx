@@ -100,6 +100,12 @@ describe('AdminFeedbackList', () => {
       }
 
       expect(previousLines).toBeGreaterThanOrEqual(lineCount);
+      expect(screen.queryByRole('button', { name: 'Show more feedback' })).not.toBeInTheDocument();
+      const collapse = screen.getByRole('button', { name: 'Show less feedback' });
+      await user.click(collapse);
+      expect(Number(content?.getAttribute('data-visible-lines'))).toBe(8);
+      expect(screen.getByRole('button', { name: 'Show more feedback' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Show less feedback' })).not.toBeInTheDocument();
       unmount();
     }
   });
