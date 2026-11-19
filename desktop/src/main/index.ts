@@ -26,6 +26,7 @@ import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager'
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
 import { DisplayWindowManager } from './displayWindowManager';
+import { saveCertificatePdf } from './certificatePdf';
 import { GnomeShortcutProtection } from './gnomeShortcutProtection';
 import { startOverlayServer, type OverlayServer } from './overlayServer';
 import { getScreenProtectionDisabled } from './screenProtectionConfig';
@@ -428,35 +429,42 @@ function registerIpcHandlers(): void {
     return displayWindowManager?.isReferenceScreenFocused() ?? false;
   });
 
-  ipcMain.handle('window:begin-certificate-print', (event) => {
+  ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);
     assertMainWindowSender(event);
     const frameUrl = event.senderFrame?.url;
     if (!frameUrl || !isCertificatePageUrl(frameUrl)) {
-      throw new Error('Certificate printing can only start from the certificate page.');
+      throw new Error('Certificate PDFs can only be saved from the certificate page.');
     }
-    displayWindowManager?.beginCertificatePrint();
-  });
 
-  ipcMain.handle('window:end-certificate-print', (event) => {
-    assertTrustedSender(event);
-    assertMainWindowSender(event);
-    displayWindowManager?.endCertificatePrint();
-  });
-
-  ipcMain.handle('certificate:save-pdf', async (event, fileName: unknown) => {
-    assertTrustedSender(event);
-
-    displayWindowManager?.beginCertificatePrint();
-    try {
-      return await savePdf(event, fileName, {
-        label: 'certificate',
-        fallbackFileName: 'certificate',
-        landscape: true,
-      });
-    } finally {
-      displayWindowManager?.endCertificatePrint();
+    if (typeof fileName !== 'string' || !fileName.trim()) {
+      throw new Error('A certificate file name is required.');
     }
+
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) throw new Error('The certificate window is not available.');
+    const pdf = await event.sender.printToPDF({
+      pageSize: 'A4',
+      landscape: true,
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
+
+    const downloadsPath = app.getPath('downloads');
+    const documentsPath = app.getPath('documents');
+    return saveCertificatePdf(pdf, sanitizePdfFileName(fileName, 'certificate'), [
+      { path: downloadsPath, label: 'Downloads', create: false },
+      {
+        path: path.join(documentsPath, 'VinkUp Certificates'),
+        label: 'Documents/VinkUp Certificates',
+        create: true,
+      },
+      {
+        path: path.join(app.getPath('userData'), 'Certificates'),
+        label: 'VinkUp app data',
+        create: true,
+      },
+    ]);
   });
   ipcMain.handle('report:save-pdf', async (event, fileName: unknown) => {
     assertTrustedSender(event);

@@ -146,7 +146,7 @@ A single-page React app built with Vite. Plain CSS modules. Monaco is the code e
 | `/typing-test`               | TypingTestPage    | `GET /typing-test/results`; saves with `POST /typing-test/results`                                                                       |
 | `/journal`                   | JournalPage       | `GET /journal`; today's entry saves with `PUT /days/:dayId/journal`                                                                      |
 | `/help`                      | HelpPage          | None: the help content ships with the frontend                                                                                           |
-| `/certificates/:courseId`    | CertificatePage   | `GET /courses/:courseId/certificate`; prints landscape with Print / Save as PDF                                                          |
+| `/certificates/:courseId`    | CertificatePage   | `GET /courses/:courseId/certificate`; desktop app saves an A4 landscape PDF to Downloads or a fallback folder                            |
 | `/admin`                     | AdminTraineesPage | Mentors. `GET /admin/trainees` (assigned only); adds with `POST /admin/trainees`; search, sort, filter and CSV export run in the browser |
 | `/admin/trainees/:traineeId` | AdminTraineePage  | Mentors. `GET /admin/trainees/:traineeId` and `/flags`; `/tasks/:taskId/code` when a task is opened; print report                        |
 | `/manager`                   | ManagerPage       | Managers. `GET /manager/staff` and `/manager/trainees`; creates/edits accounts; assigns mentors; confirms activation changes             |

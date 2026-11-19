@@ -65,9 +65,6 @@ const api: DesktopApi = {
         ipcRenderer.removeListener('browser:availability-changed', handler);
       };
     },
-    beginCertificatePrint: () =>
-      ipcRenderer.invoke('window:begin-certificate-print') as Promise<void>,
-    endCertificatePrint: () => ipcRenderer.invoke('window:end-certificate-print') as Promise<void>,
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => {
       const handler = (_event: IpcRendererEvent, isFullscreen: boolean): void => {
         listener(isFullscreen);
@@ -81,7 +78,10 @@ const api: DesktopApi = {
 
   certificate: {
     savePdf: (fileName: string) =>
-      ipcRenderer.invoke('certificate:save-pdf', fileName) as Promise<boolean>,
+      ipcRenderer.invoke('certificate:save-pdf', fileName) as Promise<{
+        fileName: string;
+        location: string;
+      }>,
   },
 
   workspace: {

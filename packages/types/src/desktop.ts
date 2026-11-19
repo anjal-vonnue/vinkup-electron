@@ -202,14 +202,12 @@ export interface DesktopApi {
     onBrowserAvailabilityChange: (
       listener: (availability: BrowserAvailability) => void
     ) => () => void;
-    beginCertificatePrint: () => Promise<void>;
-    endCertificatePrint: () => Promise<void>;
     /** Returns an unsubscribe function. */
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => () => void;
   };
 
   certificate: {
-    savePdf: (fileName: string) => Promise<boolean>;
+    savePdf: (fileName: string) => Promise<{ fileName: string; location: string }>;
   };
 
   /** Host execution for task runtimes (files, preview server, shells, dev servers). */

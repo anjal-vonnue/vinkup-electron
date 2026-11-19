@@ -45,10 +45,10 @@ restored on logout/exit; if VinkUp is interrupted, it attempts recovery at its
 next startup.
 Display covers and focus alerts are paused while Google sign-in is active in the
 system browser, then restored when sign-in completes or fails.
-The certificate page's **Print / Save as PDF** button temporarily suppresses
-focus alerts while the native print dialog is open; overlays on other displays
-remain in place. Protection resumes when printing ends, the student leaves the
-certificate page, or a two-minute watchdog expires.
+The certificate page saves PDFs directly to the Downloads folder, falling back
+to Documents/VinkUp Certificates and then VinkUp app data if needed. Existing
+files are preserved and duplicate names receive a numbered suffix. This avoids
+opening a native print/save dialog, so focus protection remains active.
 
 To temporarily disable the entire screen-protection feature for a developer
 run, add `VINKUP_DISABLE_SCREEN_PROTECTION=true` to `desktop/.env.local` and
