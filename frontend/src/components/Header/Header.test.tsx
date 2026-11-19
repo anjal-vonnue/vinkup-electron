@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import Header from './Header';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 
 const mockLogout = vi.fn();
 
@@ -175,5 +175,96 @@ describe('Header', () => {
 
     expect(screen.getByText('ACTIVE SESSION')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['/', 'Home'],
+    ['/typing-test', 'Typing Test'],
+    ['/journal', 'Journal'],
+    ['/resources', 'Resources'],
+  ])('marks only the active section link on %s', (path, activeLabel) => {
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <Header />
+      </MemoryRouter>
+    );
+
+    for (const label of ['Home', 'Typing Test', 'Journal', 'Resources']) {
+      const className = screen.getByRole('link', { name: label }).className;
+      expect(className.includes('active')).toBe(label === activeLabel);
+    }
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/workspaceActive/);
+  });
+
+  it('marks Home active while inside a task workspace', () => {
+    render(
+      <MemoryRouter initialEntries={['/tasks/t1']}>
+        <Routes>
+          <Route path="/tasks/:taskId" element={<Header />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/active/);
+    expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/workspaceActive/);
+    for (const label of ['Typing Test', 'Journal', 'Resources']) {
+      expect(screen.getByRole('link', { name: label }).className).not.toMatch(/active/);
+      expect(screen.getByRole('link', { name: label }).className).not.toMatch(/workspaceActive/);
+    }
+  });
+
+  it.each(['/days/js-day-01', '/days/js-day-01/references'])(
+    'marks Home active on the day page (%s)',
+    (path) => {
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/days/:dayId" element={<Header />} />
+            <Route path="/days/:dayId/references" element={<Header />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/active/);
+      expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/workspaceActive/);
+      for (const label of ['Typing Test', 'Journal', 'Resources']) {
+        expect(screen.getByRole('link', { name: label }).className).not.toMatch(/active/);
+      }
+    }
+  );
+
+  it('returns Home to its normal state when navigating from a workspace to a section', () => {
+    render(
+      <MemoryRouter initialEntries={['/tasks/t1']}>
+        <Routes>
+          <Route path="/tasks/:taskId" element={<Header />} />
+          <Route path="/journal" element={<Header />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/active/);
+    expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/workspaceActive/);
+    fireEvent.click(screen.getByRole('link', { name: 'Journal' }));
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/active/);
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/workspaceActive/);
+    expect(screen.getByRole('link', { name: 'Journal' }).className).toMatch(/active/);
+  });
+
+  it('returns Home to its normal state when navigating from the day page to a section', () => {
+    render(
+      <MemoryRouter initialEntries={['/days/js-day-01']}>
+        <Routes>
+          <Route path="/days/:dayId" element={<Header />} />
+          <Route path="/journal" element={<Header />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: 'Home' }).className).toMatch(/active/);
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/workspaceActive/);
+    fireEvent.click(screen.getByRole('link', { name: 'Journal' }));
+    expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/active/);
+    expect(screen.getByRole('link', { name: 'Journal' }).className).toMatch(/active/);
   });
 });

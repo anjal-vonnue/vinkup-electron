@@ -84,6 +84,15 @@
   font-weight: 600;
 }
 
+/* Workspace edit mode: the Home chip keeps its active shape but turns yellow.
+   Only applied on /tasks/:taskId, never on Home, the day page, or other sections. */
+.link.active.workspaceActive,
+.link.active.workspaceActive:hover {
+  background-color: var(--color-status-warning-bg);
+  border-color: var(--color-status-warning-border);
+  color: var(--color-status-warning);
+}
+
 /* Reserves the bold width so the link doesn't shift when it becomes active */
 .label {
   display: inline-flex;

@@ -11,6 +11,7 @@ import { initWorkspace } from './initWorkspace';
 import { workspaceReducer } from './workspaceReducer';
 import type { PaneId, WorkspaceAction, WorkspaceState } from '../../../types/workspaceTypes';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { useWorkspaceSession } from '../../../context/WorkspaceSessionContext';
 
 const PANES_STORAGE_KEY = 'itp.task.panes';
 
@@ -19,22 +20,40 @@ const WorkspaceDispatchContext = createContext<Dispatch<WorkspaceAction> | null>
 
 type WorkspaceProviderProps = {
   code: TaskCodeResponse;
+  /** Task this workspace belongs to. Optional so isolated unit tests stay simple. */
+  taskId?: string;
+  /** Rehydrates an in-progress workspace when its route is restored. */
+  initialState?: WorkspaceState;
   children: ReactNode;
 };
 
-export function WorkspaceProvider({ code, children }: WorkspaceProviderProps) {
+export function WorkspaceProvider({
+  code,
+  taskId,
+  initialState,
+  children,
+}: WorkspaceProviderProps) {
+  const { rememberWorkspace } = useWorkspaceSession();
   const [storedPanes, setStoredPanes] = useLocalStorageState<Record<PaneId, boolean> | undefined>(
     PANES_STORAGE_KEY,
     undefined
   );
 
-  const [state, dispatch] = useReducer(workspaceReducer, code, (initialCode) =>
-    initWorkspace(initialCode, storedPanes)
+  const [state, dispatch] = useReducer(
+    workspaceReducer,
+    code,
+    (initialCode) => initialState ?? initWorkspace(initialCode, storedPanes)
   );
 
   useEffect(() => {
     setStoredPanes(state.visiblePanes);
   }, [state.visiblePanes, setStoredPanes]);
+
+  // Mirror every edit into the session so temporary navigation never loses unsaved work.
+  // The snapshot is only read back when a new provider mounts for the same task.
+  useEffect(() => {
+    if (taskId) rememberWorkspace(taskId, state);
+  }, [taskId, state, rememberWorkspace]);
 
   return (
     <WorkspaceStateContext.Provider value={state}>

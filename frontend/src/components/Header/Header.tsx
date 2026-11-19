@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/Useauth';
 import styles from './Header.module.css';
 import { useActivity } from '../../context/useActivity';
-import { NavLink } from 'react-router';
+import { matchPath, NavLink, useLocation } from 'react-router';
 import { ConfirmPopover } from '../Common/ConfirmDialog'; // adjust path if needed
 import ThemeToggle from '../ThemeToggle';
+import { useWorkspaceSession } from '../../context/WorkspaceSessionContext';
 
 type HeaderProps = {
   /** Replaces the app name on the left. The task page puts its breadcrumb here. */
@@ -133,6 +134,17 @@ function NavLabel({ text }: { text: string }) {
 export default function Header({ leading, status }: HeaderProps) {
   const activity = useActivity();
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const { exitWorkspace } = useWorkspaceSession();
+  // The Home link is shared by every page. Only when it is shown *inside* the
+  // workspace is it an intentional exit rather than a return to saved work.
+  const isInWorkspace = Boolean(matchPath('/tasks/:taskId', location.pathname));
+  // Visually, Home also owns the day flow that leads into a workspace. This is
+  // display-only: clicking Home on the day page is still an ordinary navigation.
+  const isInHomeFlow =
+    isInWorkspace ||
+    Boolean(matchPath('/days/:dayId', location.pathname)) ||
+    Boolean(matchPath('/days/:dayId/references', location.pathname));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -214,7 +226,14 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/"
             end
-            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+            onClick={() => {
+              if (isInWorkspace) exitWorkspace();
+            }}
+            className={({ isActive }) =>
+              `${styles.link} ${isActive || isInHomeFlow ? styles.active : ''} ${
+                isInWorkspace ? styles.workspaceActive : ''
+              }`
+            }
           >
             <HomeIcon />
             <NavLabel text="Home" />
