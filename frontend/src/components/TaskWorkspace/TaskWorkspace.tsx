@@ -174,14 +174,6 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
     if (event.type !== 'task.reviewed' || event.taskId !== task.id) return;
 
     setReviewStatus(event.reviewStatus);
-    toast.show({
-      message:
-        event.decision === 'approved'
-          ? 'Your task was approved.'
-          : 'Your mentor sent this task back for rework. Open the feedback for details.',
-      variant: event.decision === 'approved' ? 'success' : 'warning',
-      durationMs: 8000,
-    });
   });
 
   // After a stream reconnect, catch a review that landed while the stream was down.

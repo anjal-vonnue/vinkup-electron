@@ -376,16 +376,19 @@ describe('TaskWorkspace', () => {
       fake.source?.emit({
         type: 'task.reviewed',
         taskId: taskFixture.id,
+        taskTitle: taskFixture.title,
         decision: 'approved',
         reviewStatus: 'approved',
         submissionNo: 1,
         feedback: '',
+        mentorName: 'Mentor Maya',
         reviewedAt: '2026-11-18T10:00:00.000Z',
       })
     );
 
-    expect(await screen.findByText('Your task was approved.')).toBeInTheDocument();
+    // The page updates from the event; the app-wide toast is covered by
+    // RealtimeNotifications.test.tsx.
     // The toolbar button turns into the disabled "Approved" state once the task is approved.
-    expect(screen.getByRole('button', { name: /^approved$/i })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /^approved$/i })).toBeDisabled();
   });
 });

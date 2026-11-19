@@ -293,9 +293,9 @@ Desktop error codes: `DESKTOP_AUTH_INVALID_STATE`, `DESKTOP_AUTH_INVALID_PKCE`, 
     data: {"type":"task.reviewed","taskId":"...","decision":"approved",...}
     ```
 - **Event types** (`RealtimeEvent`, `packages/types/src/realtime.ts`):
-  - `task.reviewed` — sent to the trainee whose submission was approved or sent back: `{ taskId, decision, reviewStatus, submissionNo, feedback, reviewedAt }`.
-  - `task.submitted` — sent to the trainee's currently assigned mentor on submit and resubmit: `{ traineeId, taskId, submissionCount, submittedAt }`.
-- **Delivery rules:** the server decides the recipient (`realtimeBroker.publish(userId, …)`); a mentor never receives another mentor's trainee. Events are hints: clients re-read the REST resource, which stays the source of truth.
+  - `task.reviewed` — sent to the trainee whose submission was approved or sent back: `{ taskId, taskTitle, decision, reviewStatus, submissionNo, feedback, mentorName, reviewedAt }`.
+  - `task.submitted` — sent to the trainee's currently assigned mentor on submit and resubmit: `{ traineeId, traineeName, taskId, taskTitle, submissionCount, submittedAt }`.
+- **Delivery rules:** the server decides the recipient (`realtimeBroker.publish(userId, …)`); a mentor never receives another mentor's trainee. Events are hints: clients re-read the REST resource, which stays the source of truth. The frontend also shows one app-wide toast per event (`RealtimeNotifications`, mounted inside `ProtectedRoute`), so the user is told about a review or resubmission even when the affected page is not open.
 - **Limits:** the broker is in-process (`realtime-module/realtime.broker.ts`), so it only reaches streams held by the same backend instance; running several instances needs a shared bus. Netlify's proxy closes the stream after ~26 s; `EventSource` reconnects and the client refreshes its data on reconnect to recover events sent in the gap.
 - **Errors:** `401 UNAUTHENTICATED` without a valid cookie; `403 FORBIDDEN` for the wrong role or an inactive account.
 

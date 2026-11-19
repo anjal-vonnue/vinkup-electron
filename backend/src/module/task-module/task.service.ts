@@ -82,14 +82,16 @@ export class TaskService {
     }
 
     const submittedAt = (row.last_submitted_at ?? now).toISOString();
-    const mentorId = await taskRepository.findMentorId(traineeId);
+    const context = await taskRepository.findSubmissionContext(traineeId, taskId);
 
     // The mentor's trainee page refreshes without a reload. Only the assigned mentor is told.
-    if (mentorId) {
-      realtimeBroker.publish(mentorId, {
+    if (context.mentorId) {
+      realtimeBroker.publish(context.mentorId, {
         type: 'task.submitted',
         traineeId,
+        traineeName: context.traineeName,
         taskId,
+        taskTitle: context.taskTitle,
         submissionCount: row.submission_count,
         submittedAt,
       });

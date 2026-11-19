@@ -170,7 +170,9 @@ describe('AdminTraineePage', () => {
       fake.source?.emit({
         type: 'task.submitted',
         traineeId,
+        traineeName: 'Test Trainee',
         taskId: detail.tasks[0]?.taskId ?? 'task-1',
+        taskTitle: detail.tasks[0]?.title ?? 'Profile page',
         submissionCount: 2,
         submittedAt: '2026-11-18T10:00:00.000Z',
       });

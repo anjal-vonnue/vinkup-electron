@@ -5,7 +5,9 @@ import { RealtimeBroker } from './realtime.broker';
 const submitted: RealtimeEvent = {
   type: 'task.submitted',
   traineeId: 'trainee-1',
+  traineeName: 'Asha',
   taskId: 'task-1',
+  taskTitle: 'Profile page',
   submissionCount: 2,
   submittedAt: '2026-11-18T10:00:00.000Z',
 };

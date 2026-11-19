@@ -2,6 +2,7 @@ import { Navigate, Outlet } from 'react-router';
 import { useAuth } from '../context/Useauth';
 import LoaderOverlay from '../components/Common/LoadingState/Loader';
 import { RealtimeProvider } from '../context/RealtimeProvider';
+import { RealtimeNotifications } from '../context/RealtimeNotifications';
 
 /** Layout route: renders child routes only for authenticated users. */
 export function ProtectedRoute() {
@@ -14,6 +15,7 @@ export function ProtectedRoute() {
   // Inside the guard, so the cookie-authenticated stream never runs on the login page.
   return (
     <RealtimeProvider>
+      <RealtimeNotifications />
       <Outlet />
     </RealtimeProvider>
   );

@@ -47,7 +47,7 @@ In every environment the frontend calls a relative `/api` path. Because Netlify 
 
 ### Realtime updates
 
-A mentor approving a task and a trainee resubmitting one are pushed, not polled. `GET /api/events` is a Server-Sent Events stream behind the same cookie guard; `RealtimeProvider` (mounted inside `ProtectedRoute`, one connection per tab) hands each event to the page, which re-reads the REST resource it affects (`useRealtimeEvent`). `ReviewService.approve/requestRework` publishes `task.reviewed` to the trainee; `TaskService.submit` publishes `task.submitted` to the trainee's assigned mentor. The broker is in-process, so it fits the single Render instance. Netlify closes the stream after ~26 s, so the client reconnects and refreshes current data (`useRealtimeRefresh`) to recover anything sent during the gap.
+A mentor approving a task and a trainee resubmitting one are pushed, not polled. `GET /api/events` is a Server-Sent Events stream behind the same cookie guard; `RealtimeProvider` (mounted inside `ProtectedRoute`, one connection per tab) hands each event to the page, which re-reads the REST resource it affects (`useRealtimeEvent`). `ReviewService.approve/requestRework` publishes `task.reviewed` to the trainee; `TaskService.submit` publishes `task.submitted` to the trainee's assigned mentor. A single `RealtimeNotifications` component (also inside `ProtectedRoute`) shows the toast for every event, so it appears on any screen — including when the task or trainee page is closed. The broker is in-process, so it fits the single Render instance. Netlify closes the stream after ~26 s, so the client reconnects and refreshes current data (`useRealtimeRefresh`) to recover anything sent during the gap.
 
 ### Sign-in
 

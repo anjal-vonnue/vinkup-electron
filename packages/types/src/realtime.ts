@@ -13,12 +13,16 @@ import type { ReviewDecision, ReviewStatus } from './tasks';
 export type TaskReviewedEvent = {
   type: 'task.reviewed';
   taskId: string;
+  /** The task's title, so a notification can name it without another request. */
+  taskTitle: string;
   decision: ReviewDecision;
   /** The trainee's review state after this decision: 'approved' or 'rework'. */
   reviewStatus: ReviewStatus;
   /** Which attempt was reviewed (1 = first submission). */
   submissionNo: number;
   feedback: string;
+  /** The mentor who made the decision. */
+  mentorName: string;
   reviewedAt: string;
 };
 
@@ -26,7 +30,11 @@ export type TaskReviewedEvent = {
 export type TaskSubmittedEvent = {
   type: 'task.submitted';
   traineeId: string;
+  /** The trainee's name, so a notification can say who submitted. */
+  traineeName: string;
   taskId: string;
+  /** The task's title, so a notification can name it without another request. */
+  taskTitle: string;
   /** The new attempt number (increments on every resubmit). */
   submissionCount: number;
   submittedAt: string;

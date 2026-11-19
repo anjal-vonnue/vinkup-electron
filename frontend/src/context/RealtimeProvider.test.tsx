@@ -18,10 +18,12 @@ function RefreshProbe({ onRefresh }: { onRefresh: () => void }) {
 const approved: RealtimeEvent = {
   type: 'task.reviewed',
   taskId: 't1',
+  taskTitle: 'Profile page',
   decision: 'approved',
   reviewStatus: 'approved',
   submissionNo: 1,
   feedback: '',
+  mentorName: 'Mentor Maya',
   reviewedAt: '2026-11-18T10:00:00.000Z',
 };
 

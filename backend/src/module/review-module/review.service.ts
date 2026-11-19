@@ -134,7 +134,7 @@ export class ReviewService {
     decision: 'approved' | 'rework',
     feedback: string
   ): Promise<TaskReview> {
-    await this.assertTraineeAndTask(traineeId, taskId);
+    const { task } = await this.assertTraineeAndTask(traineeId, taskId);
 
     // Fast path: a clean error before opening a transaction.
     assertAwaitingReview(await reviewRepository.findProgress(traineeId, taskId));
@@ -151,10 +151,12 @@ export class ReviewService {
     realtimeBroker.publish(traineeId, {
       type: 'task.reviewed',
       taskId,
+      taskTitle: task.title,
       decision,
       reviewStatus: decision,
       submissionNo: review.submissionNo,
       feedback: review.feedback,
+      mentorName: review.adminName,
       reviewedAt: review.reviewedAt,
     });
 
@@ -168,5 +170,6 @@ export class ReviewService {
     ]);
     if (!trainee) throw new NotFoundError('Trainee not found.');
     if (!task) throw new NotFoundError('Task not found.');
+    return { trainee, task };
   };
 }
