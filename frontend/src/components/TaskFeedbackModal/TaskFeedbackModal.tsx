@@ -3,6 +3,7 @@ import { ArrowRight, Code, User, X } from 'lucide-react';
 import type { TaskReview } from '@itp/types';
 import { getTaskReview } from '../../api/tasks';
 import { formatIstDateTime } from '../../lib/formatDateTime';
+import MarkdownRenderer from '../MarkdownRenderer/MarkdownRenderer';
 import styles from './TaskFeedbackModal.module.css';
 
 export type TaskFeedbackModalProps = {
@@ -155,7 +156,11 @@ export default function TaskFeedbackModal({
               <div className={styles.feedbackContainer}>
                 <div className={styles.feedbackLabel}>Admin Feedback</div>
                 <div className={styles.feedbackContent}>
-                  {review.feedback ? review.feedback : 'No written feedback provided.'}
+                  {review.feedback ? (
+                    <MarkdownRenderer markdown={review.feedback} />
+                  ) : (
+                    'No written feedback provided.'
+                  )}
                 </div>
               </div>
             </>

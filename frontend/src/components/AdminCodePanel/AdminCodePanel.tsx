@@ -5,6 +5,7 @@ import { approveTask, getAdminTaskReviews, requestRework } from '../../api/admin
 import type { ApiError } from '../../api/errors';
 import { TASK_STATUS_LABELS } from '../../lib/adminLabels';
 import { formatIstDateTime } from '../../lib/formatDateTime';
+import CollapsibleMarkdown from '../CollapsibleMarkdown/CollapsibleMarkdown';
 import LoaderOverlay from '../Common/LoadingState';
 import { ErrorState } from '../Common/ErrorState';
 import { ToastContext } from '../Toast';
@@ -291,7 +292,10 @@ export default function AdminCodePanel({
                     <span>{formatIstDateTime(rev.reviewedAt)}</span>
                   </div>
                   {rev.feedback ? (
-                    <div className={styles.historyFeedback}>{rev.feedback}</div>
+                    <CollapsibleMarkdown
+                      markdown={rev.feedback}
+                      className={styles.historyFeedback}
+                    />
                   ) : (
                     <div className={styles.meta}>No feedback written.</div>
                   )}

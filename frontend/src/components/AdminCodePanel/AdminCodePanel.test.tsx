@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { AdminTaskCode } from '@itp/types';
-import { approveTask, requestRework } from '../../api/admin';
+import { approveTask, getAdminTaskReviews, requestRework } from '../../api/admin';
 import { ApiError } from '../../api/errors';
 import AdminCodePanel from './AdminCodePanel';
 
@@ -251,6 +251,40 @@ describe('AdminCodePanel', () => {
 
       expect(screen.queryByText('Selected: review.md')).not.toBeInTheDocument();
       expect(screen.getByPlaceholderText(/Please fix/i)).toHaveValue('');
+    });
+
+    it('renders Markdown in review history and keeps plain feedback readable', async () => {
+      vi.mocked(getAdminTaskReviews).mockResolvedValue([
+        {
+          id: 'rev-md',
+          taskId: 't1',
+          adminId: 'a1',
+          adminName: 'Admin',
+          submissionNo: 1,
+          decision: 'rework',
+          feedback: '## Fixes\n\n- Fix the heading\n- Add spacing',
+          reviewedAt: '2026-10-02T15:00:00.000Z',
+        },
+        {
+          id: 'rev-text',
+          taskId: 't1',
+          adminId: 'a1',
+          adminName: 'Admin',
+          submissionNo: 2,
+          decision: 'approved',
+          feedback: 'Looks good now.',
+          reviewedAt: '2026-10-03T15:00:00.000Z',
+        },
+      ]);
+      const user = userEvent.setup();
+      renderPanel({ code: completedCode });
+
+      await user.click(screen.getByRole('button', { name: /History/i }));
+
+      expect(await screen.findByRole('heading', { name: 'Fixes' })).toBeInTheDocument();
+      expect(screen.getByRole('list').querySelectorAll('li')).toHaveLength(2);
+      expect(screen.getByText('Looks good now.').tagName).toBe('P');
+      expect(screen.queryByRole('button', { name: 'Show more feedback' })).not.toBeInTheDocument();
     });
 
     it('rejects files that do not have a Markdown extension', async () => {

@@ -69,6 +69,41 @@ describe('AdminFeedbackList', () => {
     expect(screen.getByRole('button', { name: /Inspect older feedback/i })).toBeInTheDocument();
   });
 
+  it('progressively expands long Markdown feedback', async () => {
+    const user = userEvent.setup();
+    for (const lineCount of [9, 20, 80]) {
+      const longFeedback = Array.from(
+        { length: lineCount },
+        (_, index) => `Feedback line ${index + 1}`
+      ).join('\n');
+      const { unmount } = render(
+        <AdminFeedbackList
+          feedback={[
+            {
+              ...mockFeedback[0],
+              feedback: longFeedback,
+            },
+          ]}
+        />
+      );
+
+      const expand = screen.getByRole('button', { name: 'Show more feedback' });
+      const content = expand.previousElementSibling;
+      let previousLines = Number(content?.getAttribute('data-visible-lines'));
+      expect(previousLines).toBeGreaterThan(0);
+
+      while (screen.queryByRole('button', { name: 'Show more feedback' })) {
+        await user.click(screen.getByRole('button', { name: 'Show more feedback' }));
+        const revealedLines = Number(content?.getAttribute('data-visible-lines'));
+        expect(revealedLines).toBeGreaterThan(previousLines);
+        previousLines = revealedLines;
+      }
+
+      expect(previousLines).toBeGreaterThanOrEqual(lineCount);
+      unmount();
+    }
+  });
+
   it('expands older feedback when button is clicked', async () => {
     const user = userEvent.setup();
     render(<AdminFeedbackList feedback={mockFeedback} />);
