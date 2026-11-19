@@ -139,6 +139,12 @@ export default function Header({ leading, status }: HeaderProps) {
   // The Home link is shared by every page. Only when it is shown *inside* the
   // workspace is it an intentional exit rather than a return to saved work.
   const isInWorkspace = Boolean(matchPath('/tasks/:taskId', location.pathname));
+  // Visually, Home also owns the day flow that leads into a workspace. This is
+  // display-only: clicking Home on the day page is still an ordinary navigation.
+  const isInHomeFlow =
+    isInWorkspace ||
+    Boolean(matchPath('/days/:dayId', location.pathname)) ||
+    Boolean(matchPath('/days/:dayId/references', location.pathname));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -223,7 +229,11 @@ export default function Header({ leading, status }: HeaderProps) {
             onClick={() => {
               if (isInWorkspace) exitWorkspace();
             }}
-            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+            className={({ isActive }) =>
+              `${styles.link} ${isActive || isInHomeFlow ? styles.active : ''} ${
+                isInWorkspace ? styles.workspaceActive : ''
+              }`
+            }
           >
             <HomeIcon />
             <NavLabel text="Home" />
