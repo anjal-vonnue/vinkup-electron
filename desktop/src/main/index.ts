@@ -20,7 +20,13 @@ import type {
   ResourcesAllowlist,
   ResourcesBrowserBounds,
 } from '@itp/types';
-import { APP_NAME, DEV_RENDERER_URL, getApiUrl, getResourcesAllowlistUrl } from './config';
+import {
+  APP_NAME,
+  DEV_RENDERER_URL,
+  getApiUrl,
+  getLocalServicePortCandidates,
+  getResourcesAllowlistUrl,
+} from './config';
 import { startLocalServer, type LocalServer } from './server';
 import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager';
 import { HttpDesktopAuthApi } from './auth/api';
@@ -33,6 +39,7 @@ import { getScreenProtectionDisabled } from './screenProtectionConfig';
 import { BUNDLED_ALLOWLIST } from './resources/allowlist';
 import { loadResourcesAllowlist } from './resources/allowlist-source';
 import { ResourcesBrowser } from './resources/browser';
+import { LocalServicePorts } from './resources/localPorts';
 import { registerWorkspaceIpc } from './workspace/ipc';
 import { WorkspaceManager } from './workspace/manager';
 import {
@@ -55,6 +62,7 @@ let displayWindowManager: DisplayWindowManager | null = null;
 let gnomeShortcutProtection: GnomeShortcutProtection | null = null;
 let resourcesBrowser: ResourcesBrowser | null = null;
 const secondaryResourcesBrowsers = new Map<BrowserWindow, ResourcesBrowser>();
+let localServicePorts: LocalServicePorts | null = null;
 let workspaceManager: WorkspaceManager | null = null;
 let activeResourcesAllowlist: ResourcesAllowlist = BUNDLED_ALLOWLIST;
 let loginPendingForOverlayTransition = false;
@@ -106,6 +114,7 @@ async function bootstrap(): Promise<void> {
 
   authManager = createDesktopAuthManager();
   authManager.onChange(broadcastAuthState);
+  localServicePorts = createLocalServicePorts();
   workspaceManager = createWorkspaceManager();
   registerIpcHandlers();
 
@@ -141,7 +150,7 @@ function createResourcesBrowser(
   },
   trackMainWindowFocus = true
 ): ResourcesBrowser {
-  return new ResourcesBrowser(window, activeResourcesAllowlist, {
+  const browser = new ResourcesBrowser(window, activeResourcesAllowlist, {
     onState: (state) => sendEvent('resources:state-changed', state),
     onFocusChange: (focused) => {
       if (trackMainWindowFocus) displayWindowManager?.setMainResourcesFocused(focused);
@@ -152,6 +161,24 @@ function createResourcesBrowser(
     onFindResult: (result) => sendEvent('resources:find-result', result),
     onEscape: () => sendEvent('resources:escape'),
   });
+  browser.setLocalPorts(localServicePorts?.snapshot() ?? new Set());
+  return browser;
+}
+
+/**
+ * Tracks which loopback ports the Resources browser may open. The fixed dev
+ * services are polled; task dev servers arrive as workspace events.
+ */
+function createLocalServicePorts(): LocalServicePorts {
+  const ports = new LocalServicePorts({
+    candidates: getLocalServicePortCandidates(isDev),
+    onUpdate: (open) => {
+      resourcesBrowser?.setLocalPorts(open);
+      for (const browser of secondaryResourcesBrowsers.values()) browser.setLocalPorts(open);
+    },
+  });
+  ports.start();
+  return ports;
 }
 
 function createDisplayWindowManager(
@@ -268,7 +295,13 @@ function sendToRenderer(channel: string, payload: unknown): void {
 function createWorkspaceManager(): WorkspaceManager {
   return new WorkspaceManager({
     baseDir: path.join(app.getPath('userData'), 'workspaces'),
-    emitEvent: (event) => sendToRenderer('workspace:event', event),
+    emitEvent: (event) => {
+      sendToRenderer('workspace:event', event);
+      // A dev server started in the task terminal is one more local port the
+      // Resources browser may open; it is removed when the server stops.
+      if (event.type === 'server-ready') localServicePorts?.markOpen(event.port);
+      else if (event.type === 'server-closed') localServicePorts?.markClosed(event.port);
+    },
     emitTerminalData: (event) => sendToRenderer('terminal:data', event),
     emitTerminalExit: (event) => sendToRenderer('terminal:exit', event),
   });
@@ -987,6 +1020,8 @@ app.on('before-quit', (event) => {
   displayWindowManager = null;
   authManager?.dispose();
   authManager = null;
+  localServicePorts?.dispose();
+  localServicePorts = null;
 
   const manager = workspaceManager;
   const server = localServer;

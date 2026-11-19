@@ -1,5 +1,6 @@
 import { app } from 'electron';
 import path from 'node:path';
+import { isLoopbackHost, portFromUrl } from './resources/allowlist';
 
 export const APP_NAME = 'Vinkup';
 
@@ -18,6 +19,39 @@ export const DEFAULT_DEV_API_URL = 'http://localhost:3000';
  * fighting over it.
  */
 export const DEFAULT_DESKTOP_PORT = 43110;
+
+/** `prisma studio`'s default port; Prisma tasks start it from the workspace terminal. */
+export const PRISMA_STUDIO_PORT = 5555;
+
+/**
+ * Loopback ports the app itself serves, used to let the Resources browser open
+ * local dev pages: the backend (when `VINKUP_API_URL` points at this machine),
+ * the Vite dev server and Prisma Studio. `LocalServicePorts` drops the ones that
+ * are not accepting connections, so a stopped service cannot be opened.
+ */
+export function getLocalServicePortCandidates(isDev: boolean): number[] {
+  const ports = new Set<number>([PRISMA_STUDIO_PORT]);
+
+  const apiPort = loopbackPortOf(getApiUrl());
+  if (apiPort !== null) ports.add(apiPort);
+
+  if (isDev) {
+    const rendererPort = loopbackPortOf(DEV_RENDERER_URL);
+    if (rendererPort !== null) ports.add(rendererPort);
+  }
+
+  return [...ports];
+}
+
+function loopbackPortOf(rawUrl: string): number | null {
+  try {
+    const url = new URL(rawUrl);
+    if (!isLoopbackHost(url.hostname)) return null;
+    return portFromUrl(url);
+  } catch {
+    return null;
+  }
+}
 
 export function getApiUrl(): string {
   const configured = process.env.VINKUP_API_URL?.trim();

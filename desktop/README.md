@@ -104,6 +104,17 @@ host a one-line summary on its card; keys must be approved hosts.
 Only web addresses can be entered; there is no search box. Text that is not an
 address is rejected, so students use the approved sites directly.
 
+### Local dev pages
+
+Loopback addresses are allowed, but only on ports the app itself serves: the
+backend (`VINKUP_API_URL`, when it points at this machine), the Vite dev server,
+Prisma Studio (`5555`) and any dev server a task workspace starts. The main
+process polls the fixed ports and adds/removes workspace ports from
+`server-ready` / `server-closed`, so a stopped service cannot be opened.
+`localhost:PORT`, `127.0.0.1:PORT` and `[::1]:PORT` all work; any other local
+port is blocked with "This local server is not available" (there is no mentor
+approval path for another program's port).
+
 ### Page tools
 
 - **Find in page** — `Ctrl+F`, `Enter` for the next match, `Shift+Enter` for the

@@ -4,6 +4,12 @@ import bundledAllowlist from '../../../resources/resources-allowlist.json';
 const MAX_INPUT_LENGTH = 2048;
 const CATEGORY_ID = /^[a-z0-9-]+$/;
 
+/** Host names that mean "this machine". `::1` arrives with brackets from `URL`. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/** A typed address that is loopback without a scheme, e.g. `localhost:3000/admin`. */
+const LOCAL_INPUT = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?(?:[/?#].*)?$/i;
+
 /**
  * Validates a bundled or remotely hosted allowlist. Anything malformed is
  * rejected as a whole rather than partially applied.
@@ -105,14 +111,46 @@ export function isHostAllowed(host: string, domains: readonly string[]): boolean
   return domains.some((domain) => normalized === domain || normalized.endsWith(`.${domain}`));
 }
 
-export function isAllowedNavigationUrl(rawUrl: string, allowlist: ResourcesAllowlist): boolean {
+export function isAllowedNavigationUrl(
+  rawUrl: string,
+  allowlist: ResourcesAllowlist,
+  localPorts: ReadonlySet<number> = new Set()
+): boolean {
   try {
     const url = new URL(rawUrl);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+    if (isLoopbackHost(url.hostname)) return isLocalServiceUrl(url, localPorts);
     return isHostAllowed(url.hostname, allowlist.domains);
   } catch {
     return false;
   }
+}
+
+/** True for `localhost`, `127.0.0.1` and `::1` (with or without URL brackets). */
+export function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_HOSTS.has(host.trim().toLowerCase().replace(/\.$/, ''));
+}
+
+/** The port a URL connects to, including the protocol default. */
+export function portFromUrl(url: URL): number | null {
+  if (url.port !== '') {
+    const port = Number(url.port);
+    return Number.isInteger(port) && port > 0 && port <= 65535 ? port : null;
+  }
+  if (url.protocol === 'http:') return 80;
+  if (url.protocol === 'https:') return 443;
+  return null;
+}
+
+/**
+ * Loopback addresses are only opened when they belong to a port the app runs
+ * (backend, React dev server, Prisma Studio, a task's dev server). Any other
+ * service on the trainee's machine stays out of the Resources browser.
+ */
+export function isLocalServiceUrl(url: URL, localPorts: ReadonlySet<number>): boolean {
+  if (!isLoopbackHost(url.hostname)) return false;
+  const port = portFromUrl(url);
+  return port !== null && localPorts.has(port);
 }
 
 export function hostFromUrl(rawUrl: string): string | null {
@@ -135,10 +173,23 @@ export type ResourcesNavigationTarget =
 
 export function resolveNavigationInput(
   input: string,
-  allowlist: ResourcesAllowlist
+  allowlist: ResourcesAllowlist,
+  localPorts: ReadonlySet<number> = new Set()
 ): ResourcesNavigationTarget {
   const trimmed = input.trim().slice(0, MAX_INPUT_LENGTH);
   if (trimmed === '') return invalid('Enter a web address.');
+
+  // Before the scheme check: `localhost:3000` would otherwise look like the
+  // scheme `localhost:` and be rejected as "not http".
+  if (LOCAL_INPUT.test(trimmed)) {
+    let url: URL;
+    try {
+      url = new URL(`http://${trimmed}`);
+    } catch {
+      return invalid('That address is not valid.');
+    }
+    return checkUrl(url, allowlist, localPorts);
+  }
 
   if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
     let url: URL;
@@ -153,7 +204,7 @@ export function resolveNavigationInput(
     if (url.username !== '' || url.password !== '') {
       return invalid('Addresses with a username or password are not allowed.');
     }
-    return checkUrl(url, allowlist);
+    return checkUrl(url, allowlist, localPorts);
   }
 
   if (looksLikeHost(trimmed)) {
@@ -163,7 +214,7 @@ export function resolveNavigationInput(
     } catch {
       return invalid('That address is not valid.');
     }
-    return checkUrl(url, allowlist);
+    return checkUrl(url, allowlist, localPorts);
   }
 
   return invalid('Enter a web address. Searching is not available here.');
@@ -173,7 +224,18 @@ export function formatBlockedMessage(host: string): string {
   return `${host} is not on the approved resources list. Ask your mentor if it should be added.`;
 }
 
-function checkUrl(url: URL, allowlist: ResourcesAllowlist): ResourcesNavigationTarget {
+function checkUrl(
+  url: URL,
+  allowlist: ResourcesAllowlist,
+  localPorts: ReadonlySet<number>
+): ResourcesNavigationTarget {
+  if (isLoopbackHost(url.hostname)) {
+    // Block local services the app does not run, instead of asking a mentor to
+    // approve them: they are either not started yet or someone else's program.
+    if (isLocalServiceUrl(url, localPorts)) return { kind: 'navigate', url: url.toString() };
+    return { kind: 'blocked', url: url.toString(), host: url.host };
+  }
+
   if (!isHostAllowed(url.hostname, allowlist.domains)) {
     return { kind: 'blocked', url: url.toString(), host: url.hostname };
   }

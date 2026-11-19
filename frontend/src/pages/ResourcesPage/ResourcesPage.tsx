@@ -141,6 +141,19 @@ function isApprovedPage(url: string, allowlist: ResourcesAllowlist | null): bool
   }
 }
 
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+
+/** True when a blocked host is a loopback address (`localhost:3000`, `[::1]:5173`). */
+function isLocalHost(host: string | null): boolean {
+  if (!host) return false;
+  const name = host
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, '')
+    .replace(/^\[|\]$/g, '');
+  return LOOPBACK_HOSTNAMES.has(name);
+}
+
 function readLastPage(): LastPage | null {
   try {
     const raw = localStorage.getItem(LAST_PAGE_KEY);
@@ -476,9 +489,12 @@ export default function ResourcesPage() {
   const showResume = resume !== null && isApprovedPage(resume.url, allowlist);
   const errorCopy = ERROR_COPY[browser.errorKind ?? 'unknown'];
   const pageTitle = browser.title || hostFor(browser.url) || 'Loading…';
+  const blockedLocally = browser.isBlocked && isLocalHost(browser.blockedHost);
 
   const announcement = browser.isBlocked
-    ? `Blocked ${browser.blockedHost ?? 'that address'}. It is not on the approved resources list.`
+    ? blockedLocally
+      ? `Local server ${browser.blockedHost ?? 'address'} is not available.`
+      : `Blocked ${browser.blockedHost ?? 'that address'}. It is not on the approved resources list.`
     : browser.error !== null
       ? `${errorCopy.title}. ${browser.error}`
       : browser.isLoading
@@ -699,12 +715,20 @@ export default function ResourcesPage() {
                     <LockIcon />
                   </span>
                   <h2 ref={noticeHeadingRef} tabIndex={-1} className={styles.noticeTitle}>
-                    This site is blocked
+                    {blockedLocally ? 'This local server is not available' : 'This site is blocked'}
                   </h2>
-                  <p className={styles.noticeText}>
-                    <strong>{browser.blockedHost ?? 'That address'}</strong> is not on the approved
-                    resources list, so it was not opened.
-                  </p>
+                  {blockedLocally ? (
+                    <p className={styles.noticeText}>
+                      VinkUp only opens local ports used by its own services.{' '}
+                      <strong>{browser.blockedHost ?? 'That address'}</strong> is not running, or it
+                      belongs to another program.
+                    </p>
+                  ) : (
+                    <p className={styles.noticeText}>
+                      <strong>{browser.blockedHost ?? 'That address'}</strong> is not on the
+                      approved resources list, so it was not opened.
+                    </p>
+                  )}
                   {browser.blockedUrl ? (
                     <code className={styles.urlCode}>{browser.blockedUrl}</code>
                   ) : null}
@@ -720,13 +744,15 @@ export default function ResourcesPage() {
                     >
                       {copyStatus === 'address' ? 'Address copied' : 'Copy address'}
                     </button>
-                    <button
-                      type="button"
-                      className={styles.secondaryButton}
-                      onClick={() => void copyText(requestAccessText, 'request')}
-                    >
-                      {copyStatus === 'request' ? 'Request copied' : 'Copy access request'}
-                    </button>
+                    {!blockedLocally ? (
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => void copyText(requestAccessText, 'request')}
+                      >
+                        {copyStatus === 'request' ? 'Request copied' : 'Copy access request'}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className={styles.secondaryButton}
@@ -740,7 +766,9 @@ export default function ResourcesPage() {
                     </button>
                   </div>
                   <p className={styles.noticeHint}>
-                    Ask your mentor to add this site to the approved list.
+                    {blockedLocally
+                      ? 'Start the backend, the React app or Prisma Studio, then try again.'
+                      : 'Ask your mentor to add this site to the approved list.'}
                   </p>
                 </section>
               ) : browser.error !== null ? (
@@ -858,8 +886,9 @@ export default function ResourcesPage() {
                   )}
 
                   <p className={styles.footnote}>
-                    Type a web address above and press Enter. Ctrl+L focuses the address bar, Ctrl+F
-                    finds text on a page.
+                    Type a web address above and press Enter. Local dev pages open while their
+                    servers are running. Ctrl+L focuses the address bar, Ctrl+F finds text on a
+                    page.
                   </p>
                 </section>
               )}

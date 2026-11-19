@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ResourcesAllowlist } from '@itp/types';
 import {
   BUNDLED_ALLOWLIST,
+  isAllowedNavigationUrl,
   isHostAllowed,
   parseAllowlist,
   resolveNavigationInput,
@@ -86,6 +87,55 @@ describe('resolveNavigationInput', () => {
 
   it('rejects an empty address', () => {
     expect(resolveNavigationInput('   ', allowlist).kind).toBe('invalid');
+  });
+});
+
+describe('local services', () => {
+  const localPorts = new Set([3000, 5173, 5555]);
+
+  it('opens a loopback address on a port the app serves', () => {
+    expect(resolveNavigationInput('http://localhost:3000/api', allowlist, localPorts)).toEqual({
+      kind: 'navigate',
+      url: 'http://localhost:3000/api',
+    });
+    expect(resolveNavigationInput('localhost:5555', allowlist, localPorts)).toEqual({
+      kind: 'navigate',
+      url: 'http://localhost:5555/',
+    });
+    expect(resolveNavigationInput('127.0.0.1:5173/', allowlist, localPorts).kind).toBe('navigate');
+    expect(resolveNavigationInput('http://[::1]:3000', allowlist, localPorts).kind).toBe(
+      'navigate'
+    );
+  });
+
+  it('blocks loopback addresses on any other port', () => {
+    expect(resolveNavigationInput('http://localhost:8080', allowlist, localPorts)).toEqual({
+      kind: 'blocked',
+      url: 'http://localhost:8080/',
+      host: 'localhost:8080',
+    });
+    // No scheme and no allowed port: still local, still refused.
+    expect(resolveNavigationInput('localhost:9000', allowlist, localPorts).kind).toBe('blocked');
+    // The protocol default is not one of the app's ports.
+    expect(resolveNavigationInput('http://localhost', allowlist, localPorts).kind).toBe('blocked');
+    // Without a running port list, every local address is blocked.
+    expect(resolveNavigationInput('localhost:3000', allowlist).kind).toBe('blocked');
+  });
+
+  it('does not treat a look-alike host as loopback', () => {
+    expect(
+      resolveNavigationInput('http://localhost.evil.test:3000', allowlist, localPorts).kind
+    ).toBe('blocked');
+    expect(resolveNavigationInput('http://127.0.0.1.nip.io:3000', allowlist, localPorts).kind).toBe(
+      'blocked'
+    );
+  });
+
+  it('applies the same rule to links, redirects and popups', () => {
+    expect(isAllowedNavigationUrl('http://localhost:3000/admin', allowlist, localPorts)).toBe(true);
+    expect(isAllowedNavigationUrl('http://127.0.0.1:5555/', allowlist, localPorts)).toBe(true);
+    expect(isAllowedNavigationUrl('http://localhost:9999/', allowlist, localPorts)).toBe(false);
+    expect(isAllowedNavigationUrl('http://example.com:3000/', allowlist, localPorts)).toBe(false);
   });
 });
 
