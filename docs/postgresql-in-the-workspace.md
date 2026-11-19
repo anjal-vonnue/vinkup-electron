@@ -23,8 +23,9 @@ workspace deliberately does **not** create it for days 1–5. Day 6 runs `npm te
 test database, so for that task the workspace creates both `support_tickets` and
 `support_tickets_test` before the workspace opens (a no-op when day 1 already made the first one).
 
-Databases live in the PostgreSQL server's data directory, not in the task folder. Closing a task,
-or quitting the app, never deletes them: day 2 continues from the tables day 1 created.
+Databases live in the PostgreSQL server's data directory, not in the task folder. Leaving the
+workspace (Home or Back to tasks), or quitting the app, never deletes them: day 2 continues from
+the tables day 1 created.
 
 ## What the trainee gets
 

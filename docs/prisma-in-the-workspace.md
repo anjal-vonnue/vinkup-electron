@@ -90,10 +90,12 @@ starter's copy (or the trainee starts the task with no saved code).
 
 ### Databases are never deleted automatically
 
-Closing a task removes `<userData>/workspaces/<taskId>`, but the PostgreSQL databases live in the
-server's data directory, not in the workspace, so they are untouched. That is deliberate: several
-tasks continue from the database the previous one created. Use `npm run db:reset` when a trainee
-wants to start over.
+Leaving the workspace (Home or Back to tasks) removes `<userData>/workspaces/<taskId>`, but the
+PostgreSQL databases live in the server's data directory, not in the workspace, so they are
+untouched. That is deliberate: several tasks continue from the database the previous one
+created. Use `npm run db:reset` when a trainee wants to start over. Ordinary section navigation
+(Resources, Journal, …) keeps the workspace folder open, so the task resumes without another
+`npm install`.
 
 `vinkup_prisma_test` is also kept, but `npm test` runs `scripts/prepare-test-db.mjs` first
 (`prisma migrate deploy` against the test URL) and `tests/setup.ts` truncates every table before each

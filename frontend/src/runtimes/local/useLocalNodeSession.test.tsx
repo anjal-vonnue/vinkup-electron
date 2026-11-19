@@ -111,20 +111,22 @@ describe('useLocalNodeSession', () => {
       })
     );
 
-    await waitFor(() => expect(terminalApi.open).toHaveBeenCalled());
     await waitFor(() => expect(install).toHaveBeenCalledWith('t1'));
     await waitFor(() => expect(result.current.status).toBe('installing'));
-
-    act(() => {
-      for (const listener of dataListeners) listener({ terminalId: 'term-1', data: 'hello\r\n' });
-    });
-    expect(terminalWrite).toHaveBeenCalledWith('hello\r\n');
+    // The shell opens only after the install, so its prompt is printed below npm's output.
+    expect(terminalApi.open).not.toHaveBeenCalled();
 
     emit({ type: 'run-output', taskId: 't1', kind: 'install', stream: 'stdout', data: 'added 1' });
     expect(terminalWrite).toHaveBeenCalledWith('added 1');
 
     emit({ type: 'run-exited', taskId: 't1', kind: 'install', exitCode: 0 });
+    await waitFor(() => expect(terminalApi.open).toHaveBeenCalled());
     await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => {
+      for (const listener of dataListeners) listener({ terminalId: 'term-1', data: 'hello\r\n' });
+    });
+    expect(terminalWrite).toHaveBeenCalledWith('hello\r\n');
 
     emit({ type: 'server-ready', taskId: 't1', port: 5173, url: 'http://localhost:5173' });
     await waitFor(() =>
@@ -153,6 +155,8 @@ describe('useLocalNodeSession', () => {
         blockedError: null,
       })
     );
+    await waitFor(() => expect(install).toHaveBeenCalled());
+    emit({ type: 'run-exited', taskId: 't1', kind: 'install', exitCode: 0 });
     await waitFor(() => expect(terminalApi.open).toHaveBeenCalled());
 
     type('npm test');
@@ -179,6 +183,8 @@ describe('useLocalNodeSession', () => {
         blockedError: null,
       })
     );
+    await waitFor(() => expect(install).toHaveBeenCalled());
+    emit({ type: 'run-exited', taskId: 't1', kind: 'install', exitCode: 0 });
     await waitFor(() => expect(terminalApi.open).toHaveBeenCalled());
 
     type('ls\r');

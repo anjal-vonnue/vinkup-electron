@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { WorkspaceState } from '../types/workspaceTypes';
+import { getWorkspaceApi } from '../runtimes/local/localWorkspace';
 
 type WorkspaceSession = {
   taskId: string;
@@ -37,15 +38,29 @@ const WorkspaceSessionContext = createContext<WorkspaceSessionContextValue>({
  * Keeps the active workspace across ordinary in-app section navigation. The snapshot
  * lives in a ref (not local/session storage): it must survive route unmounts but not
  * a page reload, and it must not duplicate the server as the source of saved files.
+ * The desktop workspace folder stays open for the same reason; it is closed here when
+ * the trainee explicitly leaves the workspace.
  */
 export function WorkspaceSessionProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef<WorkspaceSession | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
-  const rememberWorkspace = useCallback((taskId: string, state: WorkspaceState) => {
-    sessionRef.current = { taskId, state };
-    setActiveTaskId((current) => (current === taskId ? current : taskId));
+  const closeDesktopWorkspace = useCallback((taskId: string) => {
+    const api = getWorkspaceApi();
+    if (!api) return;
+    // Closing removes the folder (and node_modules), so it only happens on an explicit exit.
+    void api.close(taskId).catch(() => undefined);
   }, []);
+
+  const rememberWorkspace = useCallback(
+    (taskId: string, state: WorkspaceState) => {
+      const previous = sessionRef.current?.taskId;
+      if (previous && previous !== taskId) closeDesktopWorkspace(previous);
+      sessionRef.current = { taskId, state };
+      setActiveTaskId((current) => (current === taskId ? current : taskId));
+    },
+    [closeDesktopWorkspace]
+  );
 
   const restoreWorkspace = useCallback(
     (taskId: string) => (sessionRef.current?.taskId === taskId ? sessionRef.current.state : null),
@@ -53,9 +68,11 @@ export function WorkspaceSessionProvider({ children }: { children: ReactNode }) 
   );
 
   const exitWorkspace = useCallback(() => {
+    const previous = sessionRef.current?.taskId;
     sessionRef.current = null;
     setActiveTaskId(null);
-  }, []);
+    if (previous) closeDesktopWorkspace(previous);
+  }, [closeDesktopWorkspace]);
 
   const value = useMemo(
     () => ({ activeTaskId, rememberWorkspace, restoreWorkspace, exitWorkspace }),
