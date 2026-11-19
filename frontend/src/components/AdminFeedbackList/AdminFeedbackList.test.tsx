@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { AdminFeedbackEntry } from '@itp/types';
@@ -119,6 +119,31 @@ describe('AdminFeedbackList', () => {
       expect(screen.queryByRole('button', { name: 'Show less feedback' })).not.toBeInTheDocument();
       unmount();
     }
+  });
+
+  it('keeps only one feedback preview expanded at a time', async () => {
+    const user = userEvent.setup();
+    const longFeedback = Array.from({ length: 20 }, (_, index) => `Line ${index + 1}`).join('\n');
+    const { container } = render(
+      <AdminFeedbackList
+        feedback={mockFeedback.slice(0, 2).map((entry) => ({ ...entry, feedback: longFeedback }))}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'All Timeline' }));
+    const expandButtons = screen.getAllByRole('button', { name: 'Show more feedback' });
+    const previews = container.querySelectorAll('[data-visible-lines]');
+
+    await user.click(expandButtons[0]);
+    await waitFor(() => expect(previews[0]).toHaveAttribute('data-visible-lines', '58'));
+    expect(previews[1]).toHaveAttribute('data-visible-lines', '8');
+
+    const secondEntry = previews[1].parentElement?.parentElement;
+    await user.click(
+      within(secondEntry as HTMLElement).getByRole('button', { name: 'Show more feedback' })
+    );
+    await waitFor(() => expect(previews[0]).toHaveAttribute('data-visible-lines', '8'));
+    expect(previews[1]).toHaveAttribute('data-visible-lines', '58');
   });
 
   it('expands older feedback when button is clicked', async () => {

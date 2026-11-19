@@ -6,16 +6,27 @@ import styles from './CollapsibleMarkdown.module.css';
 type CollapsibleMarkdownProps = {
   markdown: string;
   className?: string;
+  accordionId: string;
+  activeAccordionId: string | null;
+  onAccordionChange: (id: string | null) => void;
 };
 
 const INITIAL_LINES = 8;
 const LINES_PER_EXPANSION = 50;
 
 /** Shows review feedback progressively, expanding by a few rendered lines per click. */
-export default function CollapsibleMarkdown({ markdown, className }: CollapsibleMarkdownProps) {
+export default function CollapsibleMarkdown({
+  markdown,
+  className,
+  accordionId,
+  activeAccordionId,
+  onAccordionChange,
+}: CollapsibleMarkdownProps) {
   const [visibleLines, setVisibleLines] = useState(INITIAL_LINES);
   const [hasMore, setHasMore] = useState(markdown.split('\n').length > INITIAL_LINES);
   const contentRef = useRef<HTMLDivElement>(null);
+  const isActive = activeAccordionId === accordionId;
+  const displayedLines = isActive ? visibleLines : INITIAL_LINES;
 
   useEffect(() => {
     const content = contentRef.current;
@@ -23,7 +34,7 @@ export default function CollapsibleMarkdown({ markdown, className }: Collapsible
 
     const updateOverflow = () =>
       setHasMore(
-        markdown.split('\n').length > visibleLines ||
+        markdown.split('\n').length > displayedLines ||
           content.scrollHeight > content.clientHeight + 1
       );
     updateOverflow();
@@ -32,15 +43,15 @@ export default function CollapsibleMarkdown({ markdown, className }: Collapsible
     const observer = new ResizeObserver(updateOverflow);
     observer.observe(content);
     return () => observer.disconnect();
-  }, [markdown, visibleLines]);
+  }, [markdown, displayedLines]);
 
   return (
     <div className={className ? `${styles.container} ${className}` : styles.container}>
       <div
         ref={contentRef}
         className={styles.content}
-        data-visible-lines={visibleLines}
-        style={{ maxHeight: `${(visibleLines * 1.6).toFixed(1)}em` }}
+        data-visible-lines={displayedLines}
+        style={{ maxHeight: `${(displayedLines * 1.6).toFixed(1)}em` }}
       >
         <MarkdownRenderer markdown={markdown} />
       </div>
@@ -51,17 +62,25 @@ export default function CollapsibleMarkdown({ markdown, className }: Collapsible
               type="button"
               className={styles.expand}
               aria-label="Show more feedback"
-              onClick={() => setVisibleLines((lines) => lines + LINES_PER_EXPANSION)}
+              onClick={() => {
+                onAccordionChange(accordionId);
+                setVisibleLines(
+                  (lines) => (isActive ? lines : INITIAL_LINES) + LINES_PER_EXPANSION
+                );
+              }}
             >
               <Ellipsis size={16} aria-hidden="true" />
             </button>
           )}
-          {visibleLines > INITIAL_LINES && (
+          {isActive && visibleLines > INITIAL_LINES && (
             <button
               type="button"
               className={styles.expand}
               aria-label="Show less feedback"
-              onClick={() => setVisibleLines(INITIAL_LINES)}
+              onClick={() => {
+                setVisibleLines(INITIAL_LINES);
+                onAccordionChange(null);
+              }}
             >
               <ArrowUp size={16} aria-hidden="true" />
             </button>

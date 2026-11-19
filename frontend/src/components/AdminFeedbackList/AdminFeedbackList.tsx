@@ -14,6 +14,7 @@ type ViewMode = 'grouped' | 'timeline';
 export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
 
   // Sort newest first by default
   const sortedFeedback = useMemo(() => {
@@ -140,6 +141,9 @@ export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) 
                     <CollapsibleMarkdown
                       markdown={latestEntry.feedback}
                       className={styles.feedbackBox}
+                      accordionId={latestEntry.id}
+                      activeAccordionId={expandedReviewId}
+                      onAccordionChange={setExpandedReviewId}
                     />
                   </div>
 
@@ -175,6 +179,9 @@ export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) 
                           <CollapsibleMarkdown
                             markdown={entry.feedback}
                             className={styles.feedbackBox}
+                            accordionId={entry.id}
+                            activeAccordionId={expandedReviewId}
+                            onAccordionChange={setExpandedReviewId}
                           />
                         </div>
                       ))}
@@ -233,7 +240,13 @@ export default function AdminFeedbackList({ feedback }: AdminFeedbackListProps) 
                   </div>
                 </div>
 
-                <CollapsibleMarkdown markdown={entry.feedback} className={styles.feedbackBox} />
+                <CollapsibleMarkdown
+                  markdown={entry.feedback}
+                  className={styles.feedbackBox}
+                  accordionId={entry.id}
+                  activeAccordionId={expandedReviewId}
+                  onAccordionChange={setExpandedReviewId}
+                />
               </div>
             </div>
           ))}

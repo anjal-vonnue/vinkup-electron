@@ -68,6 +68,7 @@ export default function AdminCodePanel({
   const [showHistory, setShowHistory] = useState(false);
   const [historyReviews, setHistoryReviews] = useState<TaskReview[] | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [expandedHistoryReviewId, setExpandedHistoryReviewId] = useState<string | null>(null);
 
   // Move focus to the panel when it opens, so keyboard users land on the code they asked for.
   useEffect(() => {
@@ -304,6 +305,9 @@ export default function AdminCodePanel({
                     <CollapsibleMarkdown
                       markdown={rev.feedback}
                       className={styles.historyFeedback}
+                      accordionId={rev.id}
+                      activeAccordionId={expandedHistoryReviewId}
+                      onAccordionChange={setExpandedHistoryReviewId}
                     />
                   ) : (
                     <div className={styles.meta}>No feedback written.</div>
