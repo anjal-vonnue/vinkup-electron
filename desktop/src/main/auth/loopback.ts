@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { FAILURE_HTML, SUCCESS_HTML } from './resultPages';
 
 export class LoopbackError extends Error {
   constructor(readonly code: 'TIMEOUT' | 'CANCELLED' | 'PORT_UNAVAILABLE') {
@@ -22,20 +23,6 @@ export interface LoopbackListener {
 
 const CALLBACK_PATH = '/callback';
 const HOST = '127.0.0.1';
-
-const SUCCESS_HTML = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Vinkup sign-in</title></head>
-<body style="font-family: system-ui, sans-serif; background:#10131f; color:#eef2ff; padding:48px">
-<h1 style="font-size:20px">Sign-in complete</h1>
-<p>You can close this tab and return to Vinkup.</p>
-</body></html>`;
-
-const FAILURE_HTML = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Vinkup sign-in</title></head>
-<body style="font-family: system-ui, sans-serif; background:#10131f; color:#eef2ff; padding:48px">
-<h1 style="font-size:20px">Sign-in could not be completed</h1>
-<p>Return to Vinkup and try again.</p>
-</body></html>`;
 
 function sendHtml(res: http.ServerResponse, status: number, body: string): void {
   if (res.headersSent) {
