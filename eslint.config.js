@@ -97,6 +97,15 @@ export default tseslint.config(
     },
   },
 
+  {
+    files: ['desktop/src/main/gnomeShortcutProtection.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+    },
+  },
+
   // Shared types package — type-aware, own root
   {
     files: ['packages/types/src/**/*.ts'],

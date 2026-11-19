@@ -26,6 +26,7 @@ import { DesktopAuthManager, type DesktopAuthCookieStore } from './auth/manager'
 import { HttpDesktopAuthApi } from './auth/api';
 import { SecureDesktopCredentialStorage } from './auth/storage';
 import { DisplayWindowManager } from './displayWindowManager';
+import { GnomeShortcutProtection } from './gnomeShortcutProtection';
 import { startOverlayServer, type OverlayServer } from './overlayServer';
 import { getScreenProtectionDisabled } from './screenProtectionConfig';
 import { BUNDLED_ALLOWLIST } from './resources/allowlist';
@@ -50,6 +51,7 @@ let overlayServer: OverlayServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
 let displayWindowManager: DisplayWindowManager | null = null;
+let gnomeShortcutProtection: GnomeShortcutProtection | null = null;
 let resourcesBrowser: ResourcesBrowser | null = null;
 const secondaryResourcesBrowsers = new Map<BrowserWindow, ResourcesBrowser>();
 let workspaceManager: WorkspaceManager | null = null;
@@ -80,6 +82,12 @@ if (!hasSingleInstanceLock) {
 
 async function bootstrap(): Promise<void> {
   installMenu();
+  gnomeShortcutProtection = new GnomeShortcutProtection(app.getPath('userData'));
+  try {
+    await gnomeShortcutProtection.restorePreviousSession();
+  } catch (error) {
+    console.error('[desktop] Failed to restore GNOME shortcuts from a previous session', error);
+  }
 
   // The desktop shell does not need camera, microphone, location, notifications or
   // clipboard-read permissions. Add specific permissions here only when a feature needs them.
@@ -223,6 +231,10 @@ function createDesktopAuthManager(): DesktopAuthManager {
 }
 
 function broadcastAuthState(state: DesktopAuthState): void {
+  const isTrainee = state.status === 'authenticated' && state.user?.role === 'trainee';
+  void gnomeShortcutProtection?.setTraineeActive(isTrainee).catch((error: unknown) => {
+    console.error('[desktop] Failed to update GNOME trainee shortcuts', error);
+  });
   if (state.status === 'pending') loginPendingForOverlayTransition = true;
   const shouldTransitionOverlay =
     state.status === 'authenticated' && loginPendingForOverlayTransition;
@@ -282,6 +294,9 @@ function createMainWindow(): BrowserWindow {
   window.on('minimize', () => {
     if (displayWindowManager?.shouldPreventMinimize() ?? !DISABLE_SCREEN_PROTECTION) {
       window.restore();
+      void displayWindowManager?.restoreMainWindowAfterMinimize().catch((error: unknown) => {
+        console.error('[desktop] Failed to restore fullscreen after minimizing', error);
+      });
     }
   });
 
@@ -959,12 +974,17 @@ app.on('before-quit', (event) => {
   const manager = workspaceManager;
   const server = localServer;
   const displayServer = overlayServer;
+  const restoreGnomeShortcuts =
+    gnomeShortcutProtection?.setTraineeActive(false).catch((error: unknown) => {
+      console.error('[desktop] Failed to restore GNOME shortcuts before exit', error);
+    }) ?? Promise.resolve();
 
   void settleWithin(
     Promise.allSettled([
       manager ? manager.closeAll() : Promise.resolve(),
       server ? server.close() : Promise.resolve(),
       displayServer ? displayServer.close() : Promise.resolve(),
+      restoreGnomeShortcuts,
     ]),
     SHUTDOWN_CLEANUP_TIMEOUT_MS
   ).then(() => {

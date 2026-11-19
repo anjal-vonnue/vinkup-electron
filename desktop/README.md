@@ -37,6 +37,12 @@ moving the app away from focus opens a return-or-exit alert on every display.
 Screen protection is enabled for trainee sessions and disabled for authenticated
 admin/mentor sessions. The main process bases this on the authenticated user's
 role; admins can use a normal window without display covers or focus alerts.
+In GNOME sessions, Super+Arrow tiling bindings are temporarily removed from
+GNOME's window-manager and Tiling Assistant settings while a trainee is
+authenticated. This affects other applications in that same desktop session
+until the trainee logs out or VinkUp exits. The original bindings are saved and
+restored on logout/exit; if VinkUp is interrupted, it attempts recovery at its
+next startup.
 Display covers and focus alerts are paused while Google sign-in is active in the
 system browser, then restored when sign-in completes or fails.
 The certificate page's **Print / Save as PDF** button temporarily suppresses

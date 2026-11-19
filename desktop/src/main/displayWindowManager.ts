@@ -364,6 +364,14 @@ export class DisplayWindowManager {
     return this.isProtectionEnabledForCurrentUser();
   }
 
+  async restoreMainWindowAfterMinimize(): Promise<void> {
+    if (!this.isProtectionEnabledForCurrentUser()) return;
+    await this.restoreMainWindowForFocus();
+    if (!isAlive(this.mainWindow) || this.isQuitting) return;
+    this.mainWindow.show();
+    this.mainWindow.focus();
+  }
+
   async setDisplayTheme(theme: 'light' | 'dark'): Promise<void> {
     this.displayTheme = theme;
     await Promise.all(
