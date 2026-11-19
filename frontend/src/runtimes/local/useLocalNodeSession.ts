@@ -60,6 +60,7 @@ type InternalTerminal = {
   name: string;
   terminalId: string | null;
   instance: Terminal | null;
+  announcedStart: boolean;
   status: LocalTerminalStatus;
   exitCode: number | null;
   error: string | null;
@@ -301,6 +302,7 @@ export function useLocalNodeSession({
       name: `T${nextNameNumberRef.current++}`,
       terminalId: null,
       instance: null,
+      announcedStart: false,
       status: 'opening',
       exitCode: null,
       error: null,
@@ -317,29 +319,12 @@ export function useLocalNodeSession({
     syncTerminals();
   }, [syncTerminals]);
 
-  const reopenSession = useCallback(
-    (key: string) => {
-      const session = sessionsRef.current.get(key);
-      if (!session || session.closed || !session.instance || session.opening) return;
-      session.terminalId = null;
-      session.exitCode = null;
-      session.error = null;
-      session.queuedInput = [];
-      session.queuedChars = 0;
-      activeKeyRef.current = key;
-      setActiveTerminalKey(key);
-      void openSession(key);
-    },
-    [openSession]
-  );
-
-  const registerTerminal = useCallback(
-    (key: string, instance: Terminal) => {
-      const session = sessionsRef.current.get(key);
-      if (!session || session.closed || session.instance) return;
-
+  const bindTerminalInput = useCallback(
+    (session: InternalTerminal, instance: Terminal) => {
+      // A replacement xterm (or a restarted PTY) needs a fresh subscription; the PTY itself
+      // is owned by the session and must not be reopened just to restore typing.
+      session.inputDisposer?.dispose();
       session.instance = instance;
-      if (sessionsRef.current.size === 1) instance.write(`${DIM}Starting Node…${RESET}\r\n`);
 
       const api = getTerminalApi();
       session.inputDisposer = instance.onData((data) => {
@@ -357,10 +342,42 @@ export function useLocalNodeSession({
           void api?.write(taskId, session.terminalId, data.slice(offset, offset + MAX_WRITE_CHARS));
         }
       });
+    },
+    [taskId]
+  );
 
+  const reopenSession = useCallback(
+    (key: string) => {
+      const session = sessionsRef.current.get(key);
+      if (!session || session.closed || !session.instance || session.opening) return;
+      session.terminalId = null;
+      session.exitCode = null;
+      session.error = null;
+      session.queuedInput = [];
+      session.queuedChars = 0;
+      activeKeyRef.current = key;
+      setActiveTerminalKey(key);
+      bindTerminalInput(session, session.instance);
       void openSession(key);
     },
-    [openSession, taskId]
+    [bindTerminalInput, openSession]
+  );
+
+  const registerTerminal = useCallback(
+    (key: string, instance: Terminal) => {
+      const session = sessionsRef.current.get(key);
+      if (!session || session.closed || session.instance === instance) return;
+
+      // StrictMode (and any remount) disposes the previous xterm and reports a fresh one.
+      if (!session.announcedStart) {
+        session.announcedStart = true;
+        if (sessionsRef.current.size === 1) instance.write(`${DIM}Starting Node…${RESET}\r\n`);
+      }
+
+      bindTerminalInput(session, instance);
+      if (!session.terminalId) void openSession(key);
+    },
+    [bindTerminalInput, openSession]
   );
 
   const selectTerminal = useCallback((key: string) => {

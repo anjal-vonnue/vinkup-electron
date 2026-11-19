@@ -227,6 +227,25 @@ describe('useLocalNodeSession', () => {
     await waitFor(() => expect(rendered.result.current.servers).toHaveLength(0));
   });
 
+  it('rebinds keyboard input when xterm recreates its instance', async () => {
+    const first = createTerminalMock();
+    const rendered = await initialize(first);
+
+    // StrictMode (and any remount) disposes the first xterm and reports a fresh one.
+    const replacement = createTerminalMock();
+    act(() => rendered.result.current.registerTerminal('terminal-1', replacement.instance));
+
+    first.type('stale\r');
+    expect(terminalApi.write).not.toHaveBeenCalledWith('t1', TERMINAL_IDS[0], 'stale\r');
+
+    replacement.type('typed in the live terminal\r');
+    expect(terminalApi.write).toHaveBeenCalledWith(
+      't1',
+      TERMINAL_IDS[0],
+      'typed in the live terminal\r'
+    );
+  });
+
   it('sends keystrokes to the active shell and queues them until it opens', async () => {
     let resolveOpen: (value: { terminalId: string; name: string }) => void = () => undefined;
     openTerminal.mockReturnValueOnce(
@@ -322,8 +341,14 @@ describe('useLocalNodeSession', () => {
     await waitFor(() => expect(openTerminal).toHaveBeenCalledTimes(2));
     expect(first.writes.join('')).toContain('Terminal exited (3)');
     await waitFor(() => expect(rendered.result.current.terminals).toHaveLength(1));
-    expect(rendered.result.current.terminals[0].terminalId).toBe(TERMINAL_IDS[1]);
+    await waitFor(() =>
+      expect(rendered.result.current.terminals[0].terminalId).toBe(TERMINAL_IDS[1])
+    );
     expect(rendered.result.current.activeTerminalKey).toBe('terminal-1');
+
+    // The auto-restarted shell must accept typing again on its new id.
+    first.type('after restart\r');
+    expect(terminalApi.write).toHaveBeenCalledWith('t1', TERMINAL_IDS[1], 'after restart\r');
   });
 
   it('keeps multiple servers available independently', async () => {

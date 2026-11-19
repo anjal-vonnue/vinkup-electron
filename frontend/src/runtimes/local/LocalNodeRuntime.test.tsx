@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopApi, WorkspaceEvent } from '@itp/types';
@@ -17,30 +18,56 @@ const TERMINAL_IDS = [
 let workspaceListeners: Array<(event: WorkspaceEvent) => void> = [];
 let opened = 0;
 
+const terminalMocks = vi.hoisted(() => ({
+  instances: [] as Array<{ type: (data: string) => void }>,
+}));
+
 vi.mock('../node/TerminalView', async () => {
   const { useEffect, useRef } = await import('react');
-  const terminal = {
-    cols: 80,
-    rows: 24,
-    write: vi.fn(),
-    focus: vi.fn(),
-    onData: () => ({ dispose: () => undefined }),
-  };
 
   function MockTerminalView({
     onReady,
     onResize,
   }: {
-    onReady: (instance: typeof terminal) => void;
+    onReady: (instance: never) => void;
     onResize: (cols: number, rows: number) => void;
   }) {
-    const started = useRef(false);
+    const callbacks = useRef({ onReady, onResize });
+    callbacks.current = { onReady, onResize };
+
+    // StrictMode runs this effect twice with a fresh xterm each time, like the real view.
     useEffect(() => {
-      if (started.current) return;
-      started.current = true;
-      onReady(terminal);
-      onResize(80, 24);
-    }, [onReady, onResize]);
+      let listeners: Array<(data: string) => void> = [];
+      const subscriptions = new Set<{ dispose(): void }>();
+      const terminal = {
+        cols: 80,
+        rows: 24,
+        write: vi.fn(),
+        focus: vi.fn(),
+        onData: (listener: (data: string) => void) => {
+          listeners.push(listener);
+          const subscription = {
+            dispose: () => {
+              listeners = listeners.filter((item) => item !== listener);
+              subscriptions.delete(subscription);
+            },
+          };
+          subscriptions.add(subscription);
+          return subscription;
+        },
+      };
+      terminalMocks.instances.push({
+        type: (data) => {
+          for (const listener of listeners) listener(data);
+        },
+      });
+      callbacks.current.onReady(terminal as never);
+      callbacks.current.onResize(80, 24);
+      return () => {
+        for (const subscription of [...subscriptions]) subscription.dispose();
+      };
+    }, []);
+
     return <div data-testid="terminal-view" />;
   }
 
@@ -67,26 +94,29 @@ function renderRuntime() {
     runCommand: 'npm run dev',
   };
   return render(
-    <WorkspaceProvider
-      code={{
-        updatedAt: null,
-        files: [
-          { path: 'package.json', content: '{"dependencies":{"express":"1.0.0"}}' },
-          { path: 'index.js', content: 'console.log(1)' },
-        ],
-      }}
-      taskId="t1"
-    >
-      <RunnerProvider>
-        <LocalNodeRuntime task={task} isVisible={true} />
-      </RunnerProvider>
-    </WorkspaceProvider>
+    <StrictMode>
+      <WorkspaceProvider
+        code={{
+          updatedAt: null,
+          files: [
+            { path: 'package.json', content: '{"dependencies":{"express":"1.0.0"}}' },
+            { path: 'index.js', content: 'console.log(1)' },
+          ],
+        }}
+        taskId="t1"
+      >
+        <RunnerProvider>
+          <LocalNodeRuntime task={task} isVisible={true} />
+        </RunnerProvider>
+      </WorkspaceProvider>
+    </StrictMode>
   );
 }
 
 beforeEach(() => {
   workspaceListeners = [];
   opened = 0;
+  terminalMocks.instances = [];
 
   window.desktop = {
     workspace: {
@@ -133,6 +163,26 @@ afterEach(() => {
 });
 
 describe('LocalNodeRuntime', () => {
+  it('sends typing from the live xterm to the active PTY under StrictMode', async () => {
+    renderRuntime();
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /T1/ })).toBeInTheDocument());
+    await waitFor(() => expect(window.desktop?.run.install).toHaveBeenCalledWith('t1'));
+    emit({ type: 'run-exited', taskId: 't1', kind: 'install', exitCode: 0 });
+    await waitFor(() => expect(window.desktop?.terminal.open).toHaveBeenCalledTimes(1));
+
+    // The first xterm is disposed by StrictMode; typing must reach the replacement.
+    const liveTerminal = terminalMocks.instances[terminalMocks.instances.length - 1];
+    if (!liveTerminal) throw new Error('No terminal instance was registered');
+    act(() => liveTerminal.type('npm run dev\r'));
+
+    expect(window.desktop?.terminal.write).toHaveBeenCalledWith(
+      't1',
+      TERMINAL_IDS[0],
+      'npm run dev\r'
+    );
+  });
+
   it('keeps terminal tabs mounted while switching between multiple Preview servers', async () => {
     renderRuntime();
 
