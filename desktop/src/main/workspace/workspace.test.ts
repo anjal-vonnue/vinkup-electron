@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createServer as createTcpServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +17,7 @@ import {
   shouldWriteFile,
 } from './paths';
 import { baseUrlFor, databaseNameFor, urlFor } from './postgres';
-import { extractServerPort, splitCommand } from './process';
+import { createPortWatcher, extractServerPort, splitCommand } from './process';
 import {
   rewriteScripts,
   startWorkspaceServer,
@@ -29,6 +30,19 @@ async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vinkup-workspace-'));
   temporaryRoots.push(root);
   return root;
+}
+
+/** Finds a port that is free right now, so the terminal's server can bind to it. */
+async function freePort(): Promise<number> {
+  const server = createTcpServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
 }
 
 function postgresReachable(): boolean {
@@ -101,6 +115,20 @@ describe('process helpers', () => {
     expect(extractServerPort('Local: http://localhost:5173/')).toBe(5173);
     expect(extractServerPort('http://127.0.0.1:3000 and http://localhost:8080')).toBe(8080);
     expect(extractServerPort('no server here')).toBeNull();
+  });
+
+  it('announces a port again after its server stopped', () => {
+    const ports: number[] = [];
+    const scan = createPortWatcher((port) => ports.push(port));
+
+    scan('Prisma Studio is running at: http://localhost:51212');
+    scan('Prisma Studio is running at: http://localhost:51212');
+    expect(ports).toEqual([51212]);
+
+    // The port monitor saw the server stop, so a new server on the same port is new again.
+    scan.forget(51212);
+    scan('Prisma Studio is running at: http://localhost:51212');
+    expect(ports).toEqual([51212, 51212]);
   });
 });
 
@@ -424,4 +452,55 @@ describe('WorkspaceManager', () => {
     await manager.closeTerminal(terminalId);
     await manager.close('task_term');
   });
+
+  it('announces a server port again after its server restarts in the terminal', async () => {
+    const baseDir = await temporaryRoot();
+    const events: WorkspaceEvent[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: (event) => events.push(event),
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    const taskId = 'task_ports';
+    const port = await freePort();
+    await manager.open({
+      taskId,
+      files: {
+        'server.mjs': [
+          "import { createServer } from 'node:http';",
+          'const port = Number(process.argv[2]);',
+          "createServer((request, response) => response.end('ok')).listen(port, '127.0.0.1', () => {",
+          "  console.log('Server running at http://localhost:' + port);",
+          '});',
+          '',
+        ].join('\n'),
+      },
+    });
+
+    const { terminalId } = await manager.openTerminal({
+      taskId,
+      cols: 80,
+      rows: 24,
+    });
+    const ready = () =>
+      events.filter((event) => event.type === 'server-ready' && event.port === port);
+    const closed = () =>
+      events.filter((event) => event.type === 'server-closed' && event.port === port);
+
+    await manager.writeTerminal(terminalId, `node server.mjs ${port}\r`);
+    await vi.waitFor(() => expect(ready()).toHaveLength(1), { timeout: 20_000 });
+
+    // Prisma Studio's usual stop: Ctrl+C in the terminal, which closes the port.
+    await manager.writeTerminal(terminalId, '\u0003');
+    await vi.waitFor(() => expect(closed()).toHaveLength(1), { timeout: 20_000 });
+
+    // Restarting on the same port, as Prisma Studio does, must open the Preview tab again.
+    await manager.writeTerminal(terminalId, `node server.mjs ${port}\r`);
+    await vi.waitFor(() => expect(ready()).toHaveLength(2), { timeout: 20_000 });
+
+    await manager.writeTerminal(terminalId, '\u0003');
+    await manager.closeTerminal(terminalId);
+    await manager.close(taskId);
+  }, 45_000);
 });

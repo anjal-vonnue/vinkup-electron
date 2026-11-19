@@ -159,14 +159,21 @@ export function extractServerPort(text: string): number | null {
   return port;
 }
 
-export type PortWatcher = (chunk: string) => void;
+export type PortWatcher = ((chunk: string) => void) & {
+  /** Allows the port to be announced again after the server on it stopped. */
+  forget: (port: number) => void;
+};
 
-/** Calls onPort once per newly seen port; the caller verifies that it is listening. */
+/**
+ * Calls onPort once per newly seen port; the caller verifies that it is listening. A port is
+ * remembered so repeated output (or the shell echoing the command) does not announce it again.
+ * After a server stops, `forget` clears that so the next server on the same port is announced.
+ */
 export function createPortWatcher(onPort: (port: number) => void): PortWatcher {
   let buffer = '';
   const seen = new Set<number>();
 
-  return (chunk: string) => {
+  const scan = (chunk: string) => {
     // Keep a little history so a URL split across two chunks is still recognised.
     buffer = `${buffer}${chunk}`.slice(-16_384);
     for (const match of buffer.matchAll(PORT_PATTERN)) {
@@ -177,6 +184,15 @@ export function createPortWatcher(onPort: (port: number) => void): PortWatcher {
       onPort(value);
     }
   };
+
+  scan.forget = (port: number) => {
+    seen.delete(port);
+    // Drop the history too, otherwise the old URL would announce the port before the new
+    // server on it is listening, and the real announcement would then be ignored.
+    buffer = '';
+  };
+
+  return scan;
 }
 
 function canConnect(host: string, port: number, timeoutMs: number): Promise<boolean> {

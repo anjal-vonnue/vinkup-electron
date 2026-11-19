@@ -59,6 +59,19 @@ describe('task catalog', () => {
     expect(catalogTaskResponse('react-day-07-t-1', 'not_started')?.runCommand).toBe('npm run dev');
   });
 
+  it('makes Prisma Studio connect through the local socket', () => {
+    const code = catalogTaskCode('prisma-day-01-t-1');
+    const config = code?.files.find((file) => file.path === 'prisma.config.ts')?.content ?? '';
+    const packageJson = JSON.parse(
+      code?.files.find((file) => file.path === 'package.json')?.content ?? '{}'
+    ) as { scripts?: Record<string, string> };
+
+    // Studio's postgres.js driver ignores ?host=..., so the config rewrites the URL for it.
+    expect(config).toContain("includes('studio')");
+    expect(config).toContain('PGHOST');
+    expect(packageJson.scripts?.['db:studio']).toBe('prisma studio');
+  });
+
   it('keeps scenario ids separate from curriculum ids', () => {
     for (const id of Object.keys(scenarios)) {
       expect(id.startsWith('t-')).toBe(true);

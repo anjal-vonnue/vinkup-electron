@@ -27,6 +27,7 @@ import {
   splitCommand,
   spawnWorkspaceProcess,
   waitForPort,
+  type PortWatcher,
   type WorkspaceProcess,
 } from './process';
 import { openTerminal, type TerminalProcess } from './pty';
@@ -45,7 +46,7 @@ const ANSI_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`
 
 type TerminalEntry = {
   terminal: TerminalProcess;
-  scan: (chunk: string) => void;
+  scan: PortWatcher;
 };
 
 type WorkspaceRun = {
@@ -459,7 +460,7 @@ export class WorkspaceManager {
     return session;
   }
 
-  private scannerFor(session: WorkspaceSession): (chunk: string) => void {
+  private scannerFor(session: WorkspaceSession): PortWatcher {
     const scan = createPortWatcher((port) => {
       void this.announcePort(session, port);
     });
@@ -503,6 +504,10 @@ export class WorkspaceManager {
         clearInterval(timer);
         session.portMonitors.delete(port);
         if (session.servers.delete(port)) {
+          // The next `npm run dev` may reuse the same port (Prisma Studio does), and it is
+          // often typed in the terminal rather than started with Run, so the scanner has to
+          // treat the port as new again or the Preview tab never comes back.
+          for (const entry of session.terminals.values()) entry.scan.forget(port);
           this.callbacks.emitEvent({
             type: 'server-closed',
             taskId: session.taskId,

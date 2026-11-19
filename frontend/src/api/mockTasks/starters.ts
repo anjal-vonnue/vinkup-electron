@@ -281,6 +281,7 @@ function prismaStarter(task: CatalogTask): TaskFile[] {
           'db:seed': 'tsx prisma/seed.ts',
           'db:generate': 'prisma generate',
           'db:validate': 'prisma validate',
+          'db:studio': 'prisma studio',
         },
         dependencies: {
           '@prisma/adapter-pg': '7.10.0',
@@ -317,6 +318,7 @@ PostgreSQL 16 or newer must be installed and running on this machine.
 | npm run db:seed | Runs prisma/seed.ts |
 | npm run db:generate | Regenerates the Prisma client after editing schema.prisma |
 | npm run db:validate | Checks prisma/schema.prisma |
+| npm run db:studio | Opens Prisma Studio on vinkup_prisma (Preview tab shows the URL) |
 | npm run check | Type-checks the project |
 
 - The whole course uses \`vinkup_prisma\`, so the next task continues with the rows and migrations
@@ -331,10 +333,28 @@ PostgreSQL 16 or newer must be installed and running on this machine.
       'prisma.config.ts',
       `import { defineConfig } from 'prisma/config';
 
+// Prisma Studio's data browser uses the postgres.js driver, which ignores the
+// ?host=/var/run/postgresql socket parameter that psql, pg and the Prisma CLI understand.
+// For Studio only, give it a host-less URL and point the driver at the socket through PGHOST,
+// so \`npx prisma studio\` works against the local server without a TCP password.
+const url = process.env.DATABASE_URL;
+let datasourceUrl = url;
+
+if (url && process.argv.slice(2).includes('studio')) {
+  const parsed = new URL(url);
+  const socket = parsed.searchParams.get('host');
+  if (socket) {
+    process.env.PGHOST ??= socket;
+    process.env.PGUSER ??= decodeURIComponent(parsed.username);
+    if (parsed.port) process.env.PGPORT ??= parsed.port;
+    datasourceUrl = 'postgresql:///' + decodeURIComponent(parsed.pathname.slice(1));
+  }
+}
+
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: { path: 'prisma/migrations' },
-  datasource: { url: process.env.DATABASE_URL },
+  datasource: { url: datasourceUrl },
 });
 `
     ),
