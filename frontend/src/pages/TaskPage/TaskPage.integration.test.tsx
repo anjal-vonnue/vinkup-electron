@@ -105,5 +105,9 @@ describe('TaskPage (integration): edit, autosave, submit', () => {
     }
     expect(await screen.findByText(/^Submitted \d\d:\d\d$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /resubmit/i })).toBeInTheDocument();
+
+    // The header timer has stopped and shows the submitted state instead.
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: /^Submitted/ })).toBeInTheDocument();
   });
 });
