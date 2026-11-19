@@ -23,6 +23,12 @@ const initialSettings = new Map([
     "['<Super>Right', '<Super>KP_6']",
   ],
   ['org.gnome.shell.extensions.tiling-assistant.tile-maximize', "['<Super>Up', '<Super>KP_5']"],
+  ['org.gnome.shell.extensions.tiling-assistant.tile-topleft-quarter', "['<Super>KP_7']"],
+  ['org.gnome.shell.extensions.tiling-assistant.tile-top-half', "['<Super>KP_8']"],
+  ['org.gnome.shell.extensions.tiling-assistant.tile-topright-quarter', "['<Super>KP_9']"],
+  ['org.gnome.shell.extensions.tiling-assistant.tile-bottomleft-quarter', "['<Super>KP_1']"],
+  ['org.gnome.shell.extensions.tiling-assistant.tile-bottom-half', "['<Super>KP_2']"],
+  ['org.gnome.shell.extensions.tiling-assistant.tile-bottomright-quarter', "['<Super>KP_3']"],
   ['org.gnome.shell.extensions.tiling-assistant.restore-window', "['<Super>Down']"],
   ['org.gnome.shell.extensions.custom-shortcuts.hide-windows', "['<Super>D', '<Ctrl><Alt>F12']"],
   ['org.gnome.shell.extensions.custom-shortcuts.show-desktop-binding', "'<Super>d'"],
@@ -89,15 +95,19 @@ describe('GnomeShortcutProtection', () => {
     );
     expect(settings.get('org.gnome.desktop.wm.keybindings.maximize')).toBe('[]');
     expect(settings.get('org.gnome.desktop.wm.keybindings.unmaximize')).toBe("['<Alt>F5']");
-    expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-left-half')).toBe(
-      "['<Super>KP_4']"
-    );
-    expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-right-half')).toBe(
-      "['<Super>KP_6']"
-    );
-    expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-maximize')).toBe(
-      "['<Super>KP_5']"
-    );
+    expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-left-half')).toBe('[]');
+    expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-right-half')).toBe('[]');
+    expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-maximize')).toBe('[]');
+    for (const key of [
+      'tile-topleft-quarter',
+      'tile-top-half',
+      'tile-topright-quarter',
+      'tile-bottomleft-quarter',
+      'tile-bottom-half',
+      'tile-bottomright-quarter',
+    ]) {
+      expect(settings.get(`org.gnome.shell.extensions.tiling-assistant.${key}`)).toBe('[]');
+    }
     expect(await readFile(path.join(userDataPath, 'gnome-shortcuts.json'), 'utf8')).toContain(
       '<Super>Left'
     );

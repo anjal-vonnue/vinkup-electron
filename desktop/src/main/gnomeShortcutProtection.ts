@@ -12,6 +12,15 @@ const SHORTCUTS = new Set([
   '<super>down',
   '<super>h',
   '<super>d',
+  '<super>kp_1',
+  '<super>kp_2',
+  '<super>kp_3',
+  '<super>kp_4',
+  '<super>kp_5',
+  '<super>kp_6',
+  '<super>kp_7',
+  '<super>kp_8',
+  '<super>kp_9',
 ]);
 
 interface SavedBinding {
