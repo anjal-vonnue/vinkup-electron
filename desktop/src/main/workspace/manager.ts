@@ -34,6 +34,7 @@ import {
 } from './process';
 import { openTerminal, type TerminalProcess } from './pty';
 import { requiresPostgres, resolvePostgresEnvironment, type PostgresEnvironment } from './postgres';
+import { usesTrustedStaticPreview } from './preview';
 import { startWorkspaceServer, type WorkspaceStaticServer } from './staticServer';
 
 const MAX_COMMAND_CHARS = 500;
@@ -68,6 +69,8 @@ type WorkspaceSession = {
   written: WorkspaceWriteState;
   watcher: WorkspaceWatcher;
   server: WorkspaceStaticServer;
+  /** Revokes this session's static-preview trust; null for non-browser courses. */
+  staticPreviewDisposer: (() => void) | null;
   terminals: Map<string, TerminalEntry>;
   nextTerminalNumber: number;
   install: WorkspaceProcess | null;
@@ -88,6 +91,8 @@ export type WorkspaceManagerCallbacks = {
   emitEvent: (event: WorkspaceEvent) => void;
   emitTerminalData: (event: TerminalDataEvent) => void;
   emitTerminalExit: (event: TerminalExitEvent) => void;
+  /** Trusts an app-managed static preview port; returns its exact revocation. */
+  registerStaticPreview?: (taskId: string, port: number, isActive: () => boolean) => () => void;
 };
 
 export function assertTaskId(value: unknown): string {
@@ -190,6 +195,10 @@ export class WorkspaceManager {
             onEvent: (event) => {
               this.callbacks.emitEvent({ ...event, taskId });
             },
+            onClose: () => {
+              session?.staticPreviewDisposer?.();
+              if (session) session.staticPreviewDisposer = null;
+            },
           },
         });
 
@@ -199,6 +208,7 @@ export class WorkspaceManager {
           written,
           watcher,
           server,
+          staticPreviewDisposer: null,
           terminals: new Map(),
           nextTerminalNumber: 1,
           install: null,
@@ -210,6 +220,13 @@ export class WorkspaceManager {
           database,
           closed: false,
         };
+
+        // Only HTML/CSS/JavaScript previews come from this app-managed server.
+        // React and other Node courses keep their terminal-discovered dev servers.
+        const register = this.callbacks.registerStaticPreview;
+        if (usesTrustedStaticPreview(taskId) && register) {
+          session.staticPreviewDisposer = register(taskId, server.port, () => server.isListening());
+        }
         this.sessions.set(taskId, session);
       } catch (error) {
         if (session) await this.disposeSession(session);
@@ -652,6 +669,9 @@ export class WorkspaceManager {
     for (const entry of session.terminals.values()) entry.terminal.kill();
     session.terminals.clear();
     session.watcher.close();
+    // Revoke before the port can be reused by an unrelated process.
+    session.staticPreviewDisposer?.();
+    session.staticPreviewDisposer = null;
     await session.server.close().catch(() => undefined);
   }
 

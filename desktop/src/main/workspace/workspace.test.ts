@@ -57,6 +57,31 @@ function postgresReachable(): boolean {
   }
 }
 
+type TrackedRegistration = {
+  taskId: string;
+  port: number;
+  isActive: () => boolean;
+  dispose: ReturnType<typeof vi.fn>;
+};
+
+async function managerWithRegistration() {
+  const baseDir = await temporaryRoot();
+  const events: WorkspaceEvent[] = [];
+  const registrations: TrackedRegistration[] = [];
+  const manager = new WorkspaceManager({
+    baseDir,
+    emitEvent: (event) => events.push(event),
+    emitTerminalData: () => undefined,
+    emitTerminalExit: () => undefined,
+    registerStaticPreview: (taskId, port, isActive) => {
+      const dispose = vi.fn();
+      registrations.push({ taskId, port, isActive, dispose });
+      return dispose;
+    },
+  });
+  return { manager, events, registrations };
+}
+
 function dropDatabases(taskId: string): void {
   const name = databaseNameFor(taskId);
   for (const database of [`${name}_test`, name]) {
@@ -747,4 +772,58 @@ describe('WorkspaceManager', () => {
 
     await manager.close(taskId);
   }, 45_000);
+
+  it('registers the exact static-server port for HTML, CSS and JS workspaces', async () => {
+    for (const taskId of ['html-day-01-t-1', 'css-day-01-t-1', 'js-day-01-t-1']) {
+      const { manager, events, registrations } = await managerWithRegistration();
+      const opened = await manager.open({ taskId, files: { 'index.html': '<h1>ok</h1>' } });
+
+      const port = Number(new URL(opened.previewUrl).port);
+      expect(registrations).toHaveLength(1);
+      expect(registrations[0]).toMatchObject({ taskId, port });
+      expect(registrations[0].isActive()).toBe(true);
+      // The static server must not masquerade as a terminal-discovered dev server.
+      expect(events.some((event) => event.type === 'server-ready')).toBe(false);
+
+      await manager.close(taskId);
+      expect(registrations[0].dispose).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('keeps separate workspaces and their registrations independent', async () => {
+    const { manager, registrations } = await managerWithRegistration();
+    const first = await manager.open({
+      taskId: 'html-day-01-t-1',
+      files: { 'index.html': '<h1>first</h1>' },
+    });
+    const second = await manager.open({
+      taskId: 'css-day-01-t-1',
+      files: { 'index.html': '<h1>second</h1>' },
+    });
+    const firstPort = Number(new URL(first.previewUrl).port);
+    const secondPort = Number(new URL(second.previewUrl).port);
+    expect(firstPort).not.toBe(secondPort);
+    expect(registrations.map((entry) => entry.port)).toEqual([firstPort, secondPort]);
+
+    await manager.close('html-day-01-t-1');
+    expect(registrations[0].dispose).toHaveBeenCalledTimes(1);
+    expect(registrations[1].dispose).not.toHaveBeenCalled();
+    expect((await fetch(second.previewUrl)).ok).toBe(true);
+
+    await manager.close('css-day-01-t-1');
+    expect(registrations[1].dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not register a static preview port for any other course', async () => {
+    const excluded = ['ts-day-01-t-1', 'react-day-01-t-1', 'prisma-day-01-t-1', 'node-day-01-t-1'];
+    // A PostgreSQL workspace needs the machine's database to open at all.
+    if (postgresReachable()) excluded.push('postgresql-day-01-t-1');
+
+    for (const taskId of excluded) {
+      const { manager, registrations } = await managerWithRegistration();
+      await manager.open({ taskId, files: { 'index.html': '<h1>ok</h1>' } });
+      expect(registrations).toEqual([]);
+      await manager.close(taskId);
+    }
+  });
 });
