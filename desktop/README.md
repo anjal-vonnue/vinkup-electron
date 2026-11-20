@@ -135,6 +135,21 @@ invalid file is ignored, so the bundled list always works offline. To point at a
 different centrally hosted file, set `VINKUP_RESOURCES_ALLOWLIST_URL`; set it to
 an empty string to disable remote updates.
 
+## Workspace terminal prompt
+
+Task folders live under the app's data directory, so the shell's default prompt
+would print a long internal path. Each PTY starts with a generated startup file
+in `<workspace>/.vinkup/shell/` that sources the trainee's own configuration and
+then replaces only the prompt with a bare `$`:
+
+- bash starts with `--rcfile` and sources `~/.bashrc`;
+- zsh runs with `ZDOTDIR` set to that folder; the generated `.zshenv`/`.zshrc`
+  source the real ones before setting `PROMPT`, `RPROMPT` and `PROMPT_COMMAND`;
+- other shells keep their normal prompt.
+
+The folder is ignored by the editor and the file watcher, and it is recreated
+when a terminal opens, so nothing extra reaches the task or the backend.
+
 ## Production-like run
 
 ```bash
