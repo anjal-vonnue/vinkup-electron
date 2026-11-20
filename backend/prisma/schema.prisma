@@ -167,20 +167,20 @@ model task {
 // ---------- Trainee data ----------
 
 model task_progress {
-  id                 String         @id @default(uuid()) @db.Uuid
-  trainee_id         String         @db.Uuid
-  task_id            String
-  status             task_status    @default(in_progress)
-  // Current admin review state. null = no review yet (never reviewed, including
-  // tasks submitted before reviews existed). pending = submitted, waiting for an admin.
-  review_status      review_status?
-  // How many times this trainee has submitted the task (attempt/version number).
-  submission_count   Int            @default(0)
-  files              Json? // TaskFile[]; null = never saved, use task.starter_files
-  code_updated_at    DateTime?      @db.Timestamptz
-  first_submitted_at DateTime?      @db.Timestamptz
-  last_submitted_at  DateTime?      @db.Timestamptz
-  created_at         DateTime       @default(now()) @db.Timestamptz
+  id               String         @id @default(uuid()) @db.Uuid
+  trainee_id       String         @db.Uuid
+  task_id          String
+  status           task_status    @default(in_progress)
+  review_status    review_status?
+  submission_count Int            @default(0)
+
+  files           Json? // Trainee's current working files
+  submitted_files Json? // Snapshot of the latest submission
+
+  code_updated_at    DateTime? @db.Timestamptz
+  first_submitted_at DateTime? @db.Timestamptz
+  last_submitted_at  DateTime? @db.Timestamptz
+  created_at         DateTime  @default(now()) @db.Timestamptz
 
   trainee trainee @relation(fields: [trainee_id], references: [id], onDelete: Cascade)
   task    task    @relation(fields: [task_id], references: [id])

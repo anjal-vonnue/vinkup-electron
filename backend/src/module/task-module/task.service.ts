@@ -18,6 +18,7 @@ export class TaskService {
       taskRepository.findTask(taskId),
       taskRepository.findProgress(traineeId, taskId),
     ]);
+
     if (!task) throw new NotFoundError('Task not found.');
 
     return {
@@ -41,11 +42,15 @@ export class TaskService {
     };
   }
 
-  /** The saved files, or the task's starter files with updatedAt null before the first save. */
+  /**
+   * Returns the trainee's working files.
+   * Before the first save, returns the task's starter files.
+   */
   async getCode(traineeId: string, taskId: string): Promise<TaskCodeResponse> {
     await progressService.assertTaskUnlocked(traineeId, taskId);
 
     const progress = await taskRepository.findProgress(traineeId, taskId);
+
     if (progress && progress.files !== null) {
       return {
         files: toTaskFiles(progress.files),
@@ -54,26 +59,50 @@ export class TaskService {
     }
 
     const task = await taskRepository.findStarterFiles(taskId);
+
     if (!task) throw new NotFoundError('Task not found.');
-    return { files: toTaskFiles(task.starter_files), updatedAt: null };
+
+    return {
+      files: toTaskFiles(task.starter_files),
+      updatedAt: null,
+    };
   }
 
-  /** Replaces the whole file set: a file left out has been deleted. */
+  /**
+   * Saves the trainee's working copy.
+   *
+   * IMPORTANT:
+   * This must only update `files`.
+   * It must never modify `submitted_files` or submission metadata.
+   */
   async saveCode(traineeId: string, taskId: string, files: TaskFile[]): Promise<void> {
     await progressService.assertTaskUnlocked(traineeId, taskId);
+
     await taskRepository.saveFiles(traineeId, taskId, files, new Date());
   }
 
   /**
-   * Can be repeated ("Resubmit"); it never locks editing and never completes the day.
-   * Every submit becomes a new attempt: review_status returns to pending so the new
-   * code waits for review again. An approved task cannot be resubmitted (409).
+   * Submits the current working copy for mentor review.
+   *
+   * Every submission creates a new submission attempt by:
+   * - Copying files into submitted_files.
+   * - Incrementing submission_count.
+   * - Updating submission timestamps.
+   * - Resetting review_status to pending.
+   *
+   * The repository must perform these updates atomically.
+   *
+   * Editing remains unlocked after submission.
+   * Approved tasks cannot be resubmitted.
    */
   async submit(traineeId: string, taskId: string): Promise<SubmitTaskResponse> {
     await progressService.assertTaskUnlocked(traineeId, taskId);
 
     const now = new Date();
+
+    // Repository must snapshot the current working files into submitted_files.
     const row = await taskRepository.markSubmitted(traineeId, taskId, now);
+
     if (!row) {
       throw new ConflictError(
         'ALREADY_APPROVED',
@@ -82,9 +111,10 @@ export class TaskService {
     }
 
     const submittedAt = (row.last_submitted_at ?? now).toISOString();
+
     const context = await taskRepository.findSubmissionContext(traineeId, taskId);
 
-    // The mentor's trainee page refreshes without a reload. Only the assigned mentor is told.
+    // Notify only the assigned mentor.
     if (context.mentorId) {
       realtimeBroker.publish(context.mentorId, {
         type: 'task.submitted',

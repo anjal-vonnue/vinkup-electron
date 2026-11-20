@@ -245,7 +245,7 @@ export class AdminService {
     if (!task) throw new NotFoundError('Task not found.');
 
     const progress = await repo.findProgress(traineeId, taskId);
-    const saved = progress?.files ?? null; // null = never saved
+    const submitted = progress?.submitted_files ?? null;
 
     return {
       taskId: task.id,
@@ -253,10 +253,10 @@ export class AdminService {
       sequenceOrder: task.sequence_order,
       instructionsMarkdown: task.instructions_markdown,
       status: progress?.status ?? 'not_started',
-      isStarterCode: saved === null,
+      isStarterCode: submitted === null,
       reviewStatus: progress?.review_status ?? null,
       submissionCount: progress?.submission_count ?? 0,
-      files: (saved ?? task.starter_files) as unknown as TaskFile[],
+      files: (submitted ?? task.starter_files) as unknown as TaskFile[],
       codeUpdatedAt: progress?.code_updated_at?.toISOString() ?? null,
       lastSubmittedAt: progress?.last_submitted_at?.toISOString() ?? null,
     };
