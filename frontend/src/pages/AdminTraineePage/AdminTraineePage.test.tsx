@@ -181,6 +181,91 @@ describe('AdminTraineePage', () => {
     await waitFor(() => expect(getAdminTrainee).toHaveBeenCalledTimes(2));
   });
 
+  it('reloads the trainee when a task moves to In progress', async () => {
+    const fake = installFakeEventSource();
+
+    render(
+      <MemoryRouter initialEntries={[`/admin/trainees/${traineeId}`]}>
+        <RealtimeProvider enabled>
+          <Routes>
+            <Route path="/admin/trainees/:traineeId" element={<AdminTraineePage />} />
+          </Routes>
+        </RealtimeProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('heading', { level: 1, name: detail.profile.trainee.name });
+    expect(getAdminTrainee).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      fake.source?.emit({
+        type: 'task.started',
+        traineeId,
+        taskId: detail.tasks[0]?.taskId ?? 'task-1',
+        startedAt: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    await waitFor(() => expect(getAdminTrainee).toHaveBeenCalledTimes(2));
+  });
+
+  it('reloads the flags when an integrity flag arrives', async () => {
+    const fake = installFakeEventSource();
+
+    render(
+      <MemoryRouter initialEntries={[`/admin/trainees/${traineeId}`]}>
+        <RealtimeProvider enabled>
+          <Routes>
+            <Route path="/admin/trainees/:traineeId" element={<AdminTraineePage />} />
+          </Routes>
+        </RealtimeProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('heading', { level: 1, name: detail.profile.trainee.name });
+    expect(getAdminFlags).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      fake.source?.emit({
+        type: 'flag.created',
+        traineeId,
+        taskId: detail.tasks[0]?.taskId ?? 'task-1',
+        flagId: 'flag-1',
+        timestamp: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    await waitFor(() => expect(getAdminFlags).toHaveBeenCalledTimes(2));
+  });
+
+  it('ignores events for another trainee', async () => {
+    const fake = installFakeEventSource();
+
+    render(
+      <MemoryRouter initialEntries={[`/admin/trainees/${traineeId}`]}>
+        <RealtimeProvider enabled>
+          <Routes>
+            <Route path="/admin/trainees/:traineeId" element={<AdminTraineePage />} />
+          </Routes>
+        </RealtimeProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('heading', { level: 1, name: detail.profile.trainee.name });
+
+    act(() => {
+      fake.source?.emit({
+        type: 'task.started',
+        traineeId: 'another-trainee',
+        taskId: 'task-9',
+        startedAt: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    expect(getAdminTrainee).toHaveBeenCalledTimes(1);
+    expect(getAdminFlags).toHaveBeenCalledTimes(1);
+  });
+
   it('opens on the task list, with View code for every submitted task', async () => {
     renderPage();
 

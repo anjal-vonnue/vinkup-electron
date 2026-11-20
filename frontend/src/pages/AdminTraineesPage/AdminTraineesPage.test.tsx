@@ -1,11 +1,13 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { getAdminAnalytics, getAdminTrainees } from '../../api/admin';
 import { downloadCsv } from '../../lib/downloadCsv';
 import { buildAdminAnalytics, buildAdminTrainees } from '../../test/fixtures/admin';
 import { ToastProvider } from '../../components/Toast/Toast';
+import { RealtimeProvider } from '../../context/RealtimeProvider';
+import { installFakeEventSource } from '../../test/fakeEventSource';
 import AdminTraineesPage from './AdminTraineesPage';
 
 vi.mock('../../context/Useauth', () => ({
@@ -34,6 +36,10 @@ beforeEach(() => {
   );
   vi.mocked(downloadCsv).mockReset();
   vi.mocked(getAdminAnalytics).mockClear();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 async function renderPage() {
@@ -143,5 +149,56 @@ describe('AdminTraineesPage: the table still works', () => {
     const csv = vi.mocked(downloadCsv).mock.calls[0][0];
     expect(csv).toContain('Priya Nair');
     expect(csv).not.toContain('Rahul Sharma');
+  });
+});
+
+describe('AdminTraineesPage: realtime', () => {
+  async function renderWithStream() {
+    const fake = installFakeEventSource();
+
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <ToastProvider>
+          <RealtimeProvider enabled>
+            <AdminTraineesPage />
+          </RealtimeProvider>
+        </ToastProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('table', { name: 'Trainees' });
+    expect(getAdminTrainees).toHaveBeenCalledTimes(1);
+    return fake;
+  }
+
+  it('reloads the list when a task starts', async () => {
+    const fake = await renderWithStream();
+
+    act(() => {
+      fake.source?.emit({
+        type: 'task.started',
+        traineeId: trainees[0].id,
+        taskId: 'task-1',
+        startedAt: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    await waitFor(() => expect(getAdminTrainees).toHaveBeenCalledTimes(2));
+  });
+
+  it('reloads the list when a flag is created', async () => {
+    const fake = await renderWithStream();
+
+    act(() => {
+      fake.source?.emit({
+        type: 'flag.created',
+        traineeId: trainees[0].id,
+        taskId: 'task-1',
+        flagId: 'flag-1',
+        timestamp: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    await waitFor(() => expect(getAdminTrainees).toHaveBeenCalledTimes(2));
   });
 });

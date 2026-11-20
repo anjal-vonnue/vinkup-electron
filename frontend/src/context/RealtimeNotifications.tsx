@@ -35,6 +35,9 @@ export function RealtimeNotifications() {
       return;
     }
 
+    // Progress and flag events are for the mentor's pages, not for a toast.
+    if (event.type !== 'task.submitted') return;
+
     const action = event.submissionCount > 1 ? 'resubmitted' : 'submitted';
     const title = event.taskTitle ? `"${event.taskTitle}"` : 'a task';
     toast.show({

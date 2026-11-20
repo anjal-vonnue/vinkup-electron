@@ -81,15 +81,21 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
   const code = useAdminResource(loadCode);
   const feedback = useAdminResource(loadFeedback);
 
-  // The trainee submitted or resubmitted; reload the list instead of waiting for a manual refresh.
+  // The trainee's latest work: a submission, a first save ("In progress") or an integrity flag.
   useRealtimeEvent((event) => {
-    if (event.type !== 'task.submitted' || event.traineeId !== traineeId) return;
+    if (event.type === 'task.submitted' || event.type === 'task.started') {
+      if (event.traineeId !== traineeId) return;
+      detail.refresh();
+      if (event.taskId === selectedTaskId) code.refresh();
+      return;
+    }
 
-    detail.refresh();
-    if (event.taskId === selectedTaskId) code.refresh();
+    if (event.type === 'flag.created' && event.traineeId === traineeId) {
+      flags.refresh();
+    }
   });
 
-  // After a stream reconnect, catch a submission that landed while the stream was down.
+  // After a stream reconnect, catch a change that landed while the stream was down.
   useRealtimeRefresh(() => {
     detail.refresh();
     flags.refresh();
@@ -206,7 +212,7 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
     const desktopReport = window.desktop?.report;
     if (!desktopReport) {
       try {
-        await print(options);
+        print(options);
       } catch (printError: unknown) {
         setPdfError(
           printError instanceof Error

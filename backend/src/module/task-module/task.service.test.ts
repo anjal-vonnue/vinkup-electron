@@ -5,6 +5,7 @@ const repo = vi.hoisted(() => ({
   findTask: vi.fn(),
   findStarterFiles: vi.fn(),
   findProgress: vi.fn(),
+  findProgressStatus: vi.fn(),
   saveFiles: vi.fn(),
   markSubmitted: vi.fn(),
   findSubmissionContext: vi.fn(),
@@ -13,12 +14,16 @@ const progress = vi.hoisted(() => ({
   assertTaskUnlocked: vi.fn(),
   taskStatus: vi.fn(),
 }));
+const notify = vi.hoisted(() => ({
+  publishToMentor: vi.fn(),
+}));
 
 vi.mock('./task.repository', () => ({
   TaskRepository: class {
     findTask = repo.findTask;
     findStarterFiles = repo.findStarterFiles;
     findProgress = repo.findProgress;
+    findProgressStatus = repo.findProgressStatus;
     saveFiles = repo.saveFiles;
     markSubmitted = repo.markSubmitted;
     findSubmissionContext = repo.findSubmissionContext;
@@ -31,6 +36,8 @@ vi.mock('../progress-module/progress.service', () => ({
     taskStatus = progress.taskStatus;
   },
 }));
+
+vi.mock('../realtime-module/realtime.notify', () => notify);
 
 import { TaskService } from './task.service';
 import { realtimeBroker } from '../realtime-module/realtime.broker';
@@ -65,6 +72,7 @@ describe('TaskService', () => {
     repo.findTask.mockResolvedValue(taskRow);
     repo.findStarterFiles.mockResolvedValue({ starter_files: STARTER });
     repo.findProgress.mockResolvedValue(null);
+    repo.findProgressStatus.mockResolvedValue(null);
     repo.saveFiles.mockResolvedValue({});
     repo.markSubmitted.mockImplementation((_t: string, _id: string, submittedAt: Date) =>
       Promise.resolve({ last_submitted_at: submittedAt })
@@ -162,6 +170,28 @@ describe('TaskService', () => {
         DayLockedError
       );
       expect(repo.saveFiles).not.toHaveBeenCalled();
+    });
+
+    it('tells the mentor when the first save moves the task to In progress', async () => {
+      await service.saveCode(traineeId, taskId, SAVED);
+
+      expect(notify.publishToMentor).toHaveBeenCalledWith(
+        traineeId,
+        expect.objectContaining({
+          type: 'task.started',
+          traineeId,
+          taskId,
+        })
+      );
+    });
+
+    it('does not notify again on later autosaves', async () => {
+      repo.findProgressStatus.mockResolvedValue({ status: 'in_progress' });
+
+      await service.saveCode(traineeId, taskId, SAVED);
+
+      expect(repo.saveFiles).toHaveBeenCalledTimes(1);
+      expect(notify.publishToMentor).not.toHaveBeenCalled();
     });
   });
 

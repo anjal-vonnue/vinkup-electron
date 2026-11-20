@@ -82,9 +82,15 @@ export default function AdminTraineesPage() {
     setAttempt((n) => n + 1);
   };
 
-  // A submission changes the counts and the "needs attention" state of the list.
+  // Work started, a submission, or an integrity flag changes the list's counts and attention state.
   useRealtimeEvent((event) => {
-    if (event.type !== 'task.submitted') return;
+    if (
+      event.type !== 'task.submitted' &&
+      event.type !== 'task.started' &&
+      event.type !== 'flag.created'
+    ) {
+      return;
+    }
     setError(null);
     setAttempt((n) => n + 1);
   });

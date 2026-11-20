@@ -4,6 +4,7 @@ import { FlagRepository } from './flag.repository';
 import { NotFoundError } from '../../errors/AppError';
 import { review_priority } from '../../generated/prisma/enums';
 import { ProgressService } from '../progress-module/progress.service';
+import { publishToMentor } from '../realtime-module/realtime.notify';
 const progressService = new ProgressService();
 
 const DUPLICATE_WINDOW_MS = 2000;
@@ -64,6 +65,19 @@ export class FlagService {
     const since = new Date(now.getTime() - DUPLICATE_WINDOW_MS);
     const duplicate = await this.repository.findRecentFlag(trainee_id, task_id, input.type, since);
     if (duplicate) return;
-    await this.repository.createFlag({ ...input, taskId: task_id }, priority, trainee_id);
+    const created = await this.repository.createFlag(
+      { ...input, taskId: task_id },
+      priority,
+      trainee_id
+    );
+
+    // The mentor's flag table refreshes without a reload. Only the assigned mentor is told.
+    await publishToMentor(trainee_id, {
+      type: 'flag.created',
+      traineeId: trainee_id,
+      taskId: task_id,
+      flagId: created.id,
+      timestamp: now.toISOString(),
+    });
   };
 }
