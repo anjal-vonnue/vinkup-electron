@@ -8,6 +8,7 @@ import {
   TraineeDomainError,
 } from '../../errors/AppError';
 import { ManagerRepository, type StaffRow, type TraineeWithMentor } from './manager.repository';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 import type {
   CreateManagerTraineeBody,
   CreateStaffBody,
@@ -55,6 +56,31 @@ function toTrainee(row: TraineeWithMentor): ManagerTrainee {
     isActive: row.is_active,
     mentor: row.mentor,
   };
+}
+
+/**
+ * Tells both sides of a reassignment. The old mentor's list drops the trainee and the
+ * new mentor's list adds them; each page re-reads its REST data. Silent by design (no toast).
+ */
+function notifyAssignmentChange(
+  trainee: TraineeWithMentor,
+  previousMentorId: string | null,
+  mentorId: string | null
+): void {
+  const recipients = new Set<string>();
+  if (previousMentorId) recipients.add(previousMentorId);
+  if (mentorId) recipients.add(mentorId);
+  if (recipients.size === 0) return;
+
+  const event = {
+    type: 'trainee.reassigned' as const,
+    traineeId: trainee.id,
+    traineeName: trainee.name,
+    previousMentorId,
+    mentorId,
+    changedAt: new Date().toISOString(),
+  };
+  for (const recipient of recipients) realtimeBroker.publish(recipient, event);
 }
 
 export class ManagerService {
@@ -316,6 +342,12 @@ export class ManagerService {
               ? `assigned trainee ${traineeId} to mentor ${mentorId}`
               : `unassigned trainee ${traineeId}`
           }`
+        );
+        // Both mentors' admin views: the old one drops the trainee, the new one adds them.
+        notifyAssignmentChange(
+          outcome.trainee,
+          outcome.previousMentorId,
+          outcome.trainee.mentor?.id ?? null
         );
         return toTrainee(outcome.trainee);
     }

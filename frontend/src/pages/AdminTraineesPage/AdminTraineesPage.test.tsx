@@ -201,4 +201,21 @@ describe('AdminTraineesPage: realtime', () => {
 
     await waitFor(() => expect(getAdminTrainees).toHaveBeenCalledTimes(2));
   });
+
+  it('reloads the list when a trainee is reassigned', async () => {
+    const fake = await renderWithStream();
+
+    act(() => {
+      fake.source?.emit({
+        type: 'trainee.reassigned',
+        traineeId: trainees[0].id,
+        traineeName: trainees[0].name,
+        previousMentorId: 'mentor-1',
+        mentorId: 'mentor-2',
+        changedAt: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    await waitFor(() => expect(getAdminTrainees).toHaveBeenCalledTimes(2));
+  });
 });

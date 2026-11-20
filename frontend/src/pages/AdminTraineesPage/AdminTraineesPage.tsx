@@ -82,12 +82,13 @@ export default function AdminTraineesPage() {
     setAttempt((n) => n + 1);
   };
 
-  // Work started, a submission, or an integrity flag changes the list's counts and attention state.
+  // Work started, a submission, an integrity flag, or a reassignment changes the list.
   useRealtimeEvent((event) => {
     if (
       event.type !== 'task.submitted' &&
       event.type !== 'task.started' &&
-      event.type !== 'flag.created'
+      event.type !== 'flag.created' &&
+      event.type !== 'trainee.reassigned'
     ) {
       return;
     }

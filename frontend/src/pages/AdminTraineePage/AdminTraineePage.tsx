@@ -92,6 +92,13 @@ function TraineeDetail({ traineeId }: { traineeId: string }) {
 
     if (event.type === 'flag.created' && event.traineeId === traineeId) {
       flags.refresh();
+      return;
+    }
+
+    // A manager moved this trainee here or away. Re-reading shows the data, or the
+    // "not assigned to you" state when this mentor lost access.
+    if (event.type === 'trainee.reassigned' && event.traineeId === traineeId) {
+      detail.refresh();
     }
   });
 
