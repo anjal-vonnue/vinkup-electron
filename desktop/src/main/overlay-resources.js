@@ -108,6 +108,7 @@
 
     homeView.hidden = !state.isHome || state.error !== null || state.isBlocked;
     errorView.hidden = !state.isBlocked && state.error === null;
+    status.hidden = !state.isHome || state.error !== null || state.isBlocked;
     if (state.isBlocked) {
       const host = state.blockedHost ?? 'This address';
       errorView.textContent = isLocalHost(host)
@@ -117,12 +118,9 @@
     } else if (state.error) {
       errorView.textContent = state.error;
       setStatus('The page could not be loaded.', true);
-    } else if (state.isLoading) {
-      errorView.hidden = true;
-      setStatus('Loading…');
     } else {
       errorView.hidden = true;
-      setStatus(state.isHome ? 'Only approved learning sites can be opened.' : state.title || state.url);
+      setStatus('Only approved learning sites can be opened.');
     }
   }
 
