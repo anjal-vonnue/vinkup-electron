@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import { promisify } from 'node:util';
+import { courseFromTaskId } from './paths';
 
 const execFileAsync = promisify(execFile);
 
@@ -44,21 +45,21 @@ export type PostgresPlan = {
  * their PGlite database.
  */
 export function requiresPostgres(taskId: string, files: Record<string, string>): boolean {
-  if (courseOf(taskId) === POSTGRES_COURSE) return true;
+  if (courseFromTaskId(taskId) === POSTGRES_COURSE) return true;
   if (!('prisma/schema.prisma' in files)) return false;
   return !dependencyNames(files['package.json']).includes('prisma-pglite');
 }
 
 /** `prisma-day-03-t-1` -> `vinkup_prisma`, shared by the whole course. */
 export function databaseNameFor(taskId: string): string {
-  const sanitized = courseOf(taskId)
+  const sanitized = courseFromTaskId(taskId)
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, '_');
   return `${DATABASE_PREFIX}_${sanitized}`.slice(0, MAX_DATABASE_NAME);
 }
 
 export function databasePlanFor(taskId: string): PostgresPlan {
-  if (courseOf(taskId) === POSTGRES_COURSE) {
+  if (courseFromTaskId(taskId) === POSTGRES_COURSE) {
     return {
       database: POSTGRES_COURSE_DATABASE,
       testDatabase: `${POSTGRES_COURSE_DATABASE}_test`,
@@ -73,11 +74,6 @@ export function databasePlanFor(taskId: string): PostgresPlan {
     testDatabase: `${database}_test`.slice(0, MAX_DATABASE_NAME),
     create: true,
   };
-}
-
-/** `prisma-day-03-t-1` -> `prisma`; `postgresql-day-01-t-1` -> `postgresql`. */
-function courseOf(taskId: string): string {
-  return taskId.split('-day-')[0] || taskId;
 }
 
 /**

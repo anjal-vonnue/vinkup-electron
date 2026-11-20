@@ -144,8 +144,9 @@ export function portFromUrl(url: URL): number | null {
 
 /**
  * Loopback addresses are only opened when they belong to a port the app runs
- * (backend, React dev server, Prisma Studio, a task's dev server). Any other
- * service on the trainee's machine stays out of the Resources browser.
+ * (backend, React dev server, Prisma Studio, a task's dev server, or an
+ * app-managed static preview). Any other service on the trainee's machine
+ * stays out of the Resources browser.
  */
 export function isLocalServiceUrl(url: URL, localPorts: ReadonlySet<number>): boolean {
   if (!isLoopbackHost(url.hostname)) return false;

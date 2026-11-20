@@ -304,6 +304,12 @@ function createWorkspaceManager(): WorkspaceManager {
     },
     emitTerminalData: (event) => sendToRenderer('terminal:data', event),
     emitTerminalExit: (event) => sendToRenderer('terminal:exit', event),
+    // The manager decides which courses own a static preview; the registry only
+    // trusts the exact, still-listening server registered here.
+    registerStaticPreview: (_taskId, port, isActive) => {
+      const registration = localServicePorts?.registerStaticPreview(port, isActive);
+      return registration ? () => registration.dispose() : () => undefined;
+    },
   });
 }
 

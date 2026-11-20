@@ -1,3 +1,4 @@
+import { createServer, type Server } from 'node:http';
 import { describe, expect, it } from 'vitest';
 import type { ResourcesAllowlist } from '@itp/types';
 import {
@@ -7,6 +8,7 @@ import {
   parseAllowlist,
   resolveNavigationInput,
 } from './allowlist';
+import { LocalServicePorts } from './localPorts';
 
 const allowlist: ResourcesAllowlist = {
   version: 3,
@@ -136,6 +138,117 @@ describe('local services', () => {
     expect(isAllowedNavigationUrl('http://127.0.0.1:5555/', allowlist, localPorts)).toBe(true);
     expect(isAllowedNavigationUrl('http://localhost:9999/', allowlist, localPorts)).toBe(false);
     expect(isAllowedNavigationUrl('http://example.com:3000/', allowlist, localPorts)).toBe(false);
+  });
+});
+
+async function listenOn(server: Server, port = 0): Promise<number> {
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (typeof address !== 'object' || address === null) throw new Error('Server did not bind');
+  return address.port;
+}
+
+async function closeServer(server: Server): Promise<void> {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}
+
+function navigationRegistry() {
+  return new LocalServicePorts({
+    candidates: [],
+    probe: () => Promise.resolve(false),
+    pollMs: 10,
+  });
+}
+
+describe('trusted static preview navigation', () => {
+  it('opens the registered HTML preview URL but not arbitrary loopback ports', () => {
+    const ports = navigationRegistry();
+    const registration = ports.registerStaticPreview(4100);
+
+    expect(resolveNavigationInput('http://127.0.0.1:4100', allowlist, ports.snapshot())).toEqual({
+      kind: 'navigate',
+      url: 'http://127.0.0.1:4100/',
+    });
+    expect(resolveNavigationInput('localhost:4100/index.html', allowlist, ports.snapshot()).kind)
+      .toBe('navigate');
+    expect(resolveNavigationInput('http://localhost:8080', allowlist, ports.snapshot()).kind).toBe(
+      'blocked'
+    );
+
+    registration.dispose();
+    expect(resolveNavigationInput('http://127.0.0.1:4100', allowlist, ports.snapshot()).kind).toBe(
+      'blocked'
+    );
+    ports.dispose();
+  });
+
+  it('blocks a user-started HTTP server on an unregistered port', async () => {
+    const ports = navigationRegistry();
+    const server = createServer((_request, response) => response.end('user server'));
+    try {
+      const port = await listenOn(server);
+      // The service is really there; the browser policy still refuses to open it.
+      expect((await fetch(`http://127.0.0.1:${port}`)).ok).toBe(true);
+      expect(resolveNavigationInput(`localhost:${port}`, allowlist, ports.snapshot())).toEqual({
+        kind: 'blocked',
+        url: `http://localhost:${port}/`,
+        host: `localhost:${port}`,
+      });
+    } finally {
+      await closeServer(server);
+      ports.dispose();
+    }
+  });
+
+  it('keeps terminal-discovered React ports on their existing path', () => {
+    const ports = navigationRegistry();
+    const preview = ports.registerStaticPreview(4100);
+
+    // React's dev server is still trusted only through markOpen/markClosed.
+    ports.markOpen(5173);
+    expect(resolveNavigationInput('localhost:5173', allowlist, ports.snapshot()).kind).toBe(
+      'navigate'
+    );
+    ports.markClosed(5173);
+    expect(resolveNavigationInput('localhost:5173', allowlist, ports.snapshot()).kind).toBe(
+      'blocked'
+    );
+    // Revoking the static preview must not disturb the terminal port set.
+    preview.dispose();
+    ports.markOpen(5173);
+    expect(resolveNavigationInput('localhost:5173', allowlist, ports.snapshot()).kind).toBe(
+      'navigate'
+    );
+    ports.dispose();
+  });
+
+  it('does not authorize a different server that reuses a revoked port', async () => {
+    const ports = navigationRegistry();
+    const first = createServer((_request, response) => response.end('first'));
+    const second = createServer((_request, response) => response.end('second'));
+    try {
+      const port = await listenOn(first);
+      const registration = ports.registerStaticPreview(port, () => first.listening);
+      expect(resolveNavigationInput(`localhost:${port}`, allowlist, ports.snapshot()).kind).toBe(
+        'navigate'
+      );
+
+      registration.dispose();
+      await closeServer(first);
+      await listenOn(second, port);
+      expect((await fetch(`http://127.0.0.1:${port}`)).ok).toBe(true);
+      expect(resolveNavigationInput(`localhost:${port}`, allowlist, ports.snapshot()).kind).toBe(
+        'blocked'
+      );
+    } finally {
+      if (first.listening) await closeServer(first);
+      if (second.listening) await closeServer(second);
+      ports.dispose();
+    }
   });
 });
 

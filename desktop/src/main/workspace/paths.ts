@@ -7,6 +7,11 @@ import path from 'node:path';
  */
 export const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
+/** `html-day-01-t-1` -> `html`; ids without a day segment use the whole id. */
+export function courseFromTaskId(taskId: string): string {
+  return taskId.split('-day-')[0] || taskId;
+}
+
 export const IGNORED_DIRS = [
   'node_modules',
   'dist',

@@ -21,6 +21,8 @@ export type WorkspaceConsoleEvent =
 
 export type WorkspaceServerCallbacks = {
   onEvent: (event: WorkspaceConsoleEvent) => void;
+  /** Called once when this server stops listening, including an explicit close(). */
+  onClose?: () => void;
 };
 
 export type WorkspaceStaticServer = {
@@ -28,6 +30,8 @@ export type WorkspaceStaticServer = {
   port: number;
   /** Tells connected pages to reload (SSE). */
   notifyReload: () => void;
+  /** Lets the owner verify that this exact server is still the one on its port. */
+  isListening: () => boolean;
   close: () => Promise<void>;
 };
 
@@ -316,6 +320,12 @@ export function startWorkspaceServer(options: {
 }): Promise<WorkspaceStaticServer> {
   const { root, callbacks } = options;
   const eventClients = new Set<http.ServerResponse>();
+  let closeNotified = false;
+  const notifyClosed = (): void => {
+    if (closeNotified) return;
+    closeNotified = true;
+    callbacks.onClose?.();
+  };
 
   const server = http.createServer((req, res) => {
     void handleRequest(req, res).catch((error: unknown) => {
@@ -462,6 +472,8 @@ export function startWorkspaceServer(options: {
     }
   }
 
+  server.once('close', notifyClosed);
+
   return new Promise<WorkspaceStaticServer>((resolve, reject) => {
     const onError = (error: Error): void => reject(error);
     server.once('error', onError);
@@ -482,7 +494,10 @@ export function startWorkspaceServer(options: {
             client.write('event: reload\ndata: {}\n\n');
           }
         },
+        isListening: () => server.listening,
         close() {
+          // Drop the trust registration before the port can be reused.
+          notifyClosed();
           for (const client of eventClients) client.end();
           eventClients.clear();
           return new Promise<void>((resolveClose) => {
