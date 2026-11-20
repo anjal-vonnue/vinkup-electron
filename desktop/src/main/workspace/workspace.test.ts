@@ -240,6 +240,23 @@ describe('static preview server', () => {
     }
   });
 
+  it('reports server shutdown once so owners can revoke its trust', async () => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, 'index.html'), '<h1>ok</h1>');
+    const onClose = vi.fn();
+    const server = await startWorkspaceServer({
+      root,
+      callbacks: { onEvent: () => undefined, onClose },
+    });
+    expect(server.isListening()).toBe(true);
+
+    await server.close();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(server.isListening()).toBe(false);
+    await server.close();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects path traversal with a raw request', async () => {
     const root = await temporaryRoot();
     await writeFile(path.join(root, 'index.html'), '<h1>ok</h1>');
