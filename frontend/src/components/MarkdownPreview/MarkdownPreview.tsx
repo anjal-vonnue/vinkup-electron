@@ -8,6 +8,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import rehypeSlug from 'rehype-slug';
 import rehypeHighlight from 'rehype-highlight';
 import { Link as LinkIcon } from 'lucide-react';
+import MermaidDiagram from '../MermaidDiagram';
 import styles from './MarkdownPreview.module.css';
 
 type MarkdownPreviewProps = {
@@ -22,6 +23,7 @@ type MarkdownPreviewProps = {
  *  - rehype-slug: heading ids (sanitize adds GitHub's "user-content-" prefix, so a heading id
  *    can never collide with an id in the app itself)
  *  - rehype-highlight: syntax highlighting; it runs after sanitize, which would strip its classes
+ *  - ```mermaid blocks: drawn as diagrams by MermaidDiagram (Mermaid is loaded on first use)
  */
 const remarkPlugins: Options['remarkPlugins'] = [remarkGfm];
 
@@ -33,6 +35,31 @@ const rehypePlugins: Options['rehypePlugins'] = [
 ];
 
 const EXTERNAL_LINK = /^(https?:|mailto:)/i;
+
+type HastNode = {
+  type: string;
+  value?: string;
+  tagName?: string;
+  properties?: { className?: unknown };
+  children?: HastNode[];
+};
+
+function textOf(node: HastNode): string {
+  if (node.type === 'text') return node.value ?? '';
+  return (node.children ?? []).map(textOf).join('');
+}
+
+/** The diagram text when this <pre> is a ```mermaid block, otherwise null. */
+function mermaidSource(pre: unknown): string | null {
+  const code = (pre as HastNode | undefined)?.children?.find(
+    (child) => child.type === 'element' && child.tagName === 'code'
+  );
+  const classes = code?.properties?.className;
+
+  if (!code || !Array.isArray(classes) || !classes.includes('language-mermaid')) return null;
+
+  return textOf(code).replace(/\n$/, '');
+}
 
 /** react-markdown passes the syntax-tree `node` to every component; it must not reach the DOM. */
 function withoutNode<T extends { node?: unknown }>(props: T): Omit<T, 'node'> {
@@ -133,6 +160,15 @@ const components: Components = {
   img(props) {
     const { alt, ...rest } = withoutNode(props);
     return <img alt={alt ?? ''} loading="lazy" {...rest} />;
+  },
+
+  // ```mermaid blocks are drawn as diagrams; every other code block stays as code.
+  pre(props) {
+    const source = mermaidSource(props.node);
+
+    if (source !== null) return <MermaidDiagram source={source} />;
+
+    return <pre {...withoutNode(props)} />;
   },
 
   // Wide tables scroll sideways inside their own box instead of widening the page.

@@ -233,9 +233,58 @@
 
 /* Lists */
 
+/*
+ * The markers are set explicitly. An app-wide reset (Tailwind's preflight, or a plain
+ * `ul, ol { list-style: none }`) removes them, and this stylesheet used to rely on the
+ * browser default.
+ */
+
 .markdown ul,
 .markdown ol {
   padding-left: 2em;
+  list-style-position: outside;
+}
+
+.markdown li {
+  display: list-item;
+}
+
+.markdown li::marker {
+  color: inherit;
+}
+
+/* Bullets: disc, then circle, then square */
+.markdown ul {
+  list-style-type: disc;
+}
+
+.markdown ul ul,
+.markdown ol ul {
+  list-style-type: circle;
+}
+
+.markdown ul ul ul,
+.markdown ul ol ul,
+.markdown ol ul ul,
+.markdown ol ol ul {
+  list-style-type: square;
+}
+
+/* Numbers: 1. 2. 3., then i. ii. iii., then a. b. c. (as on GitHub) */
+.markdown ol {
+  list-style-type: decimal;
+}
+
+.markdown ol ol,
+.markdown ul ol {
+  list-style-type: lower-roman;
+}
+
+.markdown ul ul ol,
+.markdown ul ol ol,
+.markdown ol ul ol,
+.markdown ol ol ol {
+  list-style-type: lower-alpha;
 }
 
 .markdown ul ul,
