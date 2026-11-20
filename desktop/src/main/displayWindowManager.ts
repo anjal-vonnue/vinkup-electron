@@ -20,6 +20,34 @@ function sameBounds(left: Electron.Rectangle, right: Electron.Rectangle): boolea
   );
 }
 
+function sameDisplayRegion(left: Electron.Rectangle, right: Electron.Rectangle): boolean {
+  const leftArea = left.width * left.height;
+  const rightArea = right.width * right.height;
+  const smallerArea = Math.min(leftArea, rightArea);
+  if (smallerArea <= 0) return false;
+
+  const overlapWidth = Math.max(
+    0,
+    Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x)
+  );
+  const overlapHeight = Math.max(
+    0,
+    Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y)
+  );
+  return (overlapWidth * overlapHeight) / smallerArea >= 0.9;
+}
+
+function uniqueDisplayRegions(displays: Display[], preferred?: Display): Display[] {
+  const candidates = preferred ? [preferred, ...displays] : displays;
+  const regions: Display[] = [];
+  for (const display of candidates) {
+    if (!regions.some((region) => sameDisplayRegion(region.bounds, display.bounds))) {
+      regions.push(display);
+    }
+  }
+  return regions;
+}
+
 export class DisplayWindowManager {
   private readonly overlays = new Map<number, BrowserWindow>();
   private readonly overlayReferencesActive = new Map<number, boolean>();
@@ -55,6 +83,7 @@ export class DisplayWindowManager {
   private displayTheme: 'light' | 'dark' = 'light';
   private mainResourcesActive = false;
   private mainResourcesFocused = false;
+  private lastDisplayMode: 'single' | 'extended' | 'mirrored' | null = null;
 
   constructor(
     mainWindow: BrowserWindow,
@@ -154,10 +183,12 @@ export class DisplayWindowManager {
   async moveToNextDisplay(): Promise<void> {
     if (!this.isProtectionEnabledForCurrentUser()) return;
     const displays = screen.getAllDisplays();
-    if (displays.length < 2) return;
+    const currentDisplay = screen.getDisplayMatching(this.mainWindow.getBounds());
+    const regions = uniqueDisplayRegions(displays, currentDisplay);
+    if (regions.length < 2) return;
 
-    const currentIndex = displays.findIndex((display) => display.id === this.appDisplayId);
-    const nextDisplay = displays[(currentIndex + 1 + displays.length) % displays.length];
+    const currentIndex = regions.findIndex((display) => display.id === currentDisplay.id);
+    const nextDisplay = regions[(currentIndex + 1 + regions.length) % regions.length];
     if (nextDisplay) await this.moveToDisplay(nextDisplay);
   }
 
@@ -343,6 +374,12 @@ export class DisplayWindowManager {
   private readonly onDisplayRemoved = (_event: Electron.Event, removed: Display): void => {
     if (this.isStaffSession || !this.isOverlayAuthenticated) return;
     if (removed.id === this.appDisplayId) {
+      const currentDisplay = screen.getDisplayMatching(this.mainWindow.getBounds());
+      if (currentDisplay.id !== removed.id) {
+        this.appDisplayId = currentDisplay.id;
+        this.scheduleReconcile();
+        return;
+      }
       void this.moveToDisplay(screen.getPrimaryDisplay()).catch((error: unknown) => {
         console.error('[desktop] Failed to move the app to the primary display', error);
       });
@@ -488,8 +525,7 @@ export class DisplayWindowManager {
         }
         const cursorPoint = screen.getCursorScreenPoint();
         const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
-        const targetAlert =
-          this.alerts.get(activeDisplay.id) ?? this.alerts.get(screen.getPrimaryDisplay().id);
+        const targetAlert = this.getAlertForDisplay(activeDisplay, screen.getAllDisplays());
         if (isAlive(targetAlert)) targetAlert.focus();
       }
       return;
@@ -524,7 +560,17 @@ export class DisplayWindowManager {
     }
 
     const displays = screen.getAllDisplays();
-    this.reconcileOverlayWindows(displays);
+    const appDisplay = screen.getDisplayMatching(this.mainWindow.getBounds());
+    this.appDisplayId = appDisplay.id;
+    const regions = uniqueDisplayRegions(displays, appDisplay);
+    const displayMode =
+      regions.length < displays.length ? 'mirrored' : regions.length < 2 ? 'single' : 'extended';
+    if (this.lastDisplayMode !== displayMode) {
+      console.info(`[display] Display layout detected: ${displayMode}.`);
+      this.lastDisplayMode = displayMode;
+    }
+
+    this.reconcileOverlayWindows(regions, appDisplay);
     if (this.isAuthenticationInProgress || !this.isOverlayAuthenticated) {
       this.clearAlerts();
       return;
@@ -533,7 +579,10 @@ export class DisplayWindowManager {
     this.reconcileAlerts(displays);
   };
 
-  private reconcileOverlayWindows(displays = screen.getAllDisplays()): void {
+  private reconcileOverlayWindows(
+    displays = screen.getAllDisplays(),
+    appDisplay = screen.getDisplayMatching(this.mainWindow.getBounds())
+  ): void {
     if (
       this.isQuitting ||
       this.isStaffSession ||
@@ -543,22 +592,20 @@ export class DisplayWindowManager {
       this.destroyAllOverlays();
       return;
     }
-    if (!displays.some((display) => display.id === this.appDisplayId)) {
-      const current = screen.getDisplayMatching(this.mainWindow.getBounds());
-      this.appDisplayId = current.id;
-    }
-
-    // Overlays must only exist on displays OTHER than the app's display
+    this.appDisplayId = appDisplay.id;
+    const uniqueRegions = uniqueDisplayRegions(displays, appDisplay);
     const wantedOverlayIds = new Set(
-      displays.filter((display) => display.id !== this.appDisplayId).map((display) => display.id)
+      uniqueRegions
+        .filter((display) => !sameDisplayRegion(display.bounds, appDisplay.bounds))
+        .map((display) => display.id)
     );
 
     for (const [id, window] of this.overlays) {
       if (!wantedOverlayIds.has(id)) this.destroyOverlay(id, window);
     }
 
-    for (const display of displays) {
-      if (display.id === this.appDisplayId) continue;
+    for (const display of uniqueRegions) {
+      if (sameDisplayRegion(display.bounds, appDisplay.bounds)) continue;
       const existing = this.overlays.get(display.id);
       if (!isAlive(existing)) {
         this.createOverlay(display);
@@ -949,20 +996,22 @@ export class DisplayWindowManager {
         alert.moveTop();
       }
     }
+    const displays = screen.getAllDisplays();
     const cursorPoint = screen.getCursorScreenPoint();
     const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
-    const targetAlert =
-      this.alerts.get(activeDisplay.id) ?? this.alerts.get(screen.getPrimaryDisplay().id);
+    const targetAlert = this.getAlertForDisplay(activeDisplay, displays);
     if (isAlive(targetAlert)) targetAlert.focus();
   }
 
   private reconcileAlerts(displays: Display[]): void {
     if (!this.areAlertsOpen || this.isQuitting) return;
-    const wantedIds = new Set(displays.map((display) => display.id));
+    const appDisplay = screen.getDisplayMatching(this.mainWindow.getBounds());
+    const regions = uniqueDisplayRegions(displays, appDisplay);
+    const wantedIds = new Set(regions.map((display) => display.id));
     for (const [id, window] of this.alerts) {
       if (!wantedIds.has(id)) this.destroyAlert(id, window);
     }
-    for (const display of displays) {
+    for (const display of regions) {
       const existing = this.alerts.get(display.id);
       if (!isAlive(existing)) {
         this.createAlert(display);
@@ -970,6 +1019,16 @@ export class DisplayWindowManager {
         this.placeWindow(existing, display.bounds);
       }
     }
+  }
+
+  private getAlertForDisplay(display: Display, displays: Display[]): BrowserWindow | null {
+    const matchingRegion = uniqueDisplayRegions(displays).find((candidate) =>
+      sameDisplayRegion(candidate.bounds, display.bounds)
+    );
+    const matchingAlert = matchingRegion ? this.alerts.get(matchingRegion.id) : null;
+    if (isAlive(matchingAlert)) return matchingAlert;
+    const fallback = this.alerts.values().next().value;
+    return isAlive(fallback) ? fallback : null;
   }
 
   private createAlert(display: Display): BrowserWindow {
@@ -1007,7 +1066,7 @@ export class DisplayWindowManager {
       window.moveTop();
       const cursorPoint = screen.getCursorScreenPoint();
       const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
-      if (display.id === activeDisplay.id) window.focus();
+      if (sameDisplayRegion(display.bounds, activeDisplay.bounds)) window.focus();
     });
     void window
       .loadFile(path.join(__dirname, 'alert.html'))
@@ -1024,9 +1083,8 @@ export class DisplayWindowManager {
   private async dismissAlertsAndRestore(): Promise<void> {
     if (this.isRestoringFromAlert) return;
     this.isRestoringFromAlert = true;
-    const returnDisplay = screen
-      .getAllDisplays()
-      .find((display) => display.id === this.alertReturnDisplayId);
+    const displays = screen.getAllDisplays();
+    const returnDisplay = displays.find((display) => display.id === this.alertReturnDisplayId);
     try {
       if (!isAlive(this.mainWindow) || this.isQuitting) return;
       await this.restoreMainWindowForFocus();
@@ -1041,10 +1099,8 @@ export class DisplayWindowManager {
       );
       if (!isAlive(this.mainWindow) || this.isQuitting) return;
 
-      if (
-        returnDisplay &&
-        screen.getDisplayMatching(this.mainWindow.getBounds()).id !== returnDisplay.id
-      ) {
+      const currentDisplay = screen.getDisplayMatching(this.mainWindow.getBounds());
+      if (returnDisplay && !sameDisplayRegion(currentDisplay.bounds, returnDisplay.bounds)) {
         this.appDisplayId = returnDisplay.id;
         this.clearAlerts();
         this.alertDismissedAt = Date.now();
@@ -1055,7 +1111,7 @@ export class DisplayWindowManager {
         return;
       }
 
-      if (returnDisplay) this.appDisplayId = returnDisplay.id;
+      if (returnDisplay) this.appDisplayId = currentDisplay.id;
       this.mainWindow.focus();
       this.clearAlerts();
       this.alertDismissedAt = Date.now();
