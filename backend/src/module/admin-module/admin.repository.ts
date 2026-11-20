@@ -132,7 +132,24 @@ export class AdminRepository {
   /** Read only. Never creates a progress row. */
   findProgress = (traineeId: string, taskId: string) =>
     prisma.task_progress.findUnique({
-      where: { trainee_id_task_id: { trainee_id: traineeId, task_id: taskId } },
+      where: {
+        trainee_id_task_id: {
+          trainee_id: traineeId,
+          task_id: taskId,
+        },
+      },
+      select: {
+        id: true,
+        trainee_id: true,
+        task_id: true,
+        status: true,
+        review_status: true,
+        submission_count: true,
+        submitted_files: true,
+        first_submitted_at: true,
+        last_submitted_at: true,
+        code_updated_at: true,
+      },
     });
 
   listJournal = (traineeId: string) =>

@@ -97,10 +97,10 @@ export type AdminTaskCode = {
   sequenceOrder: number;
   instructionsMarkdown: string;
   status: TaskStatus;
-  isStarterCode: boolean; // true = never saved; files are the task's starter files
+  isStarterCode: boolean; // true = no files have been saved
   reviewStatus: ReviewStatus | null;
   submissionCount: number;
-  files: TaskFile[];
+  files: TaskFile[]; // Latest submitted files, never the live working copy
   codeUpdatedAt: string | null;
   lastSubmittedAt: string | null;
 };

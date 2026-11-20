@@ -1,5 +1,5 @@
 import type { TaskFile } from '@itp/types';
-import type { task_progress } from '../../generated/prisma/client';
+import { type task_progress, Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../lib/prisma';
 
 export class TaskRepository {
@@ -18,7 +18,13 @@ export class TaskRepository {
         run_command: true,
         setup_sql: true,
         curriculum_day: {
-          select: { id: true, day_number: true, course: { select: { title: true } } },
+          select: {
+            id: true,
+            day_number: true,
+            course: {
+              select: { title: true },
+            },
+          },
         },
       },
     });
@@ -34,7 +40,12 @@ export class TaskRepository {
   /** This trainee's progress row for the task, or null if they haven't saved or submitted it. */
   findProgress = (traineeId: string, taskId: string) => {
     return prisma.task_progress.findUnique({
-      where: { trainee_id_task_id: { trainee_id: traineeId, task_id: taskId } },
+      where: {
+        trainee_id_task_id: {
+          trainee_id: traineeId,
+          task_id: taskId,
+        },
+      },
     });
   };
 
@@ -45,13 +56,20 @@ export class TaskRepository {
   findSubmissionContext = async (
     traineeId: string,
     taskId: string
-  ): Promise<{ mentorId: string | null; traineeName: string; taskTitle: string }> => {
+  ): Promise<{
+    mentorId: string | null;
+    traineeName: string;
+    taskTitle: string;
+  }> => {
     const [trainee, task] = await Promise.all([
       prisma.trainee.findUnique({
         where: { id: traineeId },
         select: { name: true, mentor_id: true },
       }),
-      prisma.task.findUnique({ where: { id: taskId }, select: { title: true } }),
+      prisma.task.findUnique({
+        where: { id: taskId },
+        select: { title: true },
+      }),
     ]);
 
     return {
@@ -62,12 +80,22 @@ export class TaskRepository {
   };
 
   /**
-   * Stores the whole file set. A new row starts as in_progress; an existing row keeps its status,
-   * so a completed task stays completed when it is edited again.
+   * Stores the whole working file set.
+   *
+   * A new row starts as in_progress; an existing row keeps its status.
+   *
+   * IMPORTANT:
+   * Only updates `files`.
+   * Never modifies `submitted_files` or submission metadata.
    */
   saveFiles = (traineeId: string, taskId: string, files: TaskFile[], savedAt: Date) => {
     return prisma.task_progress.upsert({
-      where: { trainee_id_task_id: { trainee_id: traineeId, task_id: taskId } },
+      where: {
+        trainee_id_task_id: {
+          trainee_id: traineeId,
+          task_id: taskId,
+        },
+      },
       create: {
         trainee_id: traineeId,
         task_id: taskId,
@@ -75,49 +103,94 @@ export class TaskRepository {
         files,
         code_updated_at: savedAt,
       },
-      update: { files, code_updated_at: savedAt },
+      update: {
+        files,
+        code_updated_at: savedAt,
+      },
     });
   };
 
   /**
-   * Marks the task completed as a new submission attempt: review_status goes back to
-   * pending and submission_count is incremented, so the new attempt awaits review.
+   * Marks the task completed as a new submission attempt.
    *
-   * first_submitted_at is set only on create, so two submits at once can't overwrite
-   * each other's first time. Returns null when the task is already approved: an
-   * approved task cannot be resubmitted (checked inside the transaction).
+   * Creates an immutable-in-practice snapshot of the current working files
+   * in `submitted_files`.
+   *
+   * Every submission:
+   * - Copies files into submitted_files.
+   * - Increments submission_count.
+   * - Updates last_submitted_at.
+   * - Sets review_status back to pending.
+   *
+   * If the trainee has never saved files, task starter files are submitted.
+   *
+   * Returns null when the task is already approved.
    */
   markSubmitted = async (
     traineeId: string,
     taskId: string,
     submittedAt: Date
   ): Promise<task_progress | null> => {
-    const key = { trainee_id: traineeId, task_id: taskId };
+    const key = {
+      trainee_id: traineeId,
+      task_id: taskId,
+    };
+
     return prisma.$transaction(async (tx) => {
+      // Fetch the existing progress, including the working files.
       const existing = await tx.task_progress.findUnique({
-        where: { trainee_id_task_id: key },
-        select: { id: true, review_status: true },
+        where: {
+          trainee_id_task_id: key,
+        },
+        select: {
+          id: true,
+          files: true,
+          review_status: true,
+          first_submitted_at: true,
+        },
       });
 
+      // An approved task cannot be resubmitted.
       if (existing?.review_status === 'approved') {
-        return null; // the service turns this into a 409
+        return null;
       }
 
+      // Use the saved working copy.
+      // If no files have ever been saved, submit the starter files.
+      const submittedFiles = existing
+        ? (existing.files ??
+          (
+            await tx.task.findUniqueOrThrow({
+              where: { id: taskId },
+              select: { starter_files: true },
+            })
+          ).starter_files)
+        : (
+            await tx.task.findUniqueOrThrow({
+              where: { id: taskId },
+              select: { starter_files: true },
+            })
+          ).starter_files;
+
+      // First submission: create the progress row and its snapshot.
       if (!existing) {
         return tx.task_progress.create({
           data: {
-            ...key,
+            trainee_id: traineeId,
+            task_id: taskId,
             status: 'completed',
             review_status: 'pending',
             submission_count: 1,
+            files: Prisma.DbNull,
+            submitted_files: submittedFiles ?? Prisma.DbNull,
             first_submitted_at: submittedAt,
             last_submitted_at: submittedAt,
           },
         });
       }
 
-      // Conditional update: if an admin approves between the read above and this
-      // write, the row no longer matches and the submit is refused (409).
+      // Conditional update protects against an approval happening
+      // between the initial read and this write.
       const updated = await tx.task_progress.updateMany({
         where: {
           id: existing.id,
@@ -125,17 +198,23 @@ export class TaskRepository {
         },
         data: {
           status: 'completed',
+          submitted_files: submittedFiles ?? Prisma.DbNull,
           last_submitted_at: submittedAt,
+          first_submitted_at: existing.first_submitted_at ?? submittedAt,
           review_status: 'pending',
-          submission_count: { increment: 1 },
+          submission_count: {
+            increment: 1,
+          },
         },
       });
 
       if (updated.count === 0) {
-        return null; // approved meanwhile
+        return null;
       }
 
-      return tx.task_progress.findUniqueOrThrow({ where: { id: existing.id } });
+      return tx.task_progress.findUniqueOrThrow({
+        where: { id: existing.id },
+      });
     });
   };
 }
