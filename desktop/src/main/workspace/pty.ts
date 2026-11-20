@@ -19,6 +19,8 @@ export type OpenTerminalOptions = {
   id: string;
   cwd: string;
   shell: string;
+  /** Startup arguments, e.g. `--rcfile` for the generated minimal prompt. */
+  args?: string[];
   env: NodeJS.ProcessEnv;
   cols: number;
   rows: number;
@@ -45,7 +47,7 @@ function stringEnv(env: NodeJS.ProcessEnv): Record<string, string> {
  * terminal data; it never gets a handle to the process or the filesystem.
  */
 export function openTerminal(options: OpenTerminalOptions): TerminalProcess {
-  const child = pty.spawn(options.shell, [], {
+  const child = pty.spawn(options.shell, options.args ?? [], {
     name: 'xterm-256color',
     cols: clamp(options.cols, MIN_COLS, MAX_COLS),
     rows: clamp(options.rows, MIN_ROWS, MAX_ROWS),

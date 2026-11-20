@@ -35,6 +35,7 @@ import {
 import { openTerminal, type TerminalProcess } from './pty';
 import { requiresPostgres, resolvePostgresEnvironment, type PostgresEnvironment } from './postgres';
 import { usesTrustedStaticPreview } from './preview';
+import { prepareShellLaunch } from './shellPrompt';
 import { startWorkspaceServer, type WorkspaceStaticServer } from './staticServer';
 
 const MAX_COMMAND_CHARS = 500;
@@ -451,6 +452,10 @@ export class WorkspaceManager {
       const host = await resolveHostEnvironment();
       if (session.closed) throw new Error('The workspace is closed.');
 
+      // Generated before the PTY starts so the first prompt is already minimal.
+      const launch = await prepareShellLaunch({ shell: host.shell, root: session.root });
+      if (session.closed) throw new Error('The workspace is closed.');
+
       const terminalId = randomUUID();
       const name = `T${session.nextTerminalNumber++}`;
       const entry: TerminalEntry = {
@@ -458,7 +463,8 @@ export class WorkspaceManager {
           id: terminalId,
           cwd: session.root,
           shell: host.shell,
-          env: this.environmentFor(session, host),
+          args: launch.args,
+          env: { ...this.environmentFor(session, host), ...launch.env },
           cols: parsed.cols,
           rows: parsed.rows,
           onData: (data) => {
