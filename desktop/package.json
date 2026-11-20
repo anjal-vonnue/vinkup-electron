@@ -11,7 +11,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1 --no-file-parallelism",
     "test:watch": "vitest",
     "dev": "npm run build && NODE_ENV=development node scripts/run-electron.mjs .",
     "start": "npm run build && NODE_ENV=production node scripts/run-electron.mjs .",

@@ -24,7 +24,6 @@ export class DisplayWindowManager {
   private readonly overlays = new Map<number, BrowserWindow>();
   private readonly overlayReferencesActive = new Map<number, boolean>();
   private readonly overlayResourcesActive = new Map<number, boolean>();
-  private readonly overlayResourcesFocused = new Map<number, boolean>();
   private readonly alerts = new Map<number, BrowserWindow>();
   private readonly closeAuthorized = new WeakSet<BrowserWindow>();
   private readonly mainWindow: BrowserWindow;
@@ -195,26 +194,12 @@ export class DisplayWindowManager {
         if (active) {
           for (const overlayId of this.overlayResourcesActive.keys()) {
             this.overlayResourcesActive.set(overlayId, false);
-            this.overlayResourcesFocused.set(overlayId, false);
           }
         }
         this.overlayResourcesActive.set(id, active);
-        if (!active) this.overlayResourcesFocused.set(id, false);
       }
       this.updateAllowedOverlayFocus();
       this.broadcastBrowserAvailability();
-      return;
-    }
-  }
-
-  setOverlayResourcesFocused(sender: WebContents, focused: boolean): void {
-    for (const [id, window] of this.overlays) {
-      if (!isAlive(window) || window.webContents !== sender) continue;
-      this.overlayResourcesFocused.set(
-        id,
-        !this.mainResourcesActive && this.overlayResourcesActive.get(id) === true && focused
-      );
-      this.updateAllowedOverlayFocus();
       return;
     }
   }
@@ -225,7 +210,6 @@ export class DisplayWindowManager {
     if (active) {
       for (const id of this.overlayResourcesActive.keys()) {
         this.overlayResourcesActive.set(id, false);
-        this.overlayResourcesFocused.set(id, false);
       }
     }
     this.updateAllowedOverlayFocus();
@@ -839,7 +823,6 @@ export class DisplayWindowManager {
     this.overlays.set(display.id, window);
     this.overlayReferencesActive.set(display.id, false);
     this.overlayResourcesActive.set(display.id, false);
-    this.overlayResourcesFocused.set(display.id, false);
     this.configureWindow(window, true);
     window.on('will-move', (event) => event.preventDefault());
     window.on('move', () => this.placeWindow(window, display.bounds));
@@ -861,7 +844,6 @@ export class DisplayWindowManager {
       this.overlays.delete(display.id);
       this.overlayReferencesActive.delete(display.id);
       this.overlayResourcesActive.delete(display.id);
-      this.overlayResourcesFocused.delete(display.id);
       if (this.focusedOverlayId === display.id) this.focusedOverlayId = null;
       this.updateAllowedOverlayFocus();
       this.broadcastBrowserAvailability();
@@ -888,8 +870,7 @@ export class DisplayWindowManager {
     const isFocused =
       focusedOverlayId !== null &&
       (this.overlayReferencesActive.get(focusedOverlayId) === true ||
-        (this.overlayResourcesActive.get(focusedOverlayId) === true &&
-          this.overlayResourcesFocused.get(focusedOverlayId) === true));
+        this.overlayResourcesActive.get(focusedOverlayId) === true);
     if (this.allowedOverlayFocused === isFocused) return;
     this.allowedOverlayFocused = isFocused;
     this.onAllowedOverlayFocusChange(isFocused);
@@ -937,7 +918,6 @@ export class DisplayWindowManager {
     this.overlays.delete(id);
     this.overlayReferencesActive.delete(id);
     this.overlayResourcesActive.delete(id);
-    this.overlayResourcesFocused.delete(id);
     if (this.focusedOverlayId === id) this.focusedOverlayId = null;
     this.updateAllowedOverlayFocus();
     this.broadcastBrowserAvailability();

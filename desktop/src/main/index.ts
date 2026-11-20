@@ -154,7 +154,6 @@ function createResourcesBrowser(
     onState: (state) => sendEvent('resources:state-changed', state),
     onFocusChange: (focused) => {
       if (trackMainWindowFocus) displayWindowManager?.setMainResourcesFocused(focused);
-      else displayWindowManager?.setOverlayResourcesFocused(window.webContents, focused);
     },
     onFocusAddress: () => sendEvent('resources:focus-address'),
     onOpenFind: () => sendEvent('resources:open-find'),

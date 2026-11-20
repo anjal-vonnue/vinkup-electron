@@ -337,16 +337,16 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
-  it('reports allowed overlay focus for active references and Resources content', async () => {
+  it('allows active Resources toolbar focus while its overlay window remains focused', async () => {
     const mainWindow = new FakeWindow();
-    const onReferenceFocusChange = vi.fn();
+    const onAllowedOverlayFocusChange = vi.fn();
     const manager = new DisplayWindowManager(
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
       1,
       OVERLAY_URL,
-      onReferenceFocusChange
+      onAllowedOverlayFocusChange
     );
 
     await manager.start();
@@ -358,22 +358,21 @@ describe('DisplayWindowManager focus alerts', () => {
 
     overlay?.setFocused(true);
     expect(manager.isAllowedOverlayContentFocused()).toBe(true);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(true);
 
     overlay?.setFocused(false);
     expect(manager.isAllowedOverlayContentFocused()).toBe(false);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(false);
 
     manager.setOverlayReferencesActive(overlay?.webContents as unknown as WebContents, false);
     manager.setOverlayResourcesActive(overlay?.webContents as unknown as WebContents, true);
-    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, true);
     overlay?.setFocused(true);
     expect(manager.isAllowedOverlayContentFocused()).toBe(true);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(true);
 
-    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, false);
+    overlay?.setFocused(false);
     expect(manager.isAllowedOverlayContentFocused()).toBe(false);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(false);
     manager.dispose();
   });
 
