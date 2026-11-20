@@ -4,6 +4,7 @@ import { ProgressService } from '../progress-module/progress.service';
 import { toTaskFiles } from './task.files';
 import { TaskRepository } from './task.repository';
 import { realtimeBroker } from '../realtime-module/realtime.broker';
+import { publishToMentor } from '../realtime-module/realtime.notify';
 
 const taskRepository = new TaskRepository();
 const progressService = new ProgressService();
@@ -78,7 +79,19 @@ export class TaskService {
   async saveCode(traineeId: string, taskId: string, files: TaskFile[]): Promise<void> {
     await progressService.assertTaskUnlocked(traineeId, taskId);
 
-    await taskRepository.saveFiles(traineeId, taskId, files, new Date());
+    const previous = await taskRepository.findProgressStatus(traineeId, taskId);
+    const savedAt = new Date();
+    await taskRepository.saveFiles(traineeId, taskId, files, savedAt);
+
+    // The first save is what turns the task into "In progress" for the mentor.
+    if (!previous) {
+      await publishToMentor(traineeId, {
+        type: 'task.started',
+        traineeId,
+        taskId,
+        startedAt: savedAt.toISOString(),
+      });
+    }
   }
 
   /**

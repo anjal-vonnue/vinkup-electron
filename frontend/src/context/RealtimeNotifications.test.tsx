@@ -108,4 +108,36 @@ describe('RealtimeNotifications', () => {
       await screen.findByText('Asha Nair resubmitted "Services Grid Layout" (attempt #2).')
     ).toBeInTheDocument();
   });
+
+  it('does not toast when a task moves to In progress', async () => {
+    renderNotifications();
+
+    emit({
+      type: 'task.started',
+      traineeId: 'tr1',
+      taskId: 't1',
+      startedAt: '2026-11-18T10:00:00.000Z',
+    });
+
+    // Let the event reach the subscribers before checking that no toast was added.
+    await act(async () => {});
+
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
+  });
+
+  it('does not toast when an integrity flag is created', async () => {
+    renderNotifications();
+
+    emit({
+      type: 'flag.created',
+      traineeId: 'tr1',
+      taskId: 't1',
+      flagId: 'flag-1',
+      timestamp: '2026-11-18T10:00:00.000Z',
+    });
+
+    await act(async () => {});
+
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
+  });
 });

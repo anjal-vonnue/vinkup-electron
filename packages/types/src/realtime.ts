@@ -40,4 +40,25 @@ export type TaskSubmittedEvent = {
   submittedAt: string;
 };
 
-export type RealtimeEvent = TaskReviewedEvent | TaskSubmittedEvent;
+/**
+ * A trainee first saved a task, moving it from "not started" to "In progress".
+ * Sent to their assigned mentor; later saves for the same task are not pushed.
+ */
+export type TaskStartedEvent = {
+  type: 'task.started';
+  traineeId: string;
+  taskId: string;
+  startedAt: string;
+};
+
+/** A trainee triggered an integrity flag (tab switch, blocked paste, …); sent to their mentor. */
+export type FlagCreatedEvent = {
+  type: 'flag.created';
+  traineeId: string;
+  taskId: string;
+  flagId: string;
+  timestamp: string;
+};
+
+export type RealtimeEvent =
+  TaskReviewedEvent | TaskSubmittedEvent | TaskStartedEvent | FlagCreatedEvent;

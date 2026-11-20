@@ -49,6 +49,19 @@ export class TaskRepository {
     });
   };
 
+  /** The same existence check without loading the saved files (called on every autosave). */
+  findProgressStatus = (traineeId: string, taskId: string) => {
+    return prisma.task_progress.findUnique({
+      where: {
+        trainee_id_task_id: {
+          trainee_id: traineeId,
+          task_id: taskId,
+        },
+      },
+      select: { status: true },
+    });
+  };
+
   /**
    * Who to notify about a submit/resubmit, plus the names the notification shows.
    * `mentorId` is null when nobody is assigned to the trainee yet.
