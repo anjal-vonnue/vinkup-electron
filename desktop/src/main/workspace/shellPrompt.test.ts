@@ -39,7 +39,7 @@ describe('prepareShellLaunch', () => {
 
     const rc = await readFile(rcFile, 'utf8');
     expect(rc).toContain('. "$HOME/.bashrc"');
-    expect(rc).toContain("PS1='vinkup\\$ '");
+    expect(rc).toContain("PS1='\\[\\e[38;5;99m\\]vinkup\\[\\e[0m\\]\\$ '");
     expect(rc).toContain("PROMPT_COMMAND='vinkup_check_dir'");
     expect(rc).toContain('cannot leave the task folder');
     expect(rc).toContain('cd() { vinkup_cd "$@"; }');
@@ -57,7 +57,7 @@ describe('prepareShellLaunch', () => {
 
     const rc = await readFile(path.join(dir, '.zshrc'), 'utf8');
     expect(rc).toContain('. "$HOME/.zshrc"');
-    expect(rc).toContain("PROMPT='vinkup$ '");
+    expect(rc).toContain("PROMPT='%F{99}vinkup%f$ '");
     expect(rc).toContain("RPROMPT=''");
     expect(rc).toContain('PROMPT_COMMAND=()');
     expect(rc).toContain('cannot leave the task folder');

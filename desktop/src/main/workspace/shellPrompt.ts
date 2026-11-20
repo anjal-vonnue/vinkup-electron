@@ -106,7 +106,9 @@ cd() { vinkup_cd "$@"; }
 pushd() { vinkup_pushd "$@"; }
 
 # Keep the generated prompt even if the user's config rewrites it.
-PS1='vinkup\\$ '
+# 256-colour 99 is a mid-tone purple with enough contrast on the light and dark
+# terminal backgrounds.
+PS1='\\[\\e[38;5;99m\\]vinkup\\[\\e[0m\\]\\$ '
 PROMPT_COMMAND='vinkup_check_dir'
 
 # A config that changed directory must not start the shell outside the task.
@@ -212,7 +214,7 @@ vinkup_check_dir() {
 }
 
 vinkup_precmd() {
-  PROMPT='vinkup$ '
+  PROMPT='%F{99}vinkup%f$ '
   RPROMPT=''
   vinkup_check_dir
 }
@@ -228,7 +230,9 @@ else
 fi
 
 # Keep the generated prompt even if the user's config rewrites it.
-PROMPT='vinkup$ '
+# 256-colour 99 is a mid-tone purple with enough contrast on the light and dark
+# terminal backgrounds.
+PROMPT='%F{99}vinkup%f$ '
 RPROMPT=''
 PROMPT_COMMAND=()
 

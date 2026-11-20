@@ -140,7 +140,9 @@ an empty string to disable remote updates.
 Task folders live under the app's data directory, so the shell's default prompt
 would print a long internal path. Each PTY starts with a generated startup file
 in `<workspace>/.vinkup/shell/` that sources the trainee's own configuration and
-then replaces only the prompt with `vinkup$`:
+then replaces only the prompt with a purple `vinkup$`. The label uses 256-colour
+99, a mid-tone purple that stays readable on both the light and dark terminal
+backgrounds:
 
 - bash starts with `--rcfile` and sources `~/.bashrc`;
 - zsh runs with `ZDOTDIR` set to that folder; the generated `.zshenv`/`.zshrc`
