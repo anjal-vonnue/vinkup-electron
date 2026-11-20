@@ -140,12 +140,19 @@ an empty string to disable remote updates.
 Task folders live under the app's data directory, so the shell's default prompt
 would print a long internal path. Each PTY starts with a generated startup file
 in `<workspace>/.vinkup/shell/` that sources the trainee's own configuration and
-then replaces only the prompt with a bare `$`:
+then replaces only the prompt with `vinkup$`:
 
 - bash starts with `--rcfile` and sources `~/.bashrc`;
 - zsh runs with `ZDOTDIR` set to that folder; the generated `.zshenv`/`.zshrc`
   source the real ones before setting `PROMPT`, `RPROMPT` and `PROMPT_COMMAND`;
 - other shells keep their normal prompt.
+
+`cd` and `pushd` are wrapped so the task folder is the limit: subfolders work,
+while `cd ..` at the root, `cd /`, and symlinks that lead outside are refused.
+A prompt hook (`PROMPT_COMMAND` in bash, `precmd` in zsh) also returns the shell
+to the root if a command bypasses the wrapper with `builtin cd`. This is a
+navigation guard, not a filesystem sandbox: commands can still read absolute
+paths and can start subshells elsewhere.
 
 The folder is ignored by the editor and the file watcher, and it is recreated
 when a terminal opens, so nothing extra reaches the task or the backend.
