@@ -352,6 +352,7 @@
       frame.title = video.title;
       frame.allow =
         'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      frame.sandbox.add('allow-scripts', 'allow-same-origin', 'allow-presentation');
       frame.referrerPolicy = 'origin';
       frame.allowFullscreen = true;
       frame.loading = 'lazy';
