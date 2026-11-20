@@ -29,6 +29,7 @@ vi.mock('./manager.repository', () => ({
 
 import { ManagerService } from './manager.service';
 import { assignMentorSchema } from './manager.schema';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 
 const MANAGER_ID = 'b5f9c5d1-2a44-4f4d-8a1e-6f2c9d7b3e55';
 const MENTOR_ID = '9b1e4c2a-7d3f-4e8b-a1c5-2f6d8e0b4a77';
@@ -140,7 +141,11 @@ describe('ManagerService.listTrainees', () => {
 
 describe('ManagerService.assignMentor', () => {
   it('assigns or reassigns a trainee to an active mentor', async () => {
-    repo.assignMentor.mockResolvedValue({ status: 'assigned', trainee: traineeRow });
+    repo.assignMentor.mockResolvedValue({
+      status: 'assigned',
+      trainee: traineeRow,
+      previousMentorId: null,
+    });
 
     const result = await service.assignMentor(TRAINEE_ID, MENTOR_ID, MANAGER_ID);
 
@@ -155,6 +160,7 @@ describe('ManagerService.assignMentor', () => {
     repo.assignMentor.mockResolvedValue({
       status: 'assigned',
       trainee: { ...traineeRow, mentor: null },
+      previousMentorId: MENTOR_ID,
     });
 
     const result = await service.assignMentor(TRAINEE_ID, null, MANAGER_ID);
@@ -164,6 +170,68 @@ describe('ManagerService.assignMentor', () => {
     expect(console.info).toHaveBeenCalledWith(
       `[manager] ${MANAGER_ID} unassigned trainee ${TRAINEE_ID}`
     );
+  });
+
+  it('tells both the previous and the new mentor about a reassignment', async () => {
+    const previousMentorId = 'c6a0d6e2-3b55-4a5e-9b2f-7a3d0e8c4f66';
+    repo.assignMentor.mockResolvedValue({
+      status: 'assigned',
+      trainee: traineeRow,
+      previousMentorId,
+    });
+    const publish = vi.spyOn(realtimeBroker, 'publish');
+
+    await service.assignMentor(TRAINEE_ID, MENTOR_ID, MANAGER_ID);
+
+    expect(publish).toHaveBeenCalledTimes(2);
+    const recipients = publish.mock.calls.map(([userId]) => userId);
+    expect(recipients).toEqual(expect.arrayContaining([previousMentorId, MENTOR_ID]));
+    for (const [, event] of publish.mock.calls) {
+      expect(event).toMatchObject({
+        type: 'trainee.reassigned',
+        traineeId: TRAINEE_ID,
+        traineeName: 'Test Trainee',
+        previousMentorId,
+        mentorId: MENTOR_ID,
+      });
+    }
+    publish.mockRestore();
+  });
+
+  it('tells only the previous mentor when a trainee is unassigned', async () => {
+    repo.assignMentor.mockResolvedValue({
+      status: 'assigned',
+      trainee: { ...traineeRow, mentor: null },
+      previousMentorId: MENTOR_ID,
+    });
+    const publish = vi.spyOn(realtimeBroker, 'publish');
+
+    await service.assignMentor(TRAINEE_ID, null, MANAGER_ID);
+
+    expect(publish).toHaveBeenCalledWith(
+      MENTOR_ID,
+      expect.objectContaining({ type: 'trainee.reassigned', mentorId: null })
+    );
+    expect(publish).toHaveBeenCalledTimes(1);
+    publish.mockRestore();
+  });
+
+  it('tells only the new mentor when a trainee had none', async () => {
+    repo.assignMentor.mockResolvedValue({
+      status: 'assigned',
+      trainee: traineeRow,
+      previousMentorId: null,
+    });
+    const publish = vi.spyOn(realtimeBroker, 'publish');
+
+    await service.assignMentor(TRAINEE_ID, MENTOR_ID, MANAGER_ID);
+
+    expect(publish).toHaveBeenCalledWith(
+      MENTOR_ID,
+      expect.objectContaining({ type: 'trainee.reassigned', previousMentorId: null })
+    );
+    expect(publish).toHaveBeenCalledTimes(1);
+    publish.mockRestore();
   });
 
   it('returns 404 when the trainee does not exist', async () => {

@@ -60,5 +60,24 @@ export type FlagCreatedEvent = {
   timestamp: string;
 };
 
+/**
+ * A manager moved a trainee to a different mentor (or unassigned them).
+ * Sent to the previous and the new mentor, so both admin views update without a reload.
+ */
+export type TraineeReassignedEvent = {
+  type: 'trainee.reassigned';
+  traineeId: string;
+  traineeName: string;
+  /** The mentor who lost access, or null when the trainee was unassigned before. */
+  previousMentorId: string | null;
+  /** The mentor who gained access, or null when the trainee is now unassigned. */
+  mentorId: string | null;
+  changedAt: string;
+};
+
 export type RealtimeEvent =
-  TaskReviewedEvent | TaskSubmittedEvent | TaskStartedEvent | FlagCreatedEvent;
+  | TaskReviewedEvent
+  | TaskSubmittedEvent
+  | TaskStartedEvent
+  | FlagCreatedEvent
+  | TraineeReassignedEvent;

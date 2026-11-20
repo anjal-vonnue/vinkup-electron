@@ -39,7 +39,12 @@ export type TraineeWithMentor = {
 };
 
 export type AssignMentorOutcome =
-  | { status: 'assigned'; trainee: TraineeWithMentor }
+  | {
+      status: 'assigned';
+      trainee: TraineeWithMentor;
+      /** The mentor the trainee had before this write, if any. */
+      previousMentorId: string | null;
+    }
   | { status: 'trainee-not-found' }
   | { status: 'mentor-not-found' }
   | { status: 'mentor-invalid' }
@@ -147,6 +152,7 @@ export class ManagerRepository {
             data: { mentor_id: null },
             select: traineeWithMentor,
           }),
+          previousMentorId: trainee.mentor_id,
         };
       }
 
@@ -165,6 +171,7 @@ export class ManagerRepository {
           data: { mentor_id: mentorId },
           select: traineeWithMentor,
         }),
+        previousMentorId: trainee.mentor_id,
       };
     });
 }

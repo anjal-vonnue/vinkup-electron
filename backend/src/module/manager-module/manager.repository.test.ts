@@ -63,6 +63,7 @@ describe('ManagerRepository.assignMentor', () => {
     await expect(repository.assignMentor(TRAINEE_ID, null)).resolves.toEqual({
       status: 'assigned',
       trainee: { ...row, mentor: null },
+      previousMentorId: null,
     });
     expect(tx.admin.findUnique).not.toHaveBeenCalled();
     expect(tx.trainee.update).toHaveBeenCalledWith(
@@ -112,6 +113,7 @@ describe('ManagerRepository.assignMentor', () => {
     await expect(repository.assignMentor(TRAINEE_ID, MENTOR_ID)).resolves.toEqual({
       status: 'assigned',
       trainee: row,
+      previousMentorId: 'c6a0d6e2-3b55-4a5e-9b2f-7a3d0e8c4f66',
     });
     expect(tx.trainee.update).toHaveBeenCalledWith(
       expect.objectContaining({

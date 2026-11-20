@@ -238,6 +238,39 @@ describe('AdminTraineePage', () => {
     await waitFor(() => expect(getAdminFlags).toHaveBeenCalledTimes(2));
   });
 
+  it('shows that the trainee is no longer assigned after a reassignment', async () => {
+    const fake = installFakeEventSource();
+    vi.mocked(getAdminTrainee)
+      .mockResolvedValueOnce(detail)
+      .mockRejectedValueOnce(new ApiError(403, 'FORBIDDEN', 'Trainee not assigned to you.'));
+
+    render(
+      <MemoryRouter initialEntries={[`/admin/trainees/${traineeId}`]}>
+        <RealtimeProvider enabled>
+          <Routes>
+            <Route path="/admin/trainees/:traineeId" element={<AdminTraineePage />} />
+          </Routes>
+        </RealtimeProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('heading', { level: 1, name: detail.profile.trainee.name });
+
+    act(() => {
+      fake.source?.emit({
+        type: 'trainee.reassigned',
+        traineeId,
+        traineeName: detail.profile.trainee.name,
+        previousMentorId: 'mentor-1',
+        mentorId: 'mentor-2',
+        changedAt: '2026-11-18T10:00:00.000Z',
+      });
+    });
+
+    expect(await screen.findByText('Trainee not assigned to you')).toBeInTheDocument();
+    expect(getAdminTrainee).toHaveBeenCalledTimes(2);
+  });
+
   it('ignores events for another trainee', async () => {
     const fake = installFakeEventSource();
 
