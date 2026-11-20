@@ -18,17 +18,27 @@ vi.mock('../lib/IsfullscreenActive', () => ({
 
 describe('useFlagTracking allowed overlay content exception', () => {
   let focusListeners: Array<(isFocused: boolean) => void>;
+  let fullscreenListeners: Array<(isFullscreen: boolean) => void>;
   let visibilityDescriptor: PropertyDescriptor | undefined;
 
   beforeEach(() => {
     vi.useFakeTimers();
     focusListeners = [];
+    fullscreenListeners = [];
+    isFullscreenActiveMock.mockReturnValue(true);
     visibilityDescriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState');
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       value: 'visible',
     });
     const windowApi = {
+      isFullscreen: vi.fn(() => Promise.resolve(true)),
+      onFullscreenChange: vi.fn((listener: (isFullscreen: boolean) => void) => {
+        fullscreenListeners.push(listener);
+        return () => {
+          fullscreenListeners = fullscreenListeners.filter((registered) => registered !== listener);
+        };
+      }),
       isAllowedOverlayContentFocused: vi.fn(() => Promise.resolve(false)),
       onAllowedOverlayContentFocusChange: vi.fn((listener: (isFocused: boolean) => void) => {
         focusListeners.push(listener);
@@ -121,6 +131,33 @@ describe('useFlagTracking allowed overlay content exception', () => {
       'task-1',
       expect.objectContaining({ type: 'WINDOW_BLUR' })
     );
+    expect(onWarning).toHaveBeenCalledOnce();
+  });
+
+  it('does not flag zoom-induced resize in Electron but flags a native fullscreen exit', async () => {
+    const onWarning = vi.fn();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    renderHook(() => useFlagTracking({ taskId: 'task-1', onWarning }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    isFullscreenActiveMock.mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(logFlagEvent).not.toHaveBeenCalled();
+    expect(onWarning).not.toHaveBeenCalled();
+
+    act(() => {
+      fullscreenListeners[0]?.(false);
+    });
+
+    expect(logFlagEvent).not.toHaveBeenCalled();
     expect(onWarning).toHaveBeenCalledOnce();
   });
 });

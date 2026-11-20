@@ -27,8 +27,11 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
   });
 
   useEffect(() => {
+    const desktopWindow = window.desktop?.window;
     let isAway = document.visibilityState === 'hidden';
-    let wasFullscreen = isFullscreenActive();
+    let nativeFullscreen: boolean | null = null;
+    let fullscreenStateVersion = 0;
+    let wasFullscreen: boolean | null = desktopWindow ? null : isFullscreenActive();
     let isUnfocused = !document.hasFocus();
     let resizeTimeout: ReturnType<typeof setTimeout> | undefined;
     let windowBlurTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -37,6 +40,10 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
     let isAllowedOverlayContentFocused = false;
     let focusStateVersion = 0;
     let skipNextReturnWarning = false;
+    function isTrackingFullscreenActive() {
+      return desktopWindow ? (nativeFullscreen ?? isFullscreenActive()) : isFullscreenActive();
+    }
+
     function startFlag(type: FlagEventType) {
       if (activeFlag || isAllowedOverlayContentFocused) return;
 
@@ -74,7 +81,6 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       isUnfocused = false;
     }
 
-    const desktopWindow = window.desktop?.window;
     const removeAllowedOverlayFocusListener = desktopWindow?.onAllowedOverlayContentFocusChange(
       handleAllowedOverlayFocusChange
     );
@@ -92,30 +98,11 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
         });
     }
 
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'hidden') {
-        if (isAway) return; // already logged this hidden period
-        isAway = true;
-        if (isAllowedOverlayContentFocused) {
-          skipNextReturnWarning = true;
-          activeFlag = null;
-        } else if (isFullscreenActive()) {
-          startFlag('TAB_SWITCH');
-        }
-      } else if (isAway) {
-        isAway = false;
-        if (isFullscreenActive()) {
-          endFlag();
-          if (!isAllowedOverlayContentFocused && !skipNextReturnWarning) {
-            onWarningRef.current(LEFT_WORKSPACE_WARNING);
-          }
-        }
-        skipNextReturnWarning = false;
+    function handleFullscreenChange(isFullscreen = isFullscreenActive()) {
+      if (wasFullscreen === null) {
+        wasFullscreen = isFullscreen;
+        return;
       }
-    }
-
-    function handleFullscreenChange() {
-      const isFullscreen = isFullscreenActive();
       if (wasFullscreen && !isFullscreen) {
         if (!isAllowedOverlayContentFocused) {
           startFlag('FULLSCREEN_EXIT');
@@ -129,6 +116,48 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       }
       wasFullscreen = isFullscreen;
     }
+
+    const removeFullscreenListener = desktopWindow?.onFullscreenChange?.((isFullscreen) => {
+      fullscreenStateVersion += 1;
+      nativeFullscreen = isFullscreen;
+      handleFullscreenChange(isFullscreen);
+    });
+    if (desktopWindow?.isFullscreen) {
+      const initialFullscreenStateVersion = fullscreenStateVersion;
+      void desktopWindow
+        .isFullscreen()
+        .then((isFullscreen) => {
+          if (fullscreenStateVersion !== initialFullscreenStateVersion) return;
+          nativeFullscreen = isFullscreen;
+          wasFullscreen = isFullscreen;
+        })
+        .catch((error: unknown) => {
+          console.error('[activity] Failed to read native fullscreen state', error);
+        });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        if (isAway) return; // already logged this hidden period
+        isAway = true;
+        if (isAllowedOverlayContentFocused) {
+          skipNextReturnWarning = true;
+          activeFlag = null;
+        } else if (isTrackingFullscreenActive()) {
+          startFlag('TAB_SWITCH');
+        }
+      } else if (isAway) {
+        isAway = false;
+        if (isTrackingFullscreenActive()) {
+          endFlag();
+          if (!isAllowedOverlayContentFocused && !skipNextReturnWarning) {
+            onWarningRef.current(LEFT_WORKSPACE_WARNING);
+          }
+        }
+        skipNextReturnWarning = false;
+      }
+    }
+
     // NEW — window-level focus loss. Overlaps with TAB_SWITCH for a full
     // tab/app switch (both will fire), but also catches cases visibilitychange
     // misses entirely: DevTools focus, address bar clicks, a second-monitor
@@ -138,7 +167,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
         clearTimeout(windowBlurTimeout);
       }
       windowBlurTimeout = setTimeout(() => {
-        if (!isFullscreenActive()) return;
+        if (!isTrackingFullscreenActive()) return;
         if (document.visibilityState === 'hidden') return;
         if (isAllowedOverlayContentFocused) return;
 
@@ -156,7 +185,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
         activeFlag = null;
         return;
       }
-      if (!isFullscreenActive()) {
+      if (!isTrackingFullscreenActive()) {
         isUnfocused = false;
         return;
       }
@@ -182,18 +211,23 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    // window.addEventListener('resize', handleFullscreenChange);
-    window.addEventListener('resize', handleResize);
+    const handleDocumentFullscreenChange = () => handleFullscreenChange(isFullscreenActive());
+    if (!desktopWindow) {
+      document.addEventListener('fullscreenchange', handleDocumentFullscreenChange);
+      window.addEventListener('resize', handleResize);
+    }
     window.addEventListener('blur', handleWindowBlur); // NEW
     window.addEventListener('focus', handleWindowFocus); // NEW
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('resize', handleResize);
+      if (!desktopWindow) {
+        document.removeEventListener('fullscreenchange', handleDocumentFullscreenChange);
+        window.removeEventListener('resize', handleResize);
+      }
       window.removeEventListener('blur', handleWindowBlur); // NEW
       window.removeEventListener('focus', handleWindowFocus); // NEW
       removeAllowedOverlayFocusListener?.();
+      removeFullscreenListener?.();
       if (resizeTimeout) {
         clearTimeout(resizeTimeout);
       }
