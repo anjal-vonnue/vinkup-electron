@@ -23,6 +23,11 @@ const SHORTCUTS = new Set([
   '<super>kp_8',
   '<super>kp_9',
   '<alt>space',
+  '<alt>f5',
+  '<alt>f6',
+  '<alt>f10',
+  'f1',
+  '<super>f1',
 ]);
 
 interface SavedBinding {

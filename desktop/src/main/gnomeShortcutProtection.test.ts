@@ -9,6 +9,7 @@ const schemas = [
   'org.gnome.desktop.input-sources',
   'org.gnome.desktop.wm.keybindings',
   'org.gnome.mutter.keybindings',
+  'org.gnome.settings-daemon.plugins.media-keys',
   'org.gnome.shell.extensions.tiling-assistant',
   'org.gnome.shell.extensions.custom-shortcuts',
 ];
@@ -20,6 +21,10 @@ const initialSettings = new Map([
   ['org.gnome.desktop.wm.keybindings.activate-window-menu', "['<Alt>space']"],
   ['org.gnome.desktop.wm.keybindings.maximize', "['<Super>Up']"],
   ['org.gnome.desktop.wm.keybindings.unmaximize', "['<Super>Down', '<Alt>F5']"],
+  ['org.gnome.desktop.wm.keybindings.toggle-maximized', "['<Alt>F10']"],
+  ['org.gnome.desktop.wm.keybindings.switch-panels', "['<Alt>F6']"],
+  ['org.gnome.desktop.wm.keybindings.panel-main-menu', "['<Alt>F1', 'F1']"],
+  ['org.gnome.settings-daemon.plugins.media-keys.help', "['', '<Super>F1']"],
   ['org.gnome.mutter.keybindings.switch-monitor', "['<Super>p', 'XF86Display']"],
   ['org.gnome.shell.extensions.tiling-assistant.tile-left-half', "['<Super>Left', '<Super>KP_4']"],
   [
@@ -92,6 +97,11 @@ describe('GnomeShortcutProtection', () => {
     expect(settings.get('org.gnome.desktop.wm.keybindings.minimize')).toBe('[]');
     expect(settings.get('org.gnome.desktop.wm.keybindings.show-desktop')).toBe('[]');
     expect(settings.get('org.gnome.desktop.wm.keybindings.activate-window-menu')).toBe('[]');
+    expect(settings.get('org.gnome.desktop.wm.keybindings.unmaximize')).toBe('[]');
+    expect(settings.get('org.gnome.desktop.wm.keybindings.toggle-maximized')).toBe('[]');
+    expect(settings.get('org.gnome.desktop.wm.keybindings.switch-panels')).toBe('[]');
+    expect(settings.get('org.gnome.desktop.wm.keybindings.panel-main-menu')).toBe("['<Alt>F1']");
+    expect(settings.get('org.gnome.settings-daemon.plugins.media-keys.help')).toBe("['']");
     expect(settings.get('org.gnome.shell.extensions.custom-shortcuts.hide-windows')).toBe(
       "['<Ctrl><Alt>F12']"
     );
@@ -99,7 +109,7 @@ describe('GnomeShortcutProtection', () => {
       "''"
     );
     expect(settings.get('org.gnome.desktop.wm.keybindings.maximize')).toBe('[]');
-    expect(settings.get('org.gnome.desktop.wm.keybindings.unmaximize')).toBe("['<Alt>F5']");
+    expect(settings.get('org.gnome.desktop.wm.keybindings.unmaximize')).toBe('[]');
     expect(settings.get('org.gnome.mutter.keybindings.switch-monitor')).toBe("['XF86Display']");
     expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-left-half')).toBe('[]');
     expect(settings.get('org.gnome.shell.extensions.tiling-assistant.tile-right-half')).toBe('[]');
