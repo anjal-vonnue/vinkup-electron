@@ -2,10 +2,13 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow, WebContents } from 'electron';
 
-const { browserWindowMock, screenMock, createdWindows } = vi.hoisted(() => ({
+const { browserWindowMock, screenMock, screenListeners, createdWindows } = vi.hoisted(() => ({
   browserWindowMock: vi.fn<(options: Record<string, unknown>) => object>(),
+  screenListeners: new Map<string, (...args: unknown[]) => void>(),
   screenMock: {
-    on: vi.fn(),
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      screenListeners.set(event, listener);
+    }),
     removeListener: vi.fn(),
     getPrimaryDisplay: vi.fn(),
     getAllDisplays: vi.fn(),
@@ -173,6 +176,7 @@ describe('DisplayWindowManager focus alerts', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     createdWindows.length = 0;
+    screenListeners.clear();
     browserWindowMock.mockImplementation(function (options: Record<string, unknown>) {
       const window = new FakeWindow(options);
       createdWindows.push({
@@ -296,6 +300,122 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('does not create a fullscreen overlay for a mirrored display', async () => {
+    const mainWindow = new FakeWindow();
+    const primaryDisplay = {
+      id: 1,
+      bounds: { x: 0, y: 0, width: 1280, height: 720 },
+    };
+    const mirroredDisplay = {
+      id: 2,
+      bounds: { x: 0, y: 0, width: 1280, height: 720 },
+    };
+    screenMock.getAllDisplays.mockReturnValue([primaryDisplay, mirroredDisplay]);
+    screenMock.getDisplayMatching.mockReturnValue(primaryDisplay);
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    const setBounds = vi.spyOn(mainWindow, 'setBounds');
+    await manager.moveToNextDisplay();
+
+    expect(
+      createdWindows.filter(({ options, destroyed }) => isOverlayWindow(options) && !destroyed)
+    ).toHaveLength(0);
+    expect(
+      createdWindows.filter(({ options, destroyed }) => isAlertWindow(options) && !destroyed)
+    ).toHaveLength(0);
+    expect(setBounds).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
+  it('creates only one focus alert for mirrored display regions', async () => {
+    const mainWindow = new FakeWindow();
+    const primaryDisplay = {
+      id: 1,
+      bounds: { x: 0, y: 0, width: 1280, height: 720 },
+    };
+    const mirroredDisplay = {
+      id: 2,
+      bounds: { x: 0, y: 0, width: 1280, height: 720 },
+    };
+    screenMock.getAllDisplays.mockReturnValue([primaryDisplay, mirroredDisplay]);
+    screenMock.getDisplayMatching.mockReturnValue(primaryDisplay);
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    mainWindow.emit('ready-to-show');
+    mainWindow.emit('focus');
+    mainWindow.focused = false;
+    mainWindow.emit('blur');
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(
+      createdWindows.filter(({ options, destroyed }) => isAlertWindow(options) && !destroyed)
+    ).toHaveLength(1);
+    manager.dispose();
+  });
+
+  it('reconciles overlays automatically when the display layout changes', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+
+    await manager.start();
+    const originalOverlay = createdWindows.find(({ options }) => isOverlayWindow(options));
+    expect(originalOverlay?.destroyed).toBe(false);
+
+    const primaryDisplay = {
+      id: 1,
+      bounds: { x: 0, y: 0, width: 1280, height: 720 },
+    };
+    const mirroredDisplay = {
+      id: 2,
+      bounds: { x: 0, y: 0, width: 1280, height: 720 },
+    };
+    screenMock.getAllDisplays.mockReturnValue([primaryDisplay, mirroredDisplay]);
+    screenMock.getDisplayMatching.mockReturnValue(primaryDisplay);
+    screenListeners.get('display-metrics-changed')?.();
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(originalOverlay?.destroyed).toBe(true);
+    expect(
+      createdWindows.filter(({ options, destroyed }) => isOverlayWindow(options) && !destroyed)
+    ).toHaveLength(0);
+
+    screenMock.getAllDisplays.mockReturnValue([
+      primaryDisplay,
+      {
+        id: 2,
+        bounds: { x: 1280, y: 0, width: 1280, height: 720 },
+      },
+    ]);
+    screenMock.getDisplayMatching.mockReturnValue(primaryDisplay);
+    screenListeners.get('display-metrics-changed')?.();
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(
+      createdWindows.filter(({ options, destroyed }) => isOverlayWindow(options) && !destroyed)
+    ).toHaveLength(1);
+    manager.dispose();
+  });
+
   it('keeps secondary displays uncovered during sign-in and restores protection on success', async () => {
     const mainWindow = new FakeWindow();
     mainWindow.fullscreen = false;
@@ -337,16 +457,16 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
-  it('reports allowed overlay focus for active references and Resources content', async () => {
+  it('allows active Resources toolbar focus while its overlay window remains focused', async () => {
     const mainWindow = new FakeWindow();
-    const onReferenceFocusChange = vi.fn();
+    const onAllowedOverlayFocusChange = vi.fn();
     const manager = new DisplayWindowManager(
       mainWindow as unknown as BrowserWindow,
       vi.fn(),
       true,
       1,
       OVERLAY_URL,
-      onReferenceFocusChange
+      onAllowedOverlayFocusChange
     );
 
     await manager.start();
@@ -358,22 +478,21 @@ describe('DisplayWindowManager focus alerts', () => {
 
     overlay?.setFocused(true);
     expect(manager.isAllowedOverlayContentFocused()).toBe(true);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(true);
 
     overlay?.setFocused(false);
     expect(manager.isAllowedOverlayContentFocused()).toBe(false);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(false);
 
     manager.setOverlayReferencesActive(overlay?.webContents as unknown as WebContents, false);
     manager.setOverlayResourcesActive(overlay?.webContents as unknown as WebContents, true);
-    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, true);
     overlay?.setFocused(true);
     expect(manager.isAllowedOverlayContentFocused()).toBe(true);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(true);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(true);
 
-    manager.setOverlayResourcesFocused(overlay?.webContents as unknown as WebContents, false);
+    overlay?.setFocused(false);
     expect(manager.isAllowedOverlayContentFocused()).toBe(false);
-    expect(onReferenceFocusChange).toHaveBeenLastCalledWith(false);
+    expect(onAllowedOverlayFocusChange).toHaveBeenLastCalledWith(false);
     manager.dispose();
   });
 

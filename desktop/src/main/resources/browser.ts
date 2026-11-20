@@ -101,7 +101,13 @@ export class ResourcesBrowser {
   }
 
   setBounds(bounds: ResourcesBrowserBounds): void {
-    this.lastBounds = this.clampBounds(bounds);
+    const zoomFactor = this.window.webContents.getZoomFactor();
+    this.lastBounds = this.clampBounds({
+      x: bounds.x * zoomFactor,
+      y: bounds.y * zoomFactor,
+      width: bounds.width * zoomFactor,
+      height: bounds.height * zoomFactor,
+    });
     this.applyBounds();
 
     if (this.lastBounds.width <= 0 || this.lastBounds.height <= 0) {
