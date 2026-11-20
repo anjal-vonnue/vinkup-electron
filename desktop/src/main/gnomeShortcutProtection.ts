@@ -22,6 +22,7 @@ const SHORTCUTS = new Set([
   '<super>kp_7',
   '<super>kp_8',
   '<super>kp_9',
+  '<alt>space',
 ]);
 
 interface SavedBinding {
@@ -103,14 +104,12 @@ export class GnomeShortcutProtection {
       const match = /^([a-zA-Z0-9.-]+) ([a-zA-Z0-9-]+) (.+)$/.exec(line);
       if (!match) continue;
       const [, schema, key, original] = match;
-      if (
-        !schema?.startsWith('org.gnome.') ||
-        !key ||
-        !original ||
-        !original.toLowerCase().includes('<super>')
-      ) {
+      if (!schema?.startsWith('org.gnome.') || !key || !original) {
         continue;
       }
+
+      const lowerOriginal = original.toLowerCase();
+      if (![...SHORTCUTS].some((shortcut) => lowerOriginal.includes(shortcut))) continue;
 
       const parsed = parseBindingValue(original);
       if (!parsed) continue;

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GnomeShortcutProtection } from './gnomeShortcutProtection.js';
 
 const schemas = [
+  'org.gnome.desktop.input-sources',
   'org.gnome.desktop.wm.keybindings',
   'org.gnome.mutter.keybindings',
   'org.gnome.shell.extensions.tiling-assistant',
@@ -13,8 +14,10 @@ const schemas = [
 ];
 
 const initialSettings = new Map([
+  ['org.gnome.desktop.input-sources.sources', "[('xkb', 'us')]"],
   ['org.gnome.desktop.wm.keybindings.minimize', "['<Super>h']"],
   ['org.gnome.desktop.wm.keybindings.show-desktop', "['<Super>d']"],
+  ['org.gnome.desktop.wm.keybindings.activate-window-menu', "['<Alt>space']"],
   ['org.gnome.desktop.wm.keybindings.maximize', "['<Super>Up']"],
   ['org.gnome.desktop.wm.keybindings.unmaximize', "['<Super>Down', '<Alt>F5']"],
   ['org.gnome.mutter.keybindings.switch-monitor', "['<Super>p', 'XF86Display']"],
@@ -88,6 +91,7 @@ describe('GnomeShortcutProtection', () => {
 
     expect(settings.get('org.gnome.desktop.wm.keybindings.minimize')).toBe('[]');
     expect(settings.get('org.gnome.desktop.wm.keybindings.show-desktop')).toBe('[]');
+    expect(settings.get('org.gnome.desktop.wm.keybindings.activate-window-menu')).toBe('[]');
     expect(settings.get('org.gnome.shell.extensions.custom-shortcuts.hide-windows')).toBe(
       "['<Ctrl><Alt>F12']"
     );
