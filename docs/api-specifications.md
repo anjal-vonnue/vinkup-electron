@@ -170,6 +170,9 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | GET    | `/api/typing-test/results`                             | Trainee | All typing results, newest first                                                       |
 | GET    | `/api/profile`                                         | Trainee | Profile page data                                                                      |
 | GET    | `/api/journal`                                         | Trainee | Accessible journal entries, newest curriculum day first                                |
+| GET    | `/api/leave-requests`                                  | Trainee | Own leave requests, newest first                                                       |
+| POST   | `/api/leave-requests`                                  | Trainee | Submit a leave request                                                                 |
+| GET    | `/api/leave-requests/:requestId`                       | Trainee | One of the signed-in trainee's own leave requests                                      |
 | GET    | `/api/admin/trainees`                                  | Mentor  | Only this mentor's assigned trainees, with progress, time, typing, flags and integrity |
 | POST   | `/api/admin/trainees`                                  | Mentor  | Add a trainee, assigned to the creating mentor                                         |
 | GET    | `/api/admin/trainees/:traineeId`                       | Mentor  | One assigned trainee: profile, course progress, worked-on tasks, journal               |
@@ -180,6 +183,9 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Mentor  | Send an assigned trainee's submission back for rework                                  |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Mentor  | Review history for an assigned trainee's task                                          |
 | GET    | `/api/admin/trainees/:traineeId/feedback`              | Mentor  | Every feedback-bearing review for an assigned trainee, newest first                    |
+| GET    | `/api/admin/leave-requests`                            | Mentor  | Leave requests from this mentor's assigned trainees                                    |
+| GET    | `/api/admin/leave-requests/:requestId`                 | Mentor  | One assigned-trainee leave request                                                     |
+| PATCH  | `/api/admin/leave-requests/:requestId/review`          | Mentor  | Approve or reject a pending assigned-trainee leave request                             |
 | GET    | `/api/manager/staff`                                   | Manager | List mentors and managers with role, status and assignment counts                      |
 | POST   | `/api/manager/staff`                                   | Manager | Create a mentor or manager account                                                     |
 | PATCH  | `/api/manager/staff/:staffId`                          | Manager | Update a staff account's name, email or role                                           |
@@ -189,10 +195,13 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | PATCH  | `/api/manager/trainees/:traineeId`                     | Manager | Update a trainee's name or email                                                       |
 | PATCH  | `/api/manager/trainees/:traineeId/status`              | Manager | Activate or deactivate a trainee                                                       |
 | PATCH  | `/api/manager/trainees/:traineeId/mentor`              | Manager | Assign, reassign or unassign (`mentorId: null`) a trainee                              |
+| GET    | `/api/manager/leave-requests`                          | Manager | Every leave request, with the trainee's assigned Mentor                                |
+| GET    | `/api/manager/leave-requests/:requestId`               | Manager | Any leave request                                                                      |
+| PATCH  | `/api/manager/leave-requests/:requestId/review`        | Manager | Approve or reject any pending leave request                                            |
 
-49 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Mentor" = `requireMentor` plus the assignment guard on trainee routes; "Manager" = `requireManager`.
+58 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Mentor" = `requireMentor` plus the assignment guard on trainee routes; "Manager" = `requireManager`.
 
-Task review rules, schema and UI are documented in [task-review-workflow.md](./task-review-workflow.md).
+Task review rules, schema and UI are documented in [task-review-workflow.md](./task-review-workflow.md). The leave request workflow and its role permissions are documented in [roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow) and [database.md](./database.md).
 
 ---
 
@@ -1233,3 +1242,135 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 ```
 
 - **Errors:** 400; 401; 403; 404 `"Trainee not found."`.
+
+---
+
+## Leave requests
+
+Trainees submit a subject and reason and may only read their own requests. Mentors review requests
+from their assigned trainees under `/api/admin`; managers review every request under `/api/manager`.
+Both staff roles share the same service, review payload and `LeaveRequest` response shape; only the
+data scope differs. See [roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow)
+for the permissions and [database.md](./database.md) for the `leave_request` table.
+
+Every leave response uses `LeaveRequest`:
+
+```json
+{
+  "id": "8d2f0d2a-…",
+  "traineeId": "3f9c…",
+  "traineeName": "Trainee Alice",
+  "assignedMentor": { "id": "1a2b…", "name": "Mentor Alice" },
+  "subject": "Medical appointment",
+  "reason": "A hospital appointment during lab hours.",
+  "status": "PENDING",
+  "submittedAt": "2026-11-21T09:00:00.000Z",
+  "reviewerId": null,
+  "reviewerName": null,
+  "reviewerRole": null,
+  "feedback": null,
+  "reviewedAt": null,
+  "createdAt": "2026-11-21T09:00:00.000Z",
+  "updatedAt": "2026-11-21T09:00:00.000Z"
+}
+```
+
+`status` ∈ `PENDING | APPROVED | REJECTED`. `reviewerRole` ∈ `MENTOR | MANAGER` once decided, else
+`null`. `assignedMentor` is `null` for an unassigned trainee. All timestamps are ISO-8601 UTC.
+For a decided request, `reviewerId`, `reviewerName`, `reviewerRole` and `reviewedAt` are populated;
+`feedback` is optional for approvals and required for rejections.
+
+### GET /api/leave-requests
+
+- **Auth:** Trainee.
+- **Response 200** (`LeaveRequest[]`): only the signed-in trainee's requests, newest first
+  (`submitted_at` descending, then `created_at`).
+- **Errors:** 401; 403.
+
+### POST /api/leave-requests
+
+- **Auth:** Trainee.
+- **Request body** (`CreateLeaveRequestInput`):
+
+| Field     | Type   | Rules                                                       |
+| --------- | ------ | ----------------------------------------------------------- |
+| `subject` | string | Trimmed, 1–200 chars (`LEAVE_SUBJECT_MAX_LENGTH = 200`).    |
+| `reason`  | string | Trimmed, 1–2,000 chars (`LEAVE_REASON_MAX_LENGTH = 2,000`). |
+
+```json
+{ "subject": "Medical appointment", "reason": "A hospital appointment during lab hours." }
+```
+
+- **Business rules:** `traineeId` always comes from the JWT, never from the body. New requests start
+  `PENDING` with no reviewer or feedback.
+- **Response 201** (`LeaveRequest`): the created request.
+- **Errors:** 400 `VALIDATION_FAILED` (missing, empty or too-long fields); 401; 403.
+
+### GET /api/leave-requests/:requestId
+
+- **Auth:** Trainee.
+- **Path params:** `requestId`: UUID.
+- **Response 200** (`LeaveRequest`): the request, only if it belongs to the signed-in trainee.
+- **Errors:** 400 (bad UUID); 401; 403; 404 `NOT_FOUND` (`"Leave request not found."`).
+
+### GET /api/admin/leave-requests
+
+- **Auth:** Mentor.
+- **Response 200** (`LeaveRequest[]`): only requests whose trainee has `mentor_id` equal to the
+  signed-in mentor; newest first. Includes each trainee's `assignedMentor`.
+- **Errors:** 401; 403.
+
+### GET /api/admin/leave-requests/:requestId
+
+- **Auth:** Mentor.
+- **Path params:** `requestId`: UUID.
+- **Response 200** (`LeaveRequest`): one request from an assigned trainee.
+- **Errors:** 400 (bad UUID); 401; 403; 404 `NOT_FOUND` for an unknown or unassigned request — the
+  same 404 hides requests outside the mentor's scope.
+
+### GET /api/manager/leave-requests
+
+- **Auth:** Manager.
+- **Response 200** (`LeaveRequest[]`): every request, newest first, with the trainee's
+  `assignedMentor` (used for the Manager-only "Assigned Mentor" column).
+- **Errors:** 401; 403.
+
+### GET /api/manager/leave-requests/:requestId
+
+- **Auth:** Manager.
+- **Path params:** `requestId`: UUID.
+- **Response 200** (`LeaveRequest`): any request, regardless of the trainee's mentor assignment.
+- **Errors:** 400 (bad UUID); 401; 403; 404 `NOT_FOUND`.
+
+### PATCH /api/admin/leave-requests/:requestId/review and PATCH /api/manager/leave-requests/:requestId/review
+
+- **Auth:** Mentor for the `/api/admin` path, Manager for the `/api/manager` path. Both use the same
+  handler.
+- **Path params:** `requestId`: UUID.
+- **Request body** (`ReviewLeaveRequestInput`), a Zod discriminated union on `decision`:
+
+| Decision   | `feedback`                                                              |
+| ---------- | ----------------------------------------------------------------------- |
+| `APPROVED` | Optional; trimmed, max 2,000 chars.                                     |
+| `REJECTED` | Required; trimmed, 1–2,000 chars (`LEAVE_FEEDBACK_MAX_LENGTH = 2,000`). |
+
+```json
+{ "decision": "APPROVED", "feedback": "Enjoy the time off." }
+```
+
+```json
+{ "decision": "REJECTED", "feedback": "Please choose another date." }
+```
+
+- **Business rules:**
+  1. The reviewer id, role and name come from the authenticated context, never the body.
+  2. The request must be in the reviewer's scope (mentor: assigned trainee; manager: any) and still
+     `PENDING`; a missing/out-of-scope request is `404`, a decided one is `409 ALREADY_REVIEWED`.
+  3. The decision, reviewer details, feedback and `reviewed_at` are written in one transaction via a
+     conditional `UPDATE ... WHERE status = 'PENDING'`. Only one of two concurrent reviews can win;
+     the loser gets `409 ALREADY_REVIEWED`. Historical requests are never deleted or overwritten.
+  4. A database CHECK constraint plus a `BEFORE UPDATE OF status` trigger also block any later code
+     path from changing a final status.
+- **Response 200** (`LeaveRequest`): the updated request with the recorded decision.
+- **Errors:** 400 `VALIDATION_FAILED` (bad UUID, invalid decision, missing rejection feedback);
+  401; 403; 404 `NOT_FOUND`; 409 `ALREADY_REVIEWED`.

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../../middleware/validate';
+import { staffLeaveRequestRoutes } from '../leave-module/leave-request.routes';
 import { managerController } from './manager.controller';
 import {
   accountStatusSchema,
@@ -13,6 +14,10 @@ import {
 } from './manager.schema';
 
 export const managerRoutes = Router();
+
+// Same router and same review workflow as the mentor area; the service applies
+// the manager's platform-wide scope from the authenticated reviewer.
+managerRoutes.use('/leave-requests', staffLeaveRequestRoutes);
 
 managerRoutes.get('/staff', managerController.listStaff);
 managerRoutes.post('/staff', validate({ body: createStaffSchema }), managerController.createStaff);

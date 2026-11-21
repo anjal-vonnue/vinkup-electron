@@ -16,6 +16,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import TypingTestPage from './pages/TypingTestPage/TypingTestPage';
 import JournalPage from './pages/JournalPage';
 import ResourcesPage from './pages/ResourcesPage/ResourcesPage';
+import LeaveRequestsPage from './pages/LeaveRequestsPage';
 import HelpPage from './pages/HelpPage';
 import ReferencePage from './pages/ReferencePage';
 import { useParams } from 'react-router';
@@ -26,6 +27,7 @@ import CertificatePage from './pages/CertificatePage';
 const TaskPage = lazy(() => import('./pages/TaskPage'));
 const AdminTraineesPage = lazy(() => import('./pages/AdminTraineesPage'));
 const AdminTraineePage = lazy(() => import('./pages/AdminTraineePage'));
+const StaffLeaveRequestsPage = lazy(() => import('./pages/StaffLeaveRequestsPage'));
 const ManagerPage = lazy(() => import('./pages/ManagerPage'));
 
 function ReferenceRoute() {
@@ -60,6 +62,7 @@ export default function App() {
                 <Route path="/typing-test" element={<TypingTestPage />} />
                 <Route path="/journal" element={<JournalPage />} />
                 <Route path="/resources" element={<ResourcesPage />} />
+                <Route path="/leave-requests" element={<LeaveRequestsPage />} />
                 <Route path="/certificates/:courseId" element={<CertificatePage />} />
                 <Route
                   path="/tasks/:taskId"
@@ -91,6 +94,15 @@ export default function App() {
                     </Suspense>
                   }
                 ></Route>
+
+                <Route
+                  path="/admin/leave-requests"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <StaffLeaveRequestsPage area="admin" />
+                    </Suspense>
+                  }
+                />
               </Route>
 
               <Route element={<RoleRoute role="manager" />}>
@@ -99,6 +111,14 @@ export default function App() {
                   element={
                     <Suspense fallback={<LoaderOverlay fullPage />}>
                       <ManagerPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/manager/leave-requests"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <StaffLeaveRequestsPage area="manager" />
                     </Suspense>
                   }
                 />
