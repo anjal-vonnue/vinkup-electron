@@ -49,8 +49,14 @@ export class OpenAiCompatProvider implements AiProvider {
       const reason = error instanceof Error ? error.message : 'unknown error';
       throw new ProviderError(`${this.name} request failed: ${reason}`);
     }
-    if (!res.ok) throw new ProviderError(`${this.name} returned HTTP ${res.status}`, res.status);
-
+    // if (!res.ok) throw new ProviderError(`${this.name} returned HTTP ${res.status}`, res.status);
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).slice(0, 200);
+      throw new ProviderError(
+        `${this.name} returned HTTP ${res.status}${detail ? `: ${detail}` : ''}`,
+        res.status
+      );
+    }
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new ProviderError(`${this.name} returned an empty response`);

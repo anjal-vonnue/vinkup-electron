@@ -16,9 +16,9 @@ const envSchema = z.object({
   AI_PROVIDER_ORDER: z.string().default('groq,gemini,anthropic'),
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().default(60000),
   GROQ_API_KEY: optionalString,
-  GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
   GEMINI_API_KEY: optionalString,
-  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+  GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
   ANTHROPIC_API_KEY: optionalString,
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
   /**
