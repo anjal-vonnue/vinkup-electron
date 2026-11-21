@@ -114,6 +114,14 @@ export default function App() {
                     </Suspense>
                   }
                 />
+                <Route
+                  path="/manager/leave-requests"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <StaffLeaveRequestsPage area="manager" />
+                    </Suspense>
+                  }
+                />
               </Route>
             </Route>
             <Route element={<PublicOnlyRoute />}>

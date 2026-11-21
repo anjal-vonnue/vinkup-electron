@@ -90,6 +90,22 @@ describe('LeaveRequestRepository scopes', () => {
       expect.objectContaining({ where: {} })
     );
   });
+
+  it('lets a manager open any detail without an assignment filter', async () => {
+    prisma.leave_request.findFirst.mockResolvedValue(row);
+
+    await expect(repository.findForReviewer(manager, REQUEST_ID)).resolves.toEqual(row);
+    expect(prisma.leave_request.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: REQUEST_ID } })
+    );
+
+    await repository.findForReviewer(mentor, REQUEST_ID);
+    expect(prisma.leave_request.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: REQUEST_ID, trainee: { mentor_id: MENTOR_ID } },
+      })
+    );
+  });
 });
 
 describe('LeaveRequestRepository.decide', () => {
@@ -130,6 +146,48 @@ describe('LeaveRequestRepository.decide', () => {
         feedback: 'Please choose another date.',
       })
     );
+  });
+
+  it('records a manager decision with the MANAGER role and a review timestamp', async () => {
+    tx.leave_request.findFirst.mockResolvedValue({ status: 'PENDING' });
+    tx.leave_request.updateMany.mockResolvedValue({ count: 1 });
+    const approved = {
+      ...row,
+      status: 'APPROVED' as const,
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER' as const,
+      reviewer_name: manager.name,
+      reviewed_at: new Date('2026-11-21T11:00:00.000Z'),
+    };
+    tx.leave_request.findUniqueOrThrow.mockResolvedValue(approved);
+
+    const outcome = await repository.decide({
+      requestId: REQUEST_ID,
+      reviewer: manager,
+      decision: 'APPROVED',
+      feedback: null,
+    });
+
+    expect(outcome.ok).toBe(true);
+    expect(tx.leave_request.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: REQUEST_ID } })
+    );
+    expect(tx.leave_request.updateMany).toHaveBeenCalledTimes(1);
+    const updateCall = tx.leave_request.updateMany.mock.calls[0]?.[0] as {
+      where: unknown;
+      data: Record<string, unknown>;
+    };
+    expect(updateCall.where).toEqual({ id: REQUEST_ID, status: 'PENDING' });
+    expect(updateCall.data).toEqual(
+      expect.objectContaining({
+        status: 'APPROVED',
+        reviewer_id: manager.id,
+        reviewer_role: 'MANAGER',
+        reviewer_name: manager.name,
+        feedback: null,
+      })
+    );
+    expect(updateCall.data.reviewed_at).toBeInstanceOf(Date);
   });
 
   it('does not write when the current status is final', async () => {

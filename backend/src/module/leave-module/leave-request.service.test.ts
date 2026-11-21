@@ -195,3 +195,49 @@ describe('LeaveRequestService mentor review actions', () => {
     });
   });
 });
+
+describe('LeaveRequestService manager review actions', () => {
+  const manager = {
+    id: 'c6a0d6e2-3b55-4a5e-9b2f-7a3d0e8c4f66',
+    name: 'Test Manager',
+    role: 'MANAGER' as const,
+  };
+
+  it('uses the same listing and detail methods with a platform-wide reviewer', async () => {
+    repository.listForReviewer.mockResolvedValue([row]);
+    repository.findForReviewer.mockResolvedValue(row);
+
+    await expect(service.listForReviewer(manager)).resolves.toHaveLength(1);
+    await expect(service.getForReviewer(manager, REQUEST_ID)).resolves.toMatchObject({
+      id: REQUEST_ID,
+    });
+    expect(repository.listForReviewer).toHaveBeenCalledWith(manager);
+    expect(repository.findForReviewer).toHaveBeenCalledWith(manager, REQUEST_ID);
+  });
+
+  it('rejects any pending request and records the manager as reviewer', async () => {
+    const rejected = {
+      ...row,
+      status: 'REJECTED' as const,
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER' as const,
+      reviewer_name: manager.name,
+      feedback: 'Reschedule after the release.',
+      reviewed_at: submittedAt,
+    };
+    repository.decide.mockResolvedValue({ ok: true, request: rejected });
+
+    await expect(
+      service.review(manager, REQUEST_ID, {
+        decision: 'REJECTED',
+        feedback: 'Reschedule after the release.',
+      })
+    ).resolves.toMatchObject({
+      status: 'REJECTED',
+      reviewerId: manager.id,
+      reviewerName: manager.name,
+      reviewerRole: 'MANAGER',
+      feedback: 'Reschedule after the release.',
+    });
+  });
+});
