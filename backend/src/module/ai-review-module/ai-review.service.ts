@@ -1,6 +1,10 @@
 import type { ReviewPrompt } from '@itp/types';
 import { ConflictError, NotFoundError } from '../../errors/AppError';
 import { aiReviewRepository as repo } from './ai-review.repository';
+import type { AnalyzeTasksResponse } from '@itp/types';
+import { analyzeSubmissions } from './ai-review.analyzer';
+import { loadSubmission } from './ai-review.submissions';
+import type { AnalyzeBody } from './ai-review.schema';
 import type { CreatePromptBody, UpdatePromptBody } from './ai-review.schema';
 
 type PromptRow = {
@@ -59,6 +63,17 @@ export class AiReviewService {
   deletePrompt = async (adminId: string, promptId: string): Promise<void> => {
     await this.assertOwned(adminId, promptId);
     await repo.deletePrompt(promptId);
+  };
+
+  analyze = async (
+    adminId: string,
+    traineeId: string,
+    body: AnalyzeBody
+  ): Promise<AnalyzeTasksResponse> => {
+    const prompt = await this.assertOwned(adminId, body.promptId);
+    const taskIds = [...new Set(body.taskIds)];
+    const loaded = await Promise.all(taskIds.map((id) => loadSubmission(traineeId, id)));
+    return { results: await analyzeSubmissions(prompt.content, loaded) };
   };
 
   // Someone else's prompt looks the same as a missing one, so ids can't be probed.

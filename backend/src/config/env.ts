@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const optionalString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().optional()
+);
+
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000), // the frontend's Vite proxy sends /api here
   DATABASE_URL: z.string().min(1),
@@ -8,6 +13,14 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   GOOGLE_CALLBACK_URL: z.string().min(1),
+  AI_PROVIDER_ORDER: z.string().default('groq,gemini,anthropic'),
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().default(60000),
+  GROQ_API_KEY: optionalString,
+  GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  GEMINI_API_KEY: optionalString,
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+  ANTHROPIC_API_KEY: optionalString,
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
   /**
    * Google redirect URI for the Electron flow. It is a second redirect URI on
    * the same Web OAuth client; no desktop client or client secret ships with

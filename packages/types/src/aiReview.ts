@@ -12,7 +12,7 @@ export type CreateReviewPromptRequest = { name: string; content: string };
 export type UpdateReviewPromptRequest = Partial<CreateReviewPromptRequest>;
 
 export type AnalyzeTasksRequest = {
-  traineeId: string;
+  //   traineeId: string;
   taskIds: string[];
   promptId: string;
 };

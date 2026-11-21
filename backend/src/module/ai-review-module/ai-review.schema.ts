@@ -18,3 +18,10 @@ export const updatePromptSchema = z
 
 export type CreatePromptBody = z.infer<typeof createPromptSchema>;
 export type UpdatePromptBody = z.infer<typeof updatePromptSchema>;
+
+export const analyzeSchema = z.object({
+  promptId: z.uuid(),
+  taskIds: z.array(z.string().min(1).max(100)).min(1).max(50),
+});
+
+export type AnalyzeBody = z.infer<typeof analyzeSchema>;
