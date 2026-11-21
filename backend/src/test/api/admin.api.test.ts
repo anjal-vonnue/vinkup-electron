@@ -118,6 +118,7 @@ describe('GET /api/admin/trainees', () => {
       flagsLast7Days: 0,
       averageScore: null,
       daysScored: 0,
+      pendingReviewItems: [],
     });
   });
 

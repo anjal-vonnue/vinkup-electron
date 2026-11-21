@@ -311,6 +311,16 @@ describe('AdminTraineePage', () => {
     );
   });
 
+  it('opens with the Pending review filter when linked from the dashboard queue', async () => {
+    renderPage(`/admin/trainees/${traineeId}?filter=pending`);
+
+    await screen.findByRole('tabpanel');
+    expect(screen.getByRole('button', { name: /^Pending review \(/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
   it('shows journal responses on the Journal tab', async () => {
     const user = userEvent.setup();
     renderPage();

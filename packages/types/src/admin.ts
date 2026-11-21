@@ -31,6 +31,15 @@ export type AdminTraineeSummary = {
   flagsLast7Days: number;
   averageScore: number | null;
   daysScored: number;
+  /** Submitted tasks waiting for review, included for the mentor dashboard queue. */
+  pendingReviewItems: {
+    taskId: string;
+    taskTitle: string;
+    dayId: string;
+    courseTitle: string;
+    dayNumber: number;
+    lastSubmittedAt: string | null;
+  }[];
 };
 
 export type AdminDay = {

@@ -119,6 +119,22 @@ export class AdminService {
         flagsLast7Days: flagsBy.get(trainee.id) ?? 0,
         averageScore: traineeIntegrity?.score ?? null,
         daysScored: traineeIntegrity?.daysScored ?? 0,
+        pendingReviewItems: startedTasks
+          .filter(
+            (row) =>
+              row.trainee_id === trainee.id &&
+              row.status === 'completed' &&
+              row.review_status !== 'approved' &&
+              row.review_status !== 'rework'
+          )
+          .map((row) => ({
+            taskId: row.task_id,
+            taskTitle: row.task.title,
+            dayId: row.task.curriculum_day_id,
+            courseTitle: row.task.curriculum_day.course.title,
+            dayNumber: row.task.curriculum_day.day_number,
+            lastSubmittedAt: row.last_submitted_at?.toISOString() ?? null,
+          })),
       };
     });
   };
