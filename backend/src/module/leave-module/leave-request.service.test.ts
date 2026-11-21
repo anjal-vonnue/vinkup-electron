@@ -145,3 +145,53 @@ describe('LeaveRequestService review mapping', () => {
     });
   });
 });
+
+describe('LeaveRequestService mentor review actions', () => {
+  it('lists and reads requests using the authenticated mentor scope', async () => {
+    repository.listForReviewer.mockResolvedValue([row]);
+    repository.findForReviewer.mockResolvedValue(row);
+
+    await expect(service.listForReviewer(reviewer)).resolves.toHaveLength(1);
+    await expect(service.getForReviewer(reviewer, REQUEST_ID)).resolves.toMatchObject({
+      id: REQUEST_ID,
+      assignedMentor: { id: reviewer.id },
+    });
+    expect(repository.listForReviewer).toHaveBeenCalledWith(reviewer);
+    expect(repository.findForReviewer).toHaveBeenCalledWith(reviewer, REQUEST_ID);
+  });
+
+  it('does not reveal a request outside the mentor assignment', async () => {
+    repository.findForReviewer.mockResolvedValue(null);
+
+    await expect(service.getForReviewer(reviewer, REQUEST_ID)).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('approves a pending request with an optional note', async () => {
+    const approved = {
+      ...row,
+      status: 'APPROVED' as const,
+      reviewer_id: reviewer.id,
+      reviewer_role: 'MENTOR' as const,
+      reviewer_name: reviewer.name,
+      feedback: 'Enjoy the time off.',
+      reviewed_at: submittedAt,
+    };
+    repository.decide.mockResolvedValue({ ok: true, request: approved });
+
+    await expect(
+      service.review(reviewer, REQUEST_ID, {
+        decision: 'APPROVED',
+        feedback: '  Enjoy the time off.  ',
+      })
+    ).resolves.toMatchObject({ status: 'APPROVED', reviewerRole: 'MENTOR' });
+    expect(repository.decide).toHaveBeenCalledWith({
+      requestId: REQUEST_ID,
+      reviewer,
+      decision: 'APPROVED',
+      feedback: 'Enjoy the time off.',
+    });
+  });
+});

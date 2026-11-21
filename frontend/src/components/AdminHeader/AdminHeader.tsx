@@ -95,7 +95,10 @@ function getInitials(name: string): string {
  * Header for the staff area. The trainee Header links to Home, Typing Test and Profile,
  * which staff cannot open, and it flushes trainee activity time on logout (staff have none).
  */
-const MENTOR_NAV: AdminNavItem[] = [{ to: '/admin', label: 'My trainees', end: true }];
+const MENTOR_NAV: AdminNavItem[] = [
+  { to: '/admin', label: 'My trainees', end: true },
+  { to: '/admin/leave-requests', label: 'Leave requests', end: true },
+];
 
 export default function AdminHeader({
   leading,

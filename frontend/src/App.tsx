@@ -27,6 +27,7 @@ import CertificatePage from './pages/CertificatePage';
 const TaskPage = lazy(() => import('./pages/TaskPage'));
 const AdminTraineesPage = lazy(() => import('./pages/AdminTraineesPage'));
 const AdminTraineePage = lazy(() => import('./pages/AdminTraineePage'));
+const StaffLeaveRequestsPage = lazy(() => import('./pages/StaffLeaveRequestsPage'));
 const ManagerPage = lazy(() => import('./pages/ManagerPage'));
 
 function ReferenceRoute() {
@@ -93,6 +94,15 @@ export default function App() {
                     </Suspense>
                   }
                 ></Route>
+
+                <Route
+                  path="/admin/leave-requests"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <StaffLeaveRequestsPage area="admin" />
+                    </Suspense>
+                  }
+                />
               </Route>
 
               <Route element={<RoleRoute role="manager" />}>
