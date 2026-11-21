@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useRef } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, UserX } from 'lucide-react';
 import {
   getAdminFlags,
@@ -38,8 +38,10 @@ type TabId = 'tasks' | 'journal' | 'flags' | 'feedbacks';
 
 export default function AdminTraineePage() {
   const { traineeId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const initialFilter = searchParams.get('filter') === 'pending' ? 'pending' : 'all';
 
-  return <TraineeDetail key={traineeId} traineeId={traineeId} />;
+  return <TraineeDetail key={traineeId} traineeId={traineeId} initialFilter={initialFilter} />;
 }
 
 function BackLink() {
@@ -51,11 +53,17 @@ function BackLink() {
   );
 }
 
-function TraineeDetail({ traineeId }: { traineeId: string }) {
+function TraineeDetail({
+  traineeId,
+  initialFilter,
+}: {
+  traineeId: string;
+  initialFilter: TaskReviewFilter;
+}) {
   const [activeTab, setActiveTab] = useState<TabId>('tasks');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   // Kept here, not in AdminTaskList, so it survives the reload after Approve / Request rework.
-  const [taskFilter, setTaskFilter] = useState<TaskReviewFilter>('all');
+  const [taskFilter, setTaskFilter] = useState<TaskReviewFilter>(initialFilter);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [isSavingPdf, setIsSavingPdf] = useState(false);
 

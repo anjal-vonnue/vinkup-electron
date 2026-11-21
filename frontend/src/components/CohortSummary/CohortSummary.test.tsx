@@ -19,6 +19,7 @@ function trainee(overrides: Partial<AdminTraineeSummary> = {}): AdminTraineeSumm
     flagsLast7Days: 0,
     daysScored: 20,
     averageScore: 85,
+    pendingReviewItems: [],
     ...overrides,
   };
 }

@@ -193,6 +193,19 @@ export function buildAdminTrainees(): AdminTraineeSummary[] {
       flagsLast7Days: t.flags.filter(([, daysAgo]) => daysAgo < 7).length,
       averageScore: t.averageScore,
       daysScored: t.daysScored,
+      pendingReviewItems: buildTaskRows(t)
+        .filter((task) => task.status === 'completed' && task.taskId === 'html-day-01-t-1')
+        .map((task) => {
+          const day = catalogDays.find((item) => item.dayId === task.dayId)!;
+          return {
+            taskId: task.taskId,
+            taskTitle: task.title,
+            dayId: task.dayId,
+            courseTitle: day.courseTitle,
+            dayNumber: day.dayNumber,
+            lastSubmittedAt: task.lastSubmittedAt,
+          };
+        }),
     };
   });
 }
