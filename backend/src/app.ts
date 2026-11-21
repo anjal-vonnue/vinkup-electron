@@ -18,6 +18,7 @@ import { traineeReviewRoutes } from './module/review-module/review.routes';
 import typingRoutes from './module/typing-test-module/typing.routes';
 import dayRouter from './module/day-module/day.routes';
 import journalRouter from './module/day-module/journal.routes';
+import { traineeLeaveRequestRoutes } from './module/leave-module/leave-request.routes';
 
 import { adminRoutes } from './module/admin-module/admin.routes';
 import { managerRoutes } from './module/manager-module/manager.routes';
@@ -53,6 +54,7 @@ app.use('/api/tasks', requireTrainee, taskRoutes);
 app.use('/api/days', requireTrainee, dayRouter);
 app.use('/api/journal', requireTrainee, journalRouter);
 app.use('/api/typing-test', requireTrainee, typingRoutes);
+app.use('/api/leave-requests', requireTrainee, traineeLeaveRequestRoutes);
 app.use('/api/admin', requireAdmin, adminRoutes);
 app.use('/api/manager', requireManager, managerRoutes);
 app.use(notFoundHandler);
