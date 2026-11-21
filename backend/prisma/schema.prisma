@@ -20,7 +20,8 @@ model admin {
   last_login_at DateTime?  @db.Timestamptz
 
   reviews           task_review[]
-  assigned_trainees trainee[]     @relation("MentorTrainees")
+  leave_reviews     leave_request[] @relation("LeaveReviewer")
+  assigned_trainees trainee[]       @relation("MentorTrainees")
 }
 
 // ---------- Enums ----------
@@ -68,6 +69,14 @@ enum staff_role {
   MANAGER
 }
 
+// A leave request has exactly one final decision. Historical rows are never
+// deleted when the decision is recorded.
+enum leave_status {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model trainee {
   id        String  @id @default(uuid()) @db.Uuid
   name      String
@@ -78,6 +87,7 @@ model trainee {
   mentor            admin?               @relation("MentorTrainees", fields: [mentor_id], references: [id], onDelete: SetNull)
   task_progress     task_progress[]
   task_reviews      task_review[]
+  leave_requests    leave_request[]
   day_completions   day_completion[]
   journal_responses journal_response[]
   typing_results    typing_test_result[]
@@ -212,6 +222,31 @@ model task_review {
   @@unique([trainee_id, task_id, submission_no])
   @@index([trainee_id, task_id, reviewed_at])
   @@index([trainee_id, reviewed_at])
+}
+
+// Trainee leave application. One row is kept for the whole lifecycle; review
+// writes flip PENDING to a final status once. Restrict on both people keeps
+// historical requests and reviewer details intact if accounts are deleted.
+model leave_request {
+  id            String        @id @default(uuid()) @db.Uuid
+  trainee_id    String        @db.Uuid
+  subject       String        @db.VarChar(200)
+  reason        String        @db.Text
+  status        leave_status  @default(PENDING)
+  reviewer_id   String?       @db.Uuid
+  reviewer_role staff_role?
+  reviewer_name String?
+  feedback      String?       @db.Text
+  submitted_at  DateTime      @default(now()) @db.Timestamptz
+  reviewed_at   DateTime?     @db.Timestamptz
+  created_at    DateTime      @default(now()) @db.Timestamptz
+  updated_at    DateTime      @updatedAt @db.Timestamptz
+
+  trainee  trainee @relation(fields: [trainee_id], references: [id], onDelete: Restrict)
+  reviewer admin?  @relation("LeaveReviewer", fields: [reviewer_id], references: [id], onDelete: Restrict)
+
+  @@index([trainee_id, submitted_at])
+  @@index([status, submitted_at])
 }
 
 model day_completion {
