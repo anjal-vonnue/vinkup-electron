@@ -11,7 +11,13 @@ const rootDir = import.meta.dirname;
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/build/**', '**/release/**'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/build/**',
+      '**/release/**',
+      '**/*.prisma',
+    ],
   },
 
   // Base, non-type-aware rules for everything
