@@ -18,6 +18,7 @@ import { formatIstDateTime } from '../../lib/formatDateTime';
 import { getCheckpointAttempt, getCheckpointResult } from '../../api/checkpoints';
 import { ApiError } from '../../api/errors';
 import { checkpointQuestionTypeLabel, submissionReasonLabel } from './checkpointUi';
+import WorkspaceFilesViewer from './WorkspaceFilesViewer';
 import styles from './Checkpoints.module.css';
 
 export default function CheckpointSummaryPage() {
@@ -249,7 +250,9 @@ export default function CheckpointSummaryPage() {
 
                     <div className={styles.reviewAnswer}>
                       <span className={styles.reviewAnswerLabel}>Your answer</span>
-                      {answer.fileName ? (
+                      {answer.files && answer.files.length > 0 ? (
+                        <WorkspaceFilesViewer files={answer.files} />
+                      ) : answer.fileName ? (
                         <p className={styles.fileAnswer}>
                           <FileText size={15} aria-hidden="true" /> {answer.fileName}
                         </p>

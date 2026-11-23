@@ -79,6 +79,8 @@ export function checkpointQuestionTypeLabel(type: string): string {
       return 'SQL';
     case 'FILE':
       return 'File upload';
+    case 'PRACTICAL':
+      return 'Practical task';
     default:
       return 'Text';
   }

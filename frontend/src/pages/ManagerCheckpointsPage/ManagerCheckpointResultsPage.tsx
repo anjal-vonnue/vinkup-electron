@@ -13,6 +13,7 @@ import MarkdownRenderer from '../../components/MarkdownRenderer';
 import { useToast } from '../../components/Toast';
 import { MANAGER_NAV } from '../../constants/managerNav';
 import { formatIstDateTime } from '../../lib/formatDateTime';
+import WorkspaceFilesViewer from '../CheckpointsPage/WorkspaceFilesViewer';
 import {
   downloadCheckpointAnswerFile,
   getManagerCheckpoint,
@@ -42,6 +43,8 @@ function questionTypeLabel(type: string): string {
       return 'SQL';
     case 'FILE':
       return 'File upload';
+    case 'PRACTICAL':
+      return 'Practical task';
     default:
       return 'Text';
   }
@@ -492,7 +495,9 @@ export default function ManagerCheckpointResultsPage() {
                         <p className={styles.answerType}>{questionTypeLabel(question.type)}</p>
 
                         <div className={styles.answerBox}>
-                          {answer?.fileName ? (
+                          {answer?.files && answer.files.length > 0 ? (
+                            <WorkspaceFilesViewer files={answer.files} />
+                          ) : answer?.fileName ? (
                             <div className={styles.fileAnswer}>
                               <FileText size={18} />
                               <span>{answer.fileName}</span>
