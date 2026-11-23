@@ -19,7 +19,14 @@ export default function CertificateSheet({ certificate }: { certificate: CourseC
           {formatDayCount(certificate.daysCompleted)} · completed{' '}
           {formatCertificateDate(certificate.completedAt)}
         </p>
+        <p className={styles.metaSecondary}>Issued {formatCertificateDate(certificate.issuedAt)}</p>
         <p className={styles.id}>Certificate ID {certificate.certificateId}</p>
+        <p className={styles.signature}>
+          <span className={styles.signatureLabel}>
+            Digital signature ({certificate.signatureAlgorithm} {certificate.signatureVersion})
+          </span>
+          <span className={styles.signatureValue}>{certificate.signature}</span>
+        </p>
 
         <p className={styles.footer}>Vinkup · In-House Trainee Training Platform</p>
       </div>

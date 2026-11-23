@@ -73,12 +73,41 @@
   font-weight: 700;
 }
 
+.metaSecondary {
+  margin: 0.5cqw 0 0;
+  font-size: 1.5cqw;
+  color: #5b5d6e;
+}
+
 .id {
   margin: 0.8cqw 0 0;
   font-family: var(--font-mono);
   font-size: 1.3cqw;
   letter-spacing: 0.08em;
   color: #716c82;
+}
+
+.signature {
+  margin: 1.2cqw 0 0;
+  max-width: 88%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2cqw;
+  color: #716c82;
+}
+
+.signatureLabel {
+  font-size: 0.95cqw;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.signatureValue {
+  font-family: var(--font-mono);
+  font-size: 0.95cqw;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .footer {
