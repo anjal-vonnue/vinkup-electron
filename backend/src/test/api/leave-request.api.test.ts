@@ -87,6 +87,7 @@ describe('trainee leave requests', () => {
       reviewerRole: null,
       feedback: null,
       reviewedAt: null,
+      reviews: [],
     });
     expectIsoDateTime(request.submittedAt);
 
@@ -174,6 +175,13 @@ describe('mentor leave review', () => {
       feedback: 'Enjoy the time off.',
     });
     expectIsoDateTime(reviewed.reviewedAt);
+    expect(reviewed.reviews).toHaveLength(1);
+    expect(reviewed.reviews[0]).toMatchObject({
+      reviewerId: mentor.id,
+      reviewerRole: 'MENTOR',
+      decision: 'APPROVED',
+      feedback: 'Enjoy the time off.',
+    });
 
     const traineeView = body<LeaveRequest>(
       await api.get(traineeDetailUrl(request.id), traineeA.cookie)
@@ -302,25 +310,136 @@ describe('leave review conflicts', () => {
     expect(row.reviewed_at).not.toBeNull();
   });
 
-  it('preserves the first decision when the other role tries again', async () => {
+  it('keeps a competing first decision when the request is not Mentor-approved', async () => {
     const request = await createAs(traineeA);
     const first = body<LeaveRequest>(
-      await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie)
+      await api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Manager decision first.' },
+        manager.cookie
+      )
     );
 
     expectError(
-      await api.patch(
-        managerReviewUrl(request.id),
-        { decision: 'REJECTED', feedback: 'Too late.' },
-        manager.cookie
-      ),
+      await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie),
       409,
       'ALREADY_REVIEWED'
     );
 
     const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
-    expect(row.status).toBe('APPROVED');
+    expect(row.status).toBe('REJECTED');
     expect(row.reviewer_id).toBe(first.reviewerId);
-    expect(row.reviewer_role).toBe('MENTOR');
+    expect(row.reviewer_role).toBe('MANAGER');
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
+  });
+});
+
+describe('manager rejection of a Mentor approval', () => {
+  it('rejects an approved request and keeps both reviews in order', async () => {
+    const request = await createAs(traineeA);
+    const approved = body<LeaveRequest>(
+      await api.patch(
+        adminReviewUrl(request.id),
+        { decision: 'APPROVED', feedback: 'Enjoy the time off.' },
+        mentor.cookie
+      )
+    );
+    expect(approved.reviews).toHaveLength(1);
+
+    const res = await api.patch(
+      managerReviewUrl(request.id),
+      { decision: 'REJECTED', feedback: 'The dates changed after approval.' },
+      manager.cookie
+    );
+    expect(res.status).toBe(200);
+    const rejected = body<LeaveRequest>(res);
+    expect(rejected).toMatchObject({
+      status: 'REJECTED',
+      reviewerId: manager.id,
+      reviewerName: manager.name,
+      reviewerRole: 'MANAGER',
+      feedback: 'The dates changed after approval.',
+    });
+    expect(rejected.reviews).toHaveLength(2);
+    expect(rejected.reviews).toMatchObject([
+      {
+        reviewerId: mentor.id,
+        reviewerName: mentor.name,
+        reviewerRole: 'MENTOR',
+        decision: 'APPROVED',
+        feedback: 'Enjoy the time off.',
+      },
+      {
+        reviewerId: manager.id,
+        reviewerName: manager.name,
+        reviewerRole: 'MANAGER',
+        decision: 'REJECTED',
+        feedback: 'The dates changed after approval.',
+      },
+    ]);
+    rejected.reviews.forEach((review) => expectIsoDateTime(review.reviewedAt));
+
+    const traineeView = body<LeaveRequest>(
+      await api.get(traineeDetailUrl(request.id), traineeA.cookie)
+    );
+    expect(traineeView.status).toBe('REJECTED');
+    expect(traineeView.reviews).toEqual(rejected.reviews);
+
+    const history = await db.leave_review.findMany({
+      where: { leave_request_id: request.id },
+      orderBy: { reviewed_at: 'asc' },
+    });
+    expect(history.map((review) => [review.reviewer_role, review.decision])).toEqual([
+      ['MENTOR', 'APPROVED'],
+      ['MANAGER', 'REJECTED'],
+    ]);
+  });
+
+  it('will not approve an already approved request or let a Mentor re-review it', async () => {
+    const request = await createAs(traineeA);
+    expect(
+      (
+        await api.patch(
+          adminReviewUrl(request.id),
+          { decision: 'APPROVED', feedback: 'Approved by mentor.' },
+          mentor.cookie
+        )
+      ).status
+    ).toBe(200);
+
+    expectError(
+      await api.patch(managerReviewUrl(request.id), { decision: 'APPROVED' }, manager.cookie),
+      409,
+      'ALREADY_REVIEWED'
+    );
+    expectError(
+      await api.patch(
+        adminReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Changed my mind.' },
+        mentor.cookie
+      ),
+      409,
+      'ALREADY_REVIEWED'
+    );
+
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
+  });
+
+  it('requires feedback when a Manager rejects a Mentor approval', async () => {
+    const request = await createAs(traineeA);
+    await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie);
+
+    expectError(
+      await api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: '   ' },
+        manager.cookie
+      ),
+      400,
+      'VALIDATION_FAILED'
+    );
+    const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(row.status).toBe('APPROVED');
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
   });
 });

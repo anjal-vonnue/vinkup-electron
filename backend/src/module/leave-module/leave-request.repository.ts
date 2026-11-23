@@ -119,23 +119,44 @@ export class LeaveRequestRepository {
     return prisma.$transaction(async (tx) => {
       const current = await tx.leave_request.findFirst({
         where: { id: input.requestId, ...leaveScopeFor(input.reviewer) },
-        select: { status: true },
+        select: { status: true, reviewer_role: true },
       });
       if (!current) return { ok: false, reason: 'not-found' } as const;
-      if (current.status !== leave_status.PENDING) {
-        return { ok: false, reason: 'already-reviewed' } as const;
-      }
 
       const reviewerRole =
         input.reviewer.role === 'MANAGER' ? staff_role.MANAGER : staff_role.MENTOR;
       const decision =
         input.decision === 'APPROVED' ? leave_status.APPROVED : leave_status.REJECTED;
-      const reviewedAt = new Date();
 
+      // Only two writes are legal: a first decision on PENDING, or a Manager
+      // rejecting an approval that is still recorded as the Mentor's.
+      const reviewingPending = current.status === leave_status.PENDING;
+      const managerRejectingApproval =
+        input.reviewer.role === 'MANAGER' &&
+        decision === leave_status.REJECTED &&
+        current.status === leave_status.APPROVED &&
+        current.reviewer_role === staff_role.MENTOR;
+      if (!reviewingPending && !managerRejectingApproval) {
+        return { ok: false, reason: 'already-reviewed' } as const;
+      }
+
+      const alreadyReviewedByRole = await tx.leave_review.findUnique({
+        where: {
+          leave_request_id_reviewer_role: {
+            leave_request_id: input.requestId,
+            reviewer_role: reviewerRole,
+          },
+        },
+        select: { id: true },
+      });
+      if (alreadyReviewedByRole) return { ok: false, reason: 'already-reviewed' } as const;
+
+      const reviewedAt = new Date();
       const updated = await tx.leave_request.updateMany({
         where: {
           id: input.requestId,
-          status: leave_status.PENDING,
+          status: managerRejectingApproval ? leave_status.APPROVED : leave_status.PENDING,
+          ...(managerRejectingApproval ? { reviewer_role: staff_role.MENTOR } : {}),
           ...leaveScopeFor(input.reviewer),
         },
         data: {

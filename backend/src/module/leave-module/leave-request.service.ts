@@ -84,8 +84,9 @@ export class LeaveRequestService {
 
   /**
    * Both roles call this exact method. Its repository transaction re-checks
-   * scope and PENDING status before writing, so two simultaneous decisions
-   * cannot both succeed.
+   * scope and status before writing, so two simultaneous decisions cannot both
+   * succeed. A Manager may reject a Mentor-approved request; every other
+   * decided request is final.
    */
   review = async (
     reviewer: LeaveReviewer,

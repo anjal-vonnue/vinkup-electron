@@ -266,6 +266,56 @@ describe('LeaveRequestService manager review actions', () => {
     expect(repository.findForReviewer).toHaveBeenCalledWith(manager, REQUEST_ID);
   });
 
+  it('reports a Manager rejection of a Mentor approval with both reviews', async () => {
+    const rejected = {
+      ...row,
+      status: 'REJECTED' as const,
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER' as const,
+      reviewer_name: manager.name,
+      feedback: 'The dates changed.',
+      reviewed_at: submittedAt,
+      reviews: [
+        {
+          id: 'review-1',
+          reviewer_id: reviewer.id,
+          reviewer_name: reviewer.name,
+          reviewer_role: 'MENTOR' as const,
+          decision: 'APPROVED' as const,
+          feedback: null,
+          reviewed_at: submittedAt,
+        },
+        {
+          id: 'review-2',
+          reviewer_id: manager.id,
+          reviewer_name: manager.name,
+          reviewer_role: 'MANAGER' as const,
+          decision: 'REJECTED' as const,
+          feedback: 'The dates changed.',
+          reviewed_at: submittedAt,
+        },
+      ],
+    };
+    repository.decide.mockResolvedValue({ ok: true, request: rejected });
+
+    await expect(
+      service.review(manager, REQUEST_ID, { decision: 'REJECTED', feedback: 'The dates changed.' })
+    ).resolves.toMatchObject({
+      status: 'REJECTED',
+      reviewerRole: 'MANAGER',
+      reviews: [
+        { reviewerRole: 'MENTOR', decision: 'APPROVED' },
+        { reviewerRole: 'MANAGER', decision: 'REJECTED', feedback: 'The dates changed.' },
+      ],
+    });
+    expect(repository.decide).toHaveBeenCalledWith({
+      requestId: REQUEST_ID,
+      reviewer: manager,
+      decision: 'REJECTED',
+      feedback: 'The dates changed.',
+    });
+  });
+
   it('rejects any pending request and records the manager as reviewer', async () => {
     const rejected = {
       ...row,
