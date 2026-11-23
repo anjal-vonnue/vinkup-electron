@@ -11,13 +11,14 @@ datasource db {
 // Existing rows mapped to MENTOR during role migration. Keep table name `admin`
 // for compatibility with existing review foreign keys.
 model admin {
-  id                   String          @id @default(uuid()) @db.Uuid
-  email                String          @unique // stored lower-case
-  name                 String
-  role                 staff_role      @default(MENTOR)
-  is_active            Boolean         @default(true) // false = can no longer log in
-  created_at           DateTime        @default(now()) @db.Timestamptz
-  last_login_at        DateTime?       @db.Timestamptz
+  id                      String          @id @default(uuid()) @db.Uuid
+  email                   String          @unique // stored lower-case
+  name                    String
+  role                    staff_role      @default(MENTOR)
+  is_active               Boolean         @default(true) // false = can no longer log in
+  slack_channel_id String?    @db.VarChar(32) // Mentor-configured Slack channel for task notifications
+  created_at              DateTime        @default(now()) @db.Timestamptz
+  last_login_at           DateTime?       @db.Timestamptz
   reviews              task_review[]
   leave_reviews        leave_request[] @relation("LeaveReviewer")
   leave_review_history leave_review[]  @relation("LeaveReviewHistory")
