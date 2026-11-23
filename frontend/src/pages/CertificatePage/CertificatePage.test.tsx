@@ -95,7 +95,6 @@ describe('CertificatePage', () => {
     expect(screen.getByText('15 days · completed 6 October 2026')).toBeInTheDocument();
     expect(screen.getByText('Issued 7 October 2026')).toBeInTheDocument();
     expect(screen.getByText('Certificate ID VK-3F9A2C71B0ABCDEF1234')).toBeInTheDocument();
-    expect(screen.getByText('c2lnbmF0dXJl')).toBeInTheDocument();
     expect(screen.getByText('Vinkup · In-House Trainee Training Platform')).toBeInTheDocument();
   });
 

@@ -130,10 +130,9 @@ The Electron certificate PDF still uses the existing print/PDF flow. The certifi
 
 - certificate ID;
 - issued date;
-- protected certificate fields;
-- digital signature and signature metadata.
+- protected certificate fields.
 
-The private signing key is never included in the PDF.
+The digital signature is stored and verified server-side; the private signing key is never included in the PDF.
 
 ## Local testing
 
