@@ -23,6 +23,12 @@ import { traineeLeaveRequestRoutes } from './module/leave-module/leave-request.r
 import { adminRoutes } from './module/admin-module/admin.routes';
 import { managerRoutes } from './module/manager-module/manager.routes';
 import realtimeRoutes from './module/realtime-module/realtime.routes';
+import {
+  managerCheckpointGroupRoutes,
+  managerCheckpointRoutes,
+  traineeCheckpointRoutes,
+} from './module/checkpoint-module/checkpoint.routes';
+import { blockDuringActiveCheckpoint } from './module/checkpoint-module/checkpoint.access.middleware';
 const app: Express = express();
 
 app.use(
@@ -45,16 +51,26 @@ app.use('/api/auth/desktop', desktopAuthRoutes);
 app.use('/api/activity', flagRoutes);
 app.use('/api/events', realtimeRoutes);
 
-app.use('/api/profile', requireTrainee, profileRoutes);
-app.use('/api/activity', requireTrainee, activityRoutes);
-app.use('/api/dashboard', requireTrainee, dashboardRoutes);
-app.use('/api/courses', requireTrainee, courseRoutes);
-app.use('/api/tasks', requireTrainee, traineeReviewRoutes);
-app.use('/api/tasks', requireTrainee, taskRoutes);
-app.use('/api/days', requireTrainee, dayRouter);
-app.use('/api/journal', requireTrainee, journalRouter);
-app.use('/api/typing-test', requireTrainee, typingRoutes);
-app.use('/api/leave-requests', requireTrainee, traineeLeaveRequestRoutes);
+// Checkpoints stay reachable during an attempt; everything else below is locked.
+app.use('/api/checkpoints', requireTrainee, traineeCheckpointRoutes);
+app.use('/api/manager/checkpoints', requireManager, managerCheckpointRoutes);
+app.use('/api/manager/checkpoint-groups', requireManager, managerCheckpointGroupRoutes);
+
+app.use('/api/profile', requireTrainee, blockDuringActiveCheckpoint, profileRoutes);
+app.use('/api/activity', requireTrainee, blockDuringActiveCheckpoint, activityRoutes);
+app.use('/api/dashboard', requireTrainee, blockDuringActiveCheckpoint, dashboardRoutes);
+app.use('/api/courses', requireTrainee, blockDuringActiveCheckpoint, courseRoutes);
+app.use('/api/tasks', requireTrainee, blockDuringActiveCheckpoint, traineeReviewRoutes);
+app.use('/api/tasks', requireTrainee, blockDuringActiveCheckpoint, taskRoutes);
+app.use('/api/days', requireTrainee, blockDuringActiveCheckpoint, dayRouter);
+app.use('/api/journal', requireTrainee, blockDuringActiveCheckpoint, journalRouter);
+app.use('/api/typing-test', requireTrainee, blockDuringActiveCheckpoint, typingRoutes);
+app.use(
+  '/api/leave-requests',
+  requireTrainee,
+  blockDuringActiveCheckpoint,
+  traineeLeaveRequestRoutes
+);
 app.use('/api/admin', requireAdmin, adminRoutes);
 app.use('/api/manager', requireManager, managerRoutes);
 app.use(notFoundHandler);
