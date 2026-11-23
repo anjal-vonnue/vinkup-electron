@@ -17,6 +17,7 @@ import {
 import AccountDialog from './AccountDialog';
 import ManagerStaffTable from './ManagerStaffTable';
 import ManagerTraineeTable from './ManagerTraineeTable';
+import { MANAGER_NAV } from '../../constants/managerNav';
 import styles from './ManagerPage.module.css';
 
 type DialogTarget =
@@ -35,11 +36,6 @@ type PendingToggle = {
 type ActiveTab = 'staff' | 'trainees';
 
 const PAGE_SIZE = 5;
-
-const MANAGER_NAV = [
-  { to: '/manager', label: 'Users & assignments', end: true },
-  { to: '/manager/leave-requests', label: 'Leave requests', end: true },
-];
 
 function byName<T extends { name: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.name.localeCompare(b.name));
