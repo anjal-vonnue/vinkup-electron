@@ -13,6 +13,7 @@ import {
 import ConfirmDialog from '../ConfirmDialog';
 import FileTree from '../FileTree';
 import NewFileInput from '../NewFileInput';
+import { planRelocation } from '../../lib/relocatePath';
 import styles from './FilesPanel.module.css';
 
 type FilesPanelProps = {
@@ -25,6 +26,7 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
 
   const [isCreating, setIsCreating] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<TreeNode | null>(null);
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
 
   const visiblePaths = selectVisiblePaths(state);
   const dirtyPaths = new Set(selectDirtyPaths(state));
@@ -40,6 +42,20 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
   function handleCreate(path: string) {
     dispatch({ type: 'fileCreated', path });
     setIsCreating(false);
+  }
+
+  function handleRenameSubmit(node: TreeNode, name: string): string | null {
+    const trimmed = name.trim();
+    if (!trimmed) return 'Enter a name.';
+    if (trimmed.includes('/')) return "A name can't contain /.";
+    const slash = node.path.lastIndexOf('/');
+    const target = (slash === -1 ? '' : node.path.slice(0, slash + 1)) + trimmed;
+
+    const plan = planRelocation(visiblePaths, node.path, target);
+    if (!plan.ok) return plan.message;
+    if (!plan.unchanged) dispatch({ type: 'pathRelocated', from: plan.from, to: plan.to });
+    setRenamingPath(null);
+    return null;
   }
 
   function handleConfirmDelete() {
@@ -92,6 +108,10 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
         onOpenFile={(path) => dispatch({ type: 'fileOpened', path })}
         onToggleFolder={(path) => dispatch({ type: 'folderToggled', path })}
         onDelete={setPendingDelete}
+        renamingPath={renamingPath}
+        onStartRename={(node) => setRenamingPath(node.path)}
+        onRenameSubmit={handleRenameSubmit}
+        onRenameCancel={() => setRenamingPath(null)}
       />
 
       <div className={styles.footer}>{fileCount} files</div>

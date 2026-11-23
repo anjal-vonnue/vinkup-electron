@@ -2,6 +2,7 @@ import { memo, type MouseEvent } from 'react';
 import { ChevronRight, ChevronDown, Folder, Trash2 } from 'lucide-react';
 import type { TreeNode } from '../../lib/buildFileTree';
 import FileTypeBadge from '../FileTypeBadge';
+import InlineRenameInput from './InlineRenameInput';
 import styles from './FileTreeRow.module.css';
 
 type FileTreeRowProps = {
@@ -14,6 +15,9 @@ type FileTreeRowProps = {
   onOpen: () => void;
   onToggle: () => void;
   onDelete?: () => void;
+  isRenaming?: boolean;
+  onRenameSubmit?: (name: string) => string | null;
+  onRenameCancel?: () => void;
 };
 
 function FileTreeRow({
@@ -26,9 +30,22 @@ function FileTreeRow({
   onOpen,
   onToggle,
   onDelete,
+  isRenaming,
+  onRenameSubmit,
+  onRenameCancel,
 }: FileTreeRowProps) {
   const isFolder = node.type === 'folder';
 
+  const nameElement =
+    isRenaming && onRenameSubmit && onRenameCancel ? (
+      <InlineRenameInput
+        initialName={node.name}
+        onSubmit={onRenameSubmit}
+        onCancel={onRenameCancel}
+      />
+    ) : (
+      <span className={styles.name}>{node.name}</span>
+    );
   function handleActivate() {
     if (isFolder) {
       onToggle();
@@ -62,7 +79,7 @@ function FileTreeRow({
             <ChevronRight size={14} aria-hidden="true" className={styles.chevron} />
           )}
           <Folder size={14} aria-hidden="true" className={styles.folderIcon} />
-          <span className={styles.name}>{node.name}</span>
+          {nameElement}
           <span className={styles.fileCount}>{node.fileCount}</span>
         </>
       ) : (
@@ -70,12 +87,12 @@ function FileTreeRow({
           <span className={styles.badgeSlot}>
             <FileTypeBadge path={node.path} />
           </span>
-          <span className={styles.name}>{node.name}</span>
+          {nameElement}
           {isDirty && <span className={styles.dirtyDot} aria-label="Unsaved changes" />}
         </>
       )}
 
-      {onDelete && (
+      {onDelete && !isRenaming && (
         <button
           type="button"
           className={styles.deleteButton}
