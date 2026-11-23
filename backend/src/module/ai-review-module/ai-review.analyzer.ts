@@ -38,7 +38,7 @@ function packBatches(submissions: Submission[], rubric: string): Submission[][] 
   let current: Submission[] = [];
   let used = overhead;
   for (const submission of submissions) {
-    const cost = tokens(submission.code) + 50;
+    const cost = tokens(submission.instructionsMarkdown) + tokens(submission.code) + 100;
     if (current.length && (current.length >= MAX_TASKS_PER_CALL || used + cost > budget)) {
       batches.push(current);
       current = [];
@@ -49,6 +49,13 @@ function packBatches(submissions: Submission[], rubric: string): Submission[][] 
   }
   if (current.length) batches.push(current);
   return batches;
+}
+
+function exceedsInputBudget(submission: Submission[], rubric: string): boolean {
+  const budget = maxInputBudget();
+  if (budget === 0) return false;
+  const prompt = buildPrompt(rubric, submission);
+  return tokens(prompt.system) + tokens(prompt.user) > budget;
 }
 
 const halve = <T>(items: T[]): T[][] => {
@@ -63,6 +70,19 @@ async function runBatch(
 ): Promise<AiTaskResult[]> {
   const ids = new Set(batch.map((s) => s.taskId));
   const done = new Map<string, AiTaskResult>();
+
+  if (exceedsInputBudget(batch, rubric)) {
+    if (!isRetry && batch.length > 1) {
+      const results = await Promise.all(halve(batch).map((chunk) => runBatch(chunk, rubric, true)));
+      return results.flat();
+    }
+    return batch.map((s) =>
+      fail(
+        s.taskId,
+        'This task exceeds the configured AI input limit, including its instructions and rubric.'
+      )
+    );
+  }
 
   try {
     const prompt = buildPrompt(rubric, batch);

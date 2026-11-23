@@ -5,7 +5,12 @@ const adminService = new AdminService();
 
 export const MAX_CODE_CHARS = 40_000;
 
-export type Submission = { taskId: string; title: string; code: string };
+export type Submission = {
+  taskId: string;
+  title: string;
+  instructionsMarkdown: string;
+  code: string;
+};
 export type Loaded = Submission | { taskId: string; error: string };
 
 // ASSUMPTION: TaskFile has `path` and `content` strings. If the names differ, change only the map line.
@@ -19,7 +24,12 @@ const toSubmission = (taskId: string, task: AdminTaskCode): Submission | null =>
   if (!code) return null;
   const clipped =
     code.length > MAX_CODE_CHARS ? `${code.slice(0, MAX_CODE_CHARS)}\n[truncated]` : code;
-  return { taskId, title: task.title, code: clipped };
+  return {
+    taskId,
+    title: task.title,
+    instructionsMarkdown: task.instructionsMarkdown,
+    code: clipped,
+  };
 };
 
 export async function loadSubmission(traineeId: string, taskId: string): Promise<Loaded> {

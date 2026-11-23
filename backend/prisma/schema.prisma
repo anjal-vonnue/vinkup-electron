@@ -20,7 +20,6 @@ model admin {
   last_login_at DateTime?  @db.Timestamptz
 
   reviews           task_review[]
-  assigned_trainees trainee[]     @relation("MentorTrainees")
   review_prompts review_prompt[]
   leave_reviews     leave_request[] @relation("LeaveReviewer")
   assigned_trainees trainee[]       @relation("MentorTrainees")
