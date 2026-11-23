@@ -38,6 +38,7 @@ function row(overrides: Partial<AdminTraineeSummary> = {}): AdminTraineeSummary 
     flagsLast7Days: 0,
     averageScore: 0,
     daysScored: 0,
+    pendingReviewItems: [],
     ...overrides,
   };
 }
