@@ -96,7 +96,9 @@ export default function SlackIntegrationSection() {
   if (mode === 'loading') {
     return (
       <section className={styles.card} aria-label="Slack integration">
-        <p className={styles.status} role="status">Loading Slack integration…</p>
+        <p className={styles.status} role="status">
+          Loading Slack integration…
+        </p>
       </section>
     );
   }
@@ -105,7 +107,9 @@ export default function SlackIntegrationSection() {
     return (
       <section className={styles.card} aria-label="Slack integration">
         <h2 className={styles.title}>Slack integration</h2>
-        <p className={styles.error} role="alert">{loadError}</p>
+        <p className={styles.error} role="alert">
+          {loadError}
+        </p>
       </section>
     );
   }
@@ -155,7 +159,7 @@ export default function SlackIntegrationSection() {
       )}
 
       {isEditing && (
-        <form className={styles.form} onSubmit={handleSave}>
+        <form className={styles.form} onSubmit={(event) => void handleSave(event)}>
           <label className={styles.label} htmlFor="slack-channel-id">
             Slack Channel ID
           </label>
@@ -211,14 +215,14 @@ export default function SlackIntegrationSection() {
         confirmLabel={isDeleting ? 'Disconnecting…' : 'Disconnect'}
         tone="danger"
         isConfirming={isDeleting}
-        onConfirm={handleDelete}
+        onConfirm={() => void handleDelete()}
         onCancel={() => {
           if (!isDeleting) setConfirmDeleteOpen(false);
         }}
       >
         <p>
-          Task submission notifications will stop being delivered to{' '}
-          <strong>{channelId}</strong>. You can connect a channel again later.
+          Task submission notifications will stop being delivered to <strong>{channelId}</strong>.
+          You can connect a channel again later.
         </p>
       </ConfirmDialog>
     </section>

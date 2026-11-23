@@ -7,7 +7,6 @@ import {
   getMentorSlackChannel,
   saveMentorSlackChannel,
 } from '../../api/admin';
-import { toApiError } from '../../api/errors';
 import SlackIntegrationSection from './SlackIntegrationSection';
 
 vi.mock('../../api/admin', () => ({
