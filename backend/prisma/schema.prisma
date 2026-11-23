@@ -20,6 +20,7 @@ model admin {
   last_login_at DateTime?  @db.Timestamptz
 
   reviews           task_review[]
+  review_prompts review_prompt[]
   leave_reviews     leave_request[] @relation("LeaveReviewer")
   assigned_trainees trainee[]       @relation("MentorTrainees")
 }
@@ -390,4 +391,18 @@ model desktop_session {
 
   @@index([user_id])
   @@index([expires_at])
+}
+
+model review_prompt {
+  id         String   @id @default(uuid()) @db.Uuid
+  admin_id   String   @db.Uuid
+  name       String   @db.VarChar(100)
+  content    String
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @updatedAt @db.Timestamptz
+
+  admin admin @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+
+  @@unique([admin_id, name])
+  @@index([admin_id])
 }

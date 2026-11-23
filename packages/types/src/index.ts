@@ -12,4 +12,5 @@ export * from './desktop';
 export * from './auth';
 export * from './resources';
 export * from './realtime';
+export * from './aiReview';
 export * from './leave';

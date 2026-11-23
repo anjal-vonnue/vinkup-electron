@@ -318,21 +318,19 @@ export default function AdminCodePanel({
         </div>
       )}
 
-      {code?.isStarterCode && (
-        <p className={styles.starter} role="note">
-          Starter code: this trainee hasn&rsquo;t saved any work on this task.
-        </p>
-      )}
-
-      {code && !code.isStarterCode && code.status === 'in_progress' && (
-        <p className={styles.starter} role="note">
-          Draft: the trainee hasn&rsquo;t submitted this task yet. Approve and Rework appear once
-          they submit.
-        </p>
-      )}
-
       <div className={styles.body}>
         {isLoading && <LoaderOverlay label="Loading code…" />}
+
+        {code?.isStarterCode && (
+          <p role="note">Starter code: this trainee hasn&rsquo;t saved any work on this task.</p>
+        )}
+
+        {code && !code.isStarterCode && code.status === 'in_progress' && (
+          <p role="note">
+            Draft: the trainee hasn&rsquo;t submitted this task yet. Approve and Rework appear once
+            they submit.
+          </p>
+        )}
 
         {error && (
           <ErrorState

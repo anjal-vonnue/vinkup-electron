@@ -44,8 +44,18 @@
 }
 
 .download:hover {
-  color: var(--color-text-on-accent);
-  background: var(--color-accent-purple);
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface-2);
+  border-color: var(--color-accent-purple);
+}
+
+.analyze {
+  margin-left: 0;
+}
+
+.analyze:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .filter[aria-pressed='true'] {
@@ -73,6 +83,20 @@
 
 .filter[aria-pressed='true'] .filterCount {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Active filters normally use white text on purple; on light-theme hover/focus
+   they switch to a light surface, so explicitly override both active styles. */
+.filter[aria-pressed='true']:hover,
+.filter[aria-pressed='true']:focus-visible {
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface-2);
+}
+
+.filter[aria-pressed='true']:hover .filterCount,
+.filter[aria-pressed='true']:focus-visible .filterCount {
+  color: var(--color-text-primary);
+  background: var(--color-bg-pill-inactive);
 }
 
 .empty {

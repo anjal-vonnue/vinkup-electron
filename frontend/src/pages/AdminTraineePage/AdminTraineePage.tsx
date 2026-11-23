@@ -14,6 +14,7 @@ import AdminFeedbackList from '../../components/AdminFeedbackList';
 import AdminFlagTable from '../../components/AdminFlagTable';
 import AdminJournalList from '../../components/AdminJournalList';
 import AdminTaskList from '../../components/AdminTaskList';
+import { AiReviewModal } from '../../components/AiReviewModal/AiReviewModal';
 import DailyActivityTable from '../../components/DailyActivityTable';
 import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
@@ -30,7 +31,7 @@ import {
   reportDocumentTitle,
   type PrintReportOptions,
 } from '../../lib/printReport';
-import type { TaskReviewFilter } from '../../lib/taskReview';
+import { getTaskReviewState, type TaskReviewFilter } from '../../lib/taskReview';
 import { useAdminResource } from './hooks/useAdminResource';
 import styles from './AdminTraineePage.module.css';
 
@@ -62,6 +63,7 @@ function TraineeDetail({
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('tasks');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   // Kept here, not in AdminTaskList, so it survives the reload after Approve / Request rework.
   const [taskFilter, setTaskFilter] = useState<TaskReviewFilter>(initialFilter);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -135,8 +137,9 @@ function TraineeDetail({
     const savedScroll = scrollBeforeViewRef.current;
     scrollBeforeViewRef.current = null;
     if (savedScroll !== null) {
-      // Wait one frame, so the page has removed the viewer before scrolling.
-      requestAnimationFrame(() => window.scrollTo({ top: savedScroll }));
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: savedScroll });
+      });
     }
   }, []);
 
@@ -259,6 +262,9 @@ function TraineeDetail({
   const { profile, typingStats, courses, totalTasks, journal, tasks } = detail.data;
 
   const selectedTask = tasks.find((task) => task.taskId === selectedTaskId);
+  const aiEligibleTasks = tasks
+    .filter((task) => getTaskReviewState(task) === 'pending')
+    .map(({ taskId, title }) => ({ taskId, title }));
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'tasks', label: `Tasks (${tasks.length}/${totalTasks})` },
@@ -349,7 +355,21 @@ function TraineeDetail({
                   onFilterChange={setTaskFilter}
                   traineeId={traineeId}
                   traineeName={profile.trainee.name}
+                  onAnalyzeWithAi={() => setAiOpen(true)}
+                  aiEligibleCount={aiEligibleTasks.length}
                 />
+                {aiOpen && (
+                  <AiReviewModal
+                    traineeId={traineeId}
+                    traineeName={profile.trainee.name}
+                    tasks={aiEligibleTasks}
+                    onClose={() => setAiOpen(false)}
+                    onApplied={() => {
+                      detail.refresh();
+                      feedback.refresh();
+                    }}
+                  />
+                )}
               </>
             )}
 
