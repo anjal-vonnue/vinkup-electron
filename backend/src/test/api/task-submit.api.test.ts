@@ -18,6 +18,13 @@ beforeEach(async () => {
 const url = (taskId: string) => `/api/tasks/${taskId}/submit`;
 
 describe('POST /api/tasks/:taskId/submit', () => {
+  it('does not queue Slack notifications when Slack is disabled', async () => {
+    const res = await api.post(url(TASK.html1Main), undefined, a.cookie);
+
+    expect(res.status).toBe(200);
+    expect(await db.slack_notification_outbox.count()).toBe(0);
+  });
+
   it('marks the task completed and returns the submit time', async () => {
     const res = await api.post(url(TASK.html1Main), undefined, a.cookie);
 
@@ -83,9 +90,11 @@ describe('POST /api/tasks/:taskId/submit', () => {
   it('returns 403 DAY_LOCKED for a task on a locked day', async () => {
     expectError(await api.post(url(TASK.html2First), undefined, a.cookie), 403, 'DAY_LOCKED');
     expect(await db.task_progress.count()).toBe(0);
+    expect(await db.slack_notification_outbox.count()).toBe(0);
   });
 
   it('returns 404 NOT_FOUND for an unknown task', async () => {
     expectError(await api.post(url('html-day-01-t-99'), undefined, a.cookie), 404, 'NOT_FOUND');
+    expect(await db.slack_notification_outbox.count()).toBe(0);
   });
 });
