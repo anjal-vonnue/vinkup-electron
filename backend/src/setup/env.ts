@@ -12,3 +12,5 @@ process.env.FRONTEND_URL = 'http://localhost:5173';
 process.env.CERTIFICATE_SIGNING_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIAP/OGZR8LKufF+cT7XkL36MSrnWGc97jk2UARDFAKXa
 -----END PRIVATE KEY-----`;
+process.env.SLACK_ENABLED = 'false';
+process.env.SLACK_BOT_TOKEN = '';
