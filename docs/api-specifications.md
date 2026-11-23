@@ -179,6 +179,9 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | GET    | `/api/admin/trainees/:traineeId/flags`                 | Mentor  | An assigned trainee's flag events, newest first                                            |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Mentor  | An assigned trainee's saved files for a task (read-only)                                   |
 | GET    | `/api/admin/analytics`                                 | Mentor  | Team analytics for a period: progress, comparison, task status, typing, integrity          |
+| GET    | `/api/admin/slack-channel`                             | Mentor  | This mentor's configured Slack channel ID                                              |
+| PUT    | `/api/admin/slack-channel`                             | Mentor  | Save or replace this mentor's Slack channel ID                                         |
+| DELETE | `/api/admin/slack-channel`                             | Mentor  | Clear this mentor's Slack channel ID                                                    |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Mentor  | Approve an assigned trainee's current submission                                           |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Mentor  | Send an assigned trainee's submission back for rework                                      |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Mentor  | Review history for an assigned trainee's task                                              |
@@ -1060,6 +1063,37 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
   3. Creates the `trainee` row. Nothing else is created: the trainee starts on day 1 with no progress. The admin id and new trainee id are logged.
 - **Response 201** (`AdminTraineeSummary`): the new trainee's row exactly as `GET /api/admin/trainees` would return it (`daysCompleted: 0`, `lastActiveDate: null`, `averageScore: null`, …), so the page can insert it as is.
 - **Errors:** 400 `VALIDATION_FAILED` / `DOMAIN_NOT_PERMITTED`; 401; 403; 409 `TRAINEE_EXISTS` / `EMAIL_BELONGS_TO_ADMIN`.
+
+### Slack channel configuration
+
+These endpoints manage the authenticated mentor's own Slack channel. The mentor id always comes
+from `req.user.id`; no mentor id is accepted from the client. Trainees and managers get
+`403 FORBIDDEN`, and unauthenticated requests get `401 UNAUTHENTICATED`. See
+[Slack integration](slack-integration.md) for setup and notification behavior.
+
+#### GET /api/admin/slack-channel
+
+- **Auth:** mentor.
+- **Response 200** (`MentorSlackChannelResponse`): `{ "channelId": "C0123ABCDEF" }`, or
+  `{ "channelId": null }` when unset.
+- **Errors:** 401; 403; 404 `NOT_FOUND` if the mentor row no longer exists.
+
+#### PUT /api/admin/slack-channel
+
+- **Auth:** mentor.
+- **Request body** (`SaveMentorSlackChannelRequest`): `{ "channelId": "C0123ABCDEF" }`.
+- **Validation:** trimmed, 1–32 characters, `/^[A-Z0-9]+$/`. Invalid values return
+  `400 VALIDATION_FAILED`.
+- **Response 200** (`MentorSlackChannelResponse`): the saved channel. Saving the same ID is allowed;
+  saving a different ID replaces the old one.
+- **Errors:** 400; 401; 403.
+
+#### DELETE /api/admin/slack-channel
+
+- **Auth:** mentor.
+- **Response 200** (`MentorSlackChannelResponse`): `{ "channelId": null }`. Deleting when unset is
+  a no-op.
+- **Errors:** 401; 403.
 
 ### GET /api/admin/trainees/:traineeId
 
