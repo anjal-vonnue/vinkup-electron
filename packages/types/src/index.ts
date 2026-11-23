@@ -13,3 +13,4 @@ export * from './auth';
 export * from './resources';
 export * from './realtime';
 export * from './leave';
+export * from './checkpoint';
