@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FolderOpen, Plus, RefreshCw, ChevronsDownUp } from 'lucide-react';
+import { FolderOpen, FilePlus, FolderPlus, RefreshCw, ChevronsDownUp } from 'lucide-react';
 import { buildFileTree, type TreeNode } from '../../lib/buildFileTree';
+import NewFolderInput from '../NewFolderInput';
 import {
   selectVisiblePaths,
   selectDirtyPaths,
@@ -20,11 +21,13 @@ type FilesPanelProps = {
   onRefresh: () => void;
 };
 
+type Creating = { kind: 'file' | 'folder'; parent: string };
+
 export default function FilesPanel({ onRefresh }: FilesPanelProps) {
   const state = useWorkspaceState();
   const dispatch = useWorkspaceDispatch();
 
-  const [isCreating, setIsCreating] = useState(false);
+  const [creating, setCreating] = useState<Creating | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TreeNode | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
 
@@ -41,7 +44,12 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
 
   function handleCreate(path: string) {
     dispatch({ type: 'fileCreated', path });
-    setIsCreating(false);
+    setCreating(null);
+  }
+
+  // A folder exists once it holds a file, so naming a folder leads straight to its first file.
+  function handleFolderNamed(path: string) {
+    setCreating({ kind: 'file', parent: path });
   }
 
   function handleRenameSubmit(node: TreeNode, name: string): string | null {
@@ -76,8 +84,21 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
         <FolderOpen size={14} aria-hidden="true" />
         <span className={styles.headerLabel}>WORKSPACE /</span>
         <div className={styles.headerActions}>
-          <button type="button" aria-label="New file" onClick={() => setIsCreating(true)}>
-            <Plus size={14} aria-hidden="true" />
+          <button
+            type="button"
+            aria-label="New file"
+            title="New file"
+            onClick={() => setCreating({ kind: 'file', parent: '' })}
+          >
+            <FilePlus size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-label="New folder"
+            title="New folder"
+            onClick={() => setCreating({ kind: 'folder', parent: '' })}
+          >
+            <FolderPlus size={14} aria-hidden="true" />
           </button>
           <button type="button" aria-label="Reload files from server" onClick={onRefresh}>
             <RefreshCw size={14} aria-hidden="true" />
@@ -92,11 +113,22 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
         </div>
       </div>
 
-      {isCreating && (
+      {creating?.kind === 'file' && (
         <NewFileInput
+          key={creating.parent}
           existingPaths={visiblePaths}
+          initialValue={creating.parent ? `${creating.parent}/` : ''}
           onCreate={handleCreate}
-          onCancel={() => setIsCreating(false)}
+          onCancel={() => setCreating(null)}
+        />
+      )}
+      {creating?.kind === 'folder' && (
+        <NewFolderInput
+          key={creating.parent}
+          existingPaths={visiblePaths}
+          initialValue={creating.parent ? `${creating.parent}/` : ''}
+          onSubmit={handleFolderNamed}
+          onCancel={() => setCreating(null)}
         />
       )}
 
@@ -112,6 +144,8 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
         onStartRename={(node) => setRenamingPath(node.path)}
         onRenameSubmit={handleRenameSubmit}
         onRenameCancel={() => setRenamingPath(null)}
+        onNewFile={(node) => setCreating({ kind: 'file', parent: node.path })}
+        onNewFolder={(node) => setCreating({ kind: 'folder', parent: node.path })}
       />
 
       <div className={styles.footer}>{fileCount} files</div>

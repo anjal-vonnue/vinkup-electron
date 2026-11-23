@@ -16,7 +16,7 @@ export function rewritePath(path: string, from: string, to: string): string {
 }
 
 /** Folder names follow the file rules minus the extension check. Returns an error message or null. */
-function folderPathError(path: string, others: string[]): string | null {
+export function folderPathError(path: string, others: string[]): string | null {
   if (path.length === 0) return 'Enter a folder name.';
   if (path.length > MAX_PATH_LENGTH) {
     return `Folder path must be ${MAX_PATH_LENGTH} characters or fewer.`;

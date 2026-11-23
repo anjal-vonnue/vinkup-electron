@@ -15,6 +15,8 @@ type FileTreeProps = {
   onStartRename?: (node: TreeNode) => void;
   onRenameSubmit?: (node: TreeNode, name: string) => string | null;
   onRenameCancel?: () => void;
+  onNewFile?: (node: TreeNode) => void;
+  onNewFolder?: (node: TreeNode) => void;
 };
 
 type FlatRow = { node: TreeNode; depth: number };
@@ -51,6 +53,8 @@ export default function FileTree({
   onStartRename,
   onRenameSubmit,
   onRenameCancel,
+  onNewFile,
+  onNewFolder,
 }: FileTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rows = flatten(nodes, expandedFolders, 0);
@@ -193,6 +197,9 @@ export default function FileTree({
               : undefined
           }
           onRenameCancel={row.node.path === renamingPath ? onRenameCancel : undefined}
+          onNewFile={onNewFile ? () => onNewFile(row.node) : undefined}
+          onNewFolder={onNewFolder ? () => onNewFolder(row.node) : undefined}
+          onStartRename={onStartRename ? () => onStartRename(row.node) : undefined}
         />
       ))}
     </div>
