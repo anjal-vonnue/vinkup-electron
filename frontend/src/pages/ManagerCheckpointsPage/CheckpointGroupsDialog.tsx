@@ -104,6 +104,7 @@ export default function CheckpointGroupsDialog({ trainees, groups, onClose, onCh
       <dialog
         ref={dialogRef}
         className={styles.dialog}
+        aria-labelledby="checkpoint-groups-title"
         onCancel={(event) => {
           event.preventDefault();
           if (!saving) onClose();
@@ -112,7 +113,9 @@ export default function CheckpointGroupsDialog({ trainees, groups, onClose, onCh
         <div className={styles.shell}>
           <header className={styles.header}>
             <div>
-              <h2 className={styles.title}>Trainee groups</h2>
+              <h2 id="checkpoint-groups-title" className={styles.title}>
+                Trainee groups
+              </h2>
               <p className={styles.subtitle}>
                 Reusable groups make it quick to assign a checkpoint to a cohort.
               </p>

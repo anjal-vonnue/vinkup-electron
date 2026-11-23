@@ -12,8 +12,15 @@ vi.mock('../../api/leave', () => ({
   reviewLeaveRequest: vi.fn(),
 }));
 
+const headerProps = vi.hoisted(() => ({
+  navItems: [] as { to: string; label: string }[],
+}));
+
 vi.mock('../../components/AdminHeader', () => ({
-  default: () => <header>Staff header</header>,
+  default: (props: { navItems?: { to: string; label: string }[] }) => {
+    headerProps.navItems = props.navItems ?? [];
+    return <header>Staff header</header>;
+  },
 }));
 
 const submittedAt = '2026-11-21T10:00:00.000Z';
@@ -79,6 +86,17 @@ describe('StaffLeaveRequestsPage', () => {
       feedback: 'Please choose another date.',
       reviewedAt: '2026-11-21T13:00:00.000Z',
     });
+  });
+
+  it('keeps the checkpoints tab in the manager navigation', async () => {
+    renderPage('manager');
+
+    await screen.findByText('Assigned Trainee');
+    expect(headerProps.navItems.map((item) => item.label)).toEqual([
+      'Users & assignments',
+      'Checkpoints',
+      'Leave requests',
+    ]);
   });
 
   it('lists scoped requests with status filters', async () => {

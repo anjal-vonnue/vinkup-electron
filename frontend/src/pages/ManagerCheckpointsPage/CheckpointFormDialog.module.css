@@ -1,7 +1,14 @@
 .dialog {
+  /* The global reset zeroes every margin, including the native <dialog>'s
+     margin: auto that usually centres it. Restore centring explicitly. */
+  position: fixed;
+  inset: 0;
+  height: fit-content;
+  margin: auto;
   width: min(1180px, calc(100vw - 32px));
   max-width: 1180px;
   max-height: calc(100vh - 32px);
+  overflow: hidden;
   padding: 0;
   border: 1px solid var(--color-border-card);
   border-radius: 14px;
@@ -10,14 +17,15 @@
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
 }
 
-.dialog::backdrop {
+/* .dialog::backdrop {
   background: rgba(10, 14, 26, 0.6);
   backdrop-filter: blur(2px);
-}
+} */
 
 .shell {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   max-height: calc(100vh - 32px);
 }
 
@@ -26,6 +34,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  flex-shrink: 0;
   padding: 18px 22px 14px;
   border-bottom: 1px solid var(--color-border-card);
 }
@@ -84,7 +93,9 @@
 .body {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  align-items: start;
   gap: 20px;
+  min-height: 0;
   overflow-y: auto;
   padding: 18px 22px;
 }
@@ -249,7 +260,8 @@
   font-size: 12px;
   line-height: 1.55;
   resize: vertical;
-  white-space: pre;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .helpText {
@@ -391,9 +403,6 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: calc(100vh - 320px);
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 .previewSection h4,
@@ -460,6 +469,13 @@
   font-size: 12px;
 }
 
+/* The form error sits between the scrollable body and the footer, so give it
+   the same horizontal gutter as those sections. */
+.formError {
+  margin: 0 22px 12px;
+  flex-shrink: 0;
+}
+
 /* ---------- Footer ---------- */
 
 .footer {
@@ -467,6 +483,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-shrink: 0;
   padding: 14px 22px;
   border-top: 1px solid var(--color-border-card);
   background: var(--color-bg-card);
@@ -521,10 +538,6 @@
   .body {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .previewScroll {
-    max-height: 380px;
-  }
 }
 
 @media (max-width: 620px) {
@@ -539,5 +552,10 @@
   .footer {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .formError {
+    margin-left: 16px;
+    margin-right: 16px;
   }
 }

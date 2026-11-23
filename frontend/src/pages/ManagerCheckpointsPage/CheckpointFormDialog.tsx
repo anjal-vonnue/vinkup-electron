@@ -332,6 +332,7 @@ export default function CheckpointFormDialog({
     <dialog
       ref={dialogRef}
       className={styles.dialog}
+      aria-labelledby="checkpoint-form-title"
       onCancel={(event) => {
         event.preventDefault();
         if (!saving) onClose();
@@ -340,7 +341,7 @@ export default function CheckpointFormDialog({
       <div className={styles.shell}>
         <header className={styles.header}>
           <div>
-            <h2 className={styles.title}>
+            <h2 id="checkpoint-form-title" className={styles.title}>
               {target.mode === 'create' ? 'New checkpoint' : 'Edit checkpoint'}
             </h2>
             <p className={styles.subtitle}>
@@ -623,8 +624,8 @@ export default function CheckpointFormDialog({
                     )}
                     {visiblePreview.warnings.length > 0 && (
                       <ul className={styles.warnings}>
-                        {visiblePreview.warnings.map((warning) => (
-                          <li key={warning}>{warning}</li>
+                        {visiblePreview.warnings.map((warning, index) => (
+                          <li key={`${warning}-${index}`}>{warning}</li>
                         ))}
                       </ul>
                     )}
@@ -677,7 +678,7 @@ export default function CheckpointFormDialog({
         )}
 
         {formError && (
-          <p className={styles.error} role="alert">
+          <p className={`${styles.error} ${styles.formError}`} role="alert">
             {formError}
           </p>
         )}
