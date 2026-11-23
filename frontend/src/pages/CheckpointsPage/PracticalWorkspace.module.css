@@ -1,0 +1,126 @@
+.workspaceShell {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border-card);
+  border-radius: 10px;
+  background: var(--color-bg-base);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--color-border-card);
+  background: var(--color-bg-card);
+}
+
+.toolbarMeta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.runtimeBadge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-secondary, rgba(127, 127, 127, 0.12));
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hint {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  max-width: 260px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-accent-purple);
+  border-radius: 7px;
+  background: var(--color-accent-purple);
+  color: var(--color-text-on-accent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.runButton:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.runButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  height: 620px;
+  min-height: 0;
+}
+
+.filesPane {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border-card);
+}
+
+.mainPane {
+  display: grid;
+  grid-template-rows: minmax(220px, 1fr) minmax(220px, 42%);
+  min-width: 0;
+  min-height: 0;
+}
+
+.editorPane {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-border-card);
+}
+
+.runtimePane {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 170px minmax(0, 1fr);
+    height: 560px;
+  }
+}
