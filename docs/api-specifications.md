@@ -1296,8 +1296,10 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 Trainees submit a subject and reason and may only read their own requests. Mentors review requests
 from their assigned trainees under `/api/admin`; managers review every request under `/api/manager`.
 Both staff roles share the same service, review payload and `LeaveRequest` response shape; only the
-data scope differs. See [roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow)
-for the permissions and [database.md](./database.md) for the `leave_request` table.
+data scope and permitted decisions differ. See
+[leave-request-workflow.md](./leave-request-workflow.md) for the workflow,
+[roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow) for permissions and
+[database.md](./database.md) for the `leave_request` and `leave_review` tables.
 
 Every leave response uses `LeaveRequest`:
 
@@ -1316,6 +1318,7 @@ Every leave response uses `LeaveRequest`:
   "reviewerRole": null,
   "feedback": null,
   "reviewedAt": null,
+  "reviews": [],
   "createdAt": "2026-11-21T09:00:00.000Z",
   "updatedAt": "2026-11-21T09:00:00.000Z"
 }
@@ -1323,8 +1326,14 @@ Every leave response uses `LeaveRequest`:
 
 `status` ∈ `PENDING | APPROVED | REJECTED`. `reviewerRole` ∈ `MENTOR | MANAGER` once decided, else
 `null`. `assignedMentor` is `null` for an unassigned trainee. All timestamps are ISO-8601 UTC.
-For a decided request, `reviewerId`, `reviewerName`, `reviewerRole` and `reviewedAt` are populated;
-`feedback` is optional for approvals and required for rejections.
+For a decided request, `reviewerId`, `reviewerName`, `reviewerRole` and `reviewedAt` describe the
+**current/final** decision; `feedback` is optional for approvals and required for rejections.
+
+`reviews` is the complete append-only decision history, oldest first. Every `LeaveReview` has
+`id`, `reviewerId`, `reviewerName`, `reviewerRole` (`MENTOR | MANAGER`), `decision` (`APPROVED |
+REJECTED`), `feedback` (`string | null`) and `reviewedAt` (ISO-8601 UTC). A Mentor approval and a
+later Manager rejection both appear; the earlier entry is never replaced. `reviews` is `[]` while
+`PENDING`. See [leave-request-workflow.md](./leave-request-workflow.md) for an example.
 
 ### GET /api/leave-requests
 
@@ -1410,13 +1419,20 @@ For a decided request, `reviewerId`, `reviewerName`, `reviewerRole` and `reviewe
 
 - **Business rules:**
   1. The reviewer id, role and name come from the authenticated context, never the body.
-  2. The request must be in the reviewer's scope (mentor: assigned trainee; manager: any) and still
-     `PENDING`; a missing/out-of-scope request is `404`, a decided one is `409 ALREADY_REVIEWED`.
-  3. The decision, reviewer details, feedback and `reviewed_at` are written in one transaction via a
-     conditional `UPDATE ... WHERE status = 'PENDING'`. Only one of two concurrent reviews can win;
-     the loser gets `409 ALREADY_REVIEWED`. Historical requests are never deleted or overwritten.
-  4. A database CHECK constraint plus a `BEFORE UPDATE OF status` trigger also block any later code
-     path from changing a final status.
-- **Response 200** (`LeaveRequest`): the updated request with the recorded decision.
+  2. The request must be in the reviewer's scope (mentor: assigned trainee; manager: any) and either
+     `PENDING` or, for a Manager `REJECTED` decision only, `APPROVED` with a Mentor as the recorded
+     reviewer. A missing/out-of-scope request is `404`; any other decided request is
+     `409 ALREADY_REVIEWED`. Mentors cannot change decided requests and Managers cannot approve an
+     already approved one.
+  3. The decision, current-review snapshot and an append-only `leave_review` row are written in one
+     transaction via a conditional `UPDATE ... WHERE status = 'PENDING'` (or
+     `status = 'APPROVED' AND reviewer_role = 'MENTOR'` for a Manager rejection). Only one of two
+     concurrent reviews can win; the loser gets `409 ALREADY_REVIEWED`. The Mentor's approval entry
+     survives a Manager's rejection.
+  4. CHECK constraints, `UNIQUE (leave_request_id, reviewer_role)` on `leave_review` and the
+     `leave_request_status_guard` trigger also protect the workflow outside the API. Only
+     `PENDING → APPROVED/REJECTED` and Mentor-approval → Manager-rejection are allowed.
+- **Response 200** (`LeaveRequest`): the updated request with the current decision and the complete
+  `reviews` history.
 - **Errors:** 400 `VALIDATION_FAILED` (bad UUID, invalid decision, missing rejection feedback);
   401; 403; 404 `NOT_FOUND`; 409 `ALREADY_REVIEWED`.
