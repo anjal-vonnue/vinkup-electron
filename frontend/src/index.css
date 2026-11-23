@@ -137,6 +137,10 @@
   --integrity-tone-high: #069669;
   --integrity-tone-mid: #8a5d00;
   --integrity-tone-low: #b91c1c;
+
+  --color-status-info: #1d4ed8;
+  --color-status-info-bg: rgba(29, 78, 216, 0.1);
+  --color-status-rework-text: #9a3412;
 }
 
 /* =========================================================
@@ -303,6 +307,11 @@
   --integrity-tone-high: #4cbf9b;
   --integrity-tone-mid: #d4a24c;
   --integrity-tone-low: #ff6b6b;
+
+  --color-status-info: #60a5fa;
+  --color-status-info-bg: rgba(96, 165, 250, 0.15);
+  --color-status-rework-text: #fb923c;
+  --color-status-progress-text: #c4b5fd;
 }
 
 /* =========================================================

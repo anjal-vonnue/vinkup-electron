@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, AlertCircle, CheckCircle2, Circle, Clock, Send } from 'lucide-react';
 import type { DayTask, DayContent, DayCurrentStatus, DayIntegrityResponse } from '@itp/types';
 import {
   getDayTasks,
@@ -40,17 +40,17 @@ function getErrorMessage(error: unknown, fallback: string): string {
 function getTaskStatusTag(task: DayTask) {
   if (task.status === 'completed') {
     if (task.reviewStatus === 'approved') {
-      return { label: 'Approved', className: styles.approved, isRework: false };
+      return { label: 'Approved', className: styles.approved, isRework: false, Icon: CheckCircle2 };
     }
     if (task.reviewStatus === 'rework') {
-      return { label: 'Rework', className: styles.rework, isRework: true };
+      return { label: 'Rework', className: styles.rework, isRework: true, Icon: AlertCircle };
     }
-    return { label: 'Completed', className: styles.completed, isRework: false };
+    return { label: 'Completed', className: styles.completed, isRework: false, Icon: Send };
   }
   if (task.status === 'in_progress') {
-    return { label: 'In progress', className: styles.in_progress, isRework: false };
+    return { label: 'In progress', className: styles.in_progress, isRework: false, Icon: Clock };
   }
-  return { label: 'Not started', className: styles.not_started, isRework: false };
+  return { label: 'Not started', className: styles.not_started, isRework: false, Icon: Circle };
 }
 
 function DayTasks({
@@ -111,6 +111,7 @@ function DayTasks({
         <div className={styles.taskList}>
           {tasks.map((task) => {
             const tag = getTaskStatusTag(task);
+            const StatusIcon = tag.Icon;
 
             return (
               <button
@@ -145,10 +146,14 @@ function DayTasks({
                           }
                         }}
                       >
+                        <StatusIcon size={12} aria-hidden="true" />
                         {tag.label}
                       </span>
                     ) : (
-                      <span className={`${styles.taskStatus} ${tag.className}`}>{tag.label}</span>
+                      <span className={`${styles.taskStatus} ${tag.className}`}>
+                        <StatusIcon size={12} aria-hidden="true" />
+                        {tag.label}
+                      </span>
                     )}
                     {task.isStretchGoal && (
                       <span className={styles.stretchBadge}>Stretch goal</span>
