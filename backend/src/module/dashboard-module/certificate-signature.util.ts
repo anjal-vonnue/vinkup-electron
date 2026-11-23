@@ -16,37 +16,36 @@ export type CertificatePayload = {
 let cachedPrivateKey: KeyObject | null | undefined;
 let cachedPublicKey: KeyObject | null | undefined;
 
-function normalizePrivateKey(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.includes('BEGIN PRIVATE KEY')) return trimmed;
-  try {
-    const decoded = Buffer.from(trimmed, 'base64').toString('utf8').trim();
-    if (decoded.includes('BEGIN PRIVATE KEY')) return decoded;
-  } catch {
-    // Fall through to the original value; createPrivateKey will report the error.
+function parseCertificatePrivateKey(raw: string): KeyObject {
+  const trimmed = raw.trim().replace(/^['"]|['"]$/g, '');
+  if (trimmed.includes('BEGIN PRIVATE KEY')) {
+    return createPrivateKey(trimmed);
   }
-  return trimmed;
+
+  const buffer = Buffer.from(trimmed, 'base64');
+  const decoded = buffer.toString('utf8').trim();
+  if (decoded.includes('BEGIN PRIVATE KEY')) {
+    return createPrivateKey(decoded);
+  }
+
+  return createPrivateKey({ key: buffer, format: 'der', type: 'pkcs8' });
 }
 
 export function getCertificateSigningPrivateKey(): KeyObject {
-  if (cachedPrivateKey !== undefined) {
-    if (cachedPrivateKey === null) {
-      throw new AppError(500, 'INTERNAL_ERROR', 'Certificate signing is not configured.');
-    }
-    return cachedPrivateKey;
-  }
+  if (cachedPrivateKey) return cachedPrivateKey;
 
-  const raw = env.CERTIFICATE_SIGNING_PRIVATE_KEY;
+  const raw = env.CERTIFICATE_SIGNING_PRIVATE_KEY ?? process.env.CERTIFICATE_SIGNING_PRIVATE_KEY;
   if (!raw) {
-    cachedPrivateKey = null;
     throw new AppError(500, 'INTERNAL_ERROR', 'Certificate signing is not configured.');
   }
 
   try {
-    cachedPrivateKey = createPrivateKey(normalizePrivateKey(raw));
-  } catch {
-    cachedPrivateKey = null;
-    throw new AppError(500, 'INTERNAL_ERROR', 'Certificate signing is not configured.');
+    cachedPrivateKey = parseCertificatePrivateKey(raw);
+  } catch (error) {
+    cachedPrivateKey = undefined;
+    cachedPublicKey = undefined;
+    console.error('Invalid CERTIFICATE_SIGNING_PRIVATE_KEY configuration.', error);
+    throw new AppError(500, 'INTERNAL_ERROR', 'Certificate signing key is invalid.');
   }
 
   cachedPublicKey = undefined;
@@ -54,20 +53,8 @@ export function getCertificateSigningPrivateKey(): KeyObject {
 }
 
 export function getCertificateSigningPublicKey(): KeyObject {
-  if (cachedPublicKey !== undefined) {
-    if (cachedPublicKey === null) {
-      throw new AppError(500, 'INTERNAL_ERROR', 'Certificate signing is not configured.');
-    }
-    return cachedPublicKey;
-  }
-
-  try {
-    cachedPublicKey = createPublicKey(getCertificateSigningPrivateKey());
-  } catch {
-    cachedPublicKey = null;
-    throw new AppError(500, 'INTERNAL_ERROR', 'Certificate signing is not configured.');
-  }
-
+  if (cachedPublicKey) return cachedPublicKey;
+  cachedPublicKey = createPublicKey(getCertificateSigningPrivateKey());
   return cachedPublicKey;
 }
 

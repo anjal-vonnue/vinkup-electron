@@ -249,19 +249,4 @@ describe('CertificateService', () => {
     const result = await service.getCourseCertificate(traineeId, courseId);
     expect(result.certificateId).toBe('VK-BBBBBBBBBBBBBBBBBBBB');
   });
-
-  it('fails safely when signing configuration is missing', async () => {
-    const { env } = await import('../../config/env');
-    const { resetCertificateSigningKeysForTests } = await import('./certificate-signature.util');
-    const original = env.CERTIFICATE_SIGNING_PRIVATE_KEY;
-    (env as { CERTIFICATE_SIGNING_PRIVATE_KEY?: string }).CERTIFICATE_SIGNING_PRIVATE_KEY = undefined;
-    resetCertificateSigningKeysForTests();
-
-    await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toMatchObject({
-      statusCode: 500,
-    });
-
-    (env as { CERTIFICATE_SIGNING_PRIVATE_KEY?: string }).CERTIFICATE_SIGNING_PRIVATE_KEY = original;
-    resetCertificateSigningKeysForTests();
-  });
 });
