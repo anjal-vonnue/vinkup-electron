@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CheckpointFileInput,
+  CheckpointWorkspaceFile,
   SaveCheckpointAnswerRequest,
   TraineeCheckpointAnswer,
 } from '@itp/types';
@@ -19,6 +20,10 @@ export type DraftAnswer = {
   /** Base64 payload waiting to be sent. Cleared once the server confirms it. */
   fileBase64: string | null;
   clearFile: boolean;
+  /** Practical questions only: the latest workspace snapshot. */
+  files: CheckpointWorkspaceFile[] | null;
+  /** Practical questions only: true when every file was deleted after a save. */
+  clearFiles: boolean;
   /** Monotonic revision used by the server's compare-and-set check. */
   revision: number;
   confirmedRevision: number;
@@ -50,6 +55,7 @@ type UseCheckpointAutosaveResult = {
   selectOption: (questionId: string, option: string) => void;
   attachFile: (questionId: string, file: CheckpointFileInput) => void;
   removeFile: (questionId: string) => void;
+  updateFiles: (questionId: string, files: CheckpointWorkspaceFile[]) => void;
   flushQuestion: (questionId: string) => Promise<boolean>;
   flushAll: () => Promise<boolean>;
   retryAll: () => void;
@@ -71,7 +77,8 @@ function toDraft(answer: TraineeCheckpointAnswer): DraftAnswer {
   const hasContent =
     Boolean(answer.answerText && answer.answerText.length > 0) ||
     Boolean(answer.selectedOption) ||
-    Boolean(answer.fileName);
+    Boolean(answer.fileName) ||
+    Boolean(answer.files && answer.files.length > 0);
 
   return {
     questionId: answer.questionId,
@@ -82,6 +89,8 @@ function toDraft(answer: TraineeCheckpointAnswer): DraftAnswer {
     fileSize: answer.fileSize,
     fileBase64: null,
     clearFile: false,
+    files: answer.files,
+    clearFiles: false,
     revision,
     confirmedRevision: revision,
     dirty: false,
@@ -228,6 +237,12 @@ export function useCheckpointAutosave({
             payload.clearFile = true;
           }
 
+          if (draft.files !== null) {
+            payload.files = draft.files;
+          } else if (draft.clearFiles) {
+            payload.clearFiles = true;
+          }
+
           patch(questionId, { status: 'saving', error: null });
 
           try {
@@ -249,6 +264,7 @@ export function useCheckpointAutosave({
               error: null,
               fileBase64: null,
               clearFile: false,
+              clearFiles: false,
             });
 
             if (!stillDirty) return true;
@@ -337,6 +353,13 @@ export function useCheckpointAutosave({
         fileBase64: null,
         clearFile: true,
       });
+    },
+    [changeDraft]
+  );
+
+  const updateFiles = useCallback(
+    (questionId: string, files: CheckpointWorkspaceFile[]) => {
+      changeDraft(questionId, { files, clearFiles: false });
     },
     [changeDraft]
   );
@@ -433,6 +456,7 @@ export function useCheckpointAutosave({
     selectOption,
     attachFile,
     removeFile,
+    updateFiles,
     flushQuestion,
     flushAll,
     retryAll,

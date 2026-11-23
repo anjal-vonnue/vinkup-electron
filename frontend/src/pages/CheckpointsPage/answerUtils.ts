@@ -38,5 +38,6 @@ export function isAnswerProvided(
   if (!draft) return false;
   if (question.type === 'MULTIPLE_CHOICE') return Boolean(draft.selectedOption);
   if (question.type === 'FILE') return Boolean(draft.fileName);
+  if (question.type === 'PRACTICAL') return (draft.files?.length ?? 0) > 0;
   return draft.answerText.trim().length > 0;
 }

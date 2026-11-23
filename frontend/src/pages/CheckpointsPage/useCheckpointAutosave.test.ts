@@ -25,6 +25,7 @@ function serverAnswer(overrides: Partial<TraineeCheckpointAnswer> = {}): Trainee
     fileName: null,
     fileMimeType: null,
     fileSize: null,
+    files: null,
     clientRevision: 0,
     savedAt: null,
     ...overrides,
@@ -330,6 +331,59 @@ describe('useCheckpointAutosave', () => {
       fileName: null,
       clearFile: false,
     });
+  });
+
+  it('autosaves practical workspace files and keeps them after the save', async () => {
+    const { result } = renderAutosave();
+    const files = [
+      { path: 'src/index.ts', content: 'export const answer = 42;' },
+      { path: 'README.md', content: '# Answer' },
+    ];
+
+    act(() => {
+      result.current.updateFiles(questionId, files);
+    });
+
+    expect(result.current.answers[questionId]).toMatchObject({
+      status: 'dirty',
+      dirty: true,
+      files,
+    });
+
+    await advance(1200);
+
+    expect(api.saveCheckpointAnswer).toHaveBeenCalledTimes(1);
+    expect(api.saveCheckpointAnswer.mock.calls[0][2]).toMatchObject({ files });
+    expect(result.current.answers[questionId]).toMatchObject({
+      status: 'saved',
+      dirty: false,
+      files,
+    });
+  });
+
+  it('restores saved workspace files from the server', () => {
+    const files = [{ path: 'index.js', content: 'console.log("hi");' }];
+    const { result } = renderAutosave({
+      answers: [serverAnswer({ files, clientRevision: 2, savedAt })],
+    });
+
+    expect(result.current.answers[questionId]).toMatchObject({
+      files,
+      status: 'saved',
+      dirty: false,
+    });
+  });
+
+  it('does not autosave workspace files once the attempt is locked', async () => {
+    const { result } = renderAutosave({ locked: true });
+
+    act(() => {
+      result.current.updateFiles(questionId, [{ path: 'index.ts', content: 'late' }]);
+    });
+    await advance(2000);
+
+    expect(api.saveCheckpointAnswer).not.toHaveBeenCalled();
+    expect(result.current.answers[questionId].files).toBeNull();
   });
 
   it('flushes dirty answers when the tab becomes hidden', async () => {
