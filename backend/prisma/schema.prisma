@@ -77,6 +77,11 @@ enum leave_status {
   REJECTED
 }
 
+enum certificate_status {
+  ACTIVE
+  REVOKED
+}
+
 model trainee {
   id        String  @id @default(uuid()) @db.Uuid
   name      String
@@ -93,6 +98,7 @@ model trainee {
   typing_results    typing_test_result[]
   flag_events       flag_event[]
   activity_logs     activity_log[]
+  certificates      certificate[]
 
   @@index([mentor_id])
 }
@@ -104,7 +110,8 @@ model course {
   title      String
   sort_order Int    @unique // curriculum order: html = 1 ... react = 8
 
-  days curriculum_day[]
+  days         curriculum_day[]
+  certificates certificate[]
 }
 
 model curriculum_day {
@@ -313,6 +320,31 @@ model activity_log {
   trainee trainee @relation(fields: [trainee_id], references: [id], onDelete: Cascade)
 
   @@unique([trainee_id, date])
+}
+
+// ---------- Certificates ----------
+
+model certificate {
+  id                  String             @id @default(uuid()) @db.Uuid
+  certificate_id      String             @unique
+  trainee_id          String             @db.Uuid
+  course_id           String
+  trainee_name        String
+  course_title        String
+  days_completed      Int
+  completed_at        DateTime           @db.Timestamptz
+  issued_at           DateTime           @default(now()) @db.Timestamptz
+  status              certificate_status @default(ACTIVE)
+  revoked_at          DateTime?          @db.Timestamptz
+  signature           String
+  signature_algorithm String
+  signature_version   String
+
+  trainee trainee @relation(fields: [trainee_id], references: [id], onDelete: Restrict)
+  course  course  @relation(fields: [course_id], references: [id], onDelete: Restrict)
+
+  @@unique([trainee_id, course_id])
+  @@index([status])
 }
 
 // ---------- Electron sign-in ----------

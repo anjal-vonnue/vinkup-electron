@@ -7,6 +7,7 @@ export const db = new PrismaClient({
 });
 
 const TABLES = [
+  'certificate',
   'activity_log',
   'flag_event',
   'typing_test_result',
@@ -31,7 +32,18 @@ export async function resetDatabase(): Promise<void> {
 
 /** Empties only the trainee tables, keeping the curriculum. */
 export async function resetTraineeData(): Promise<void> {
-  const traineeTables = TABLES.slice(0, 6).concat('trainee');
+  const traineeTables = [
+    'certificate',
+    'activity_log',
+    'flag_event',
+    'typing_test_result',
+    'journal_response',
+    'day_completion',
+    'task_review',
+    'leave_request',
+    'task_progress',
+    'trainee',
+  ];
   await db.$executeRawUnsafe(
     `TRUNCATE TABLE ${traineeTables.map((t) => `"${t}"`).join(', ')} CASCADE`
   );
