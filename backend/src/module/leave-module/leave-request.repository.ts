@@ -26,6 +26,12 @@ export type ReviewLeaveRequestRecord = {
 export type ReviewOutcome =
   { ok: true; request: LeaveRow } | { ok: false; reason: 'not-found' | 'already-reviewed' };
 
+// Declared separately so the generated Prisma types accept a mutable array.
+const reviewOrderBy: Prisma.leave_reviewOrderByWithRelationInput[] = [
+  { reviewed_at: 'asc' },
+  { created_at: 'asc' },
+];
+
 const leaveSelect = {
   id: true,
   trainee_id: true,
@@ -38,6 +44,18 @@ const leaveSelect = {
   feedback: true,
   submitted_at: true,
   reviewed_at: true,
+  reviews: {
+    select: {
+      id: true,
+      reviewer_id: true,
+      reviewer_role: true,
+      reviewer_name: true,
+      decision: true,
+      feedback: true,
+      reviewed_at: true,
+    },
+    orderBy: reviewOrderBy,
+  },
   created_at: true,
   updated_at: true,
   trainee: {
@@ -92,9 +110,10 @@ export class LeaveRequestRepository {
     });
 
   /**
-   * One transaction performs the access check, the PENDING re-check and the
-   * conditional update. A competing reviewer's update makes the second
-   * updateMany affect zero rows, so only one decision can ever be written.
+   * One transaction performs the access check, the status re-check, the
+   * conditional update and the append-only history write. A competing
+   * reviewer's update makes the second updateMany affect zero rows, so only
+   * one decision can ever win.
    */
   decide = async (input: ReviewLeaveRequestRecord): Promise<ReviewOutcome> => {
     return prisma.$transaction(async (tx) => {
@@ -107,6 +126,12 @@ export class LeaveRequestRepository {
         return { ok: false, reason: 'already-reviewed' } as const;
       }
 
+      const reviewerRole =
+        input.reviewer.role === 'MANAGER' ? staff_role.MANAGER : staff_role.MENTOR;
+      const decision =
+        input.decision === 'APPROVED' ? leave_status.APPROVED : leave_status.REJECTED;
+      const reviewedAt = new Date();
+
       const updated = await tx.leave_request.updateMany({
         where: {
           id: input.requestId,
@@ -114,15 +139,27 @@ export class LeaveRequestRepository {
           ...leaveScopeFor(input.reviewer),
         },
         data: {
-          status: input.decision === 'APPROVED' ? leave_status.APPROVED : leave_status.REJECTED,
+          status: decision,
           reviewer_id: input.reviewer.id,
-          reviewer_role: input.reviewer.role === 'MANAGER' ? staff_role.MANAGER : staff_role.MENTOR,
+          reviewer_role: reviewerRole,
           reviewer_name: input.reviewer.name,
           feedback: input.feedback,
-          reviewed_at: new Date(),
+          reviewed_at: reviewedAt,
         },
       });
       if (updated.count === 0) return { ok: false, reason: 'already-reviewed' } as const;
+
+      await tx.leave_review.create({
+        data: {
+          leave_request_id: input.requestId,
+          reviewer_id: input.reviewer.id,
+          reviewer_role: reviewerRole,
+          reviewer_name: input.reviewer.name,
+          decision,
+          feedback: input.feedback,
+          reviewed_at: reviewedAt,
+        },
+      });
 
       const request = await tx.leave_request.findUniqueOrThrow({
         where: { id: input.requestId },

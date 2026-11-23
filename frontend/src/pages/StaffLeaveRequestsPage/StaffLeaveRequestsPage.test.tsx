@@ -41,6 +41,7 @@ const pending: LeaveRequest = {
   reviewerRole: null,
   feedback: null,
   reviewedAt: null,
+  reviews: [],
   createdAt: submittedAt,
   updatedAt: submittedAt,
 };
@@ -66,6 +67,17 @@ const decided: LeaveRequest = {
   reviewerRole: 'MENTOR',
   feedback: 'All the best with the move.',
   reviewedAt: '2026-11-21T12:00:00.000Z',
+  reviews: [
+    {
+      id: 'review-1',
+      reviewerId: 'mentor-1',
+      reviewerName: 'Mock Mentor',
+      reviewerRole: 'MENTOR',
+      decision: 'APPROVED',
+      feedback: 'All the best with the move.',
+      reviewedAt: '2026-11-21T12:00:00.000Z',
+    },
+  ],
 };
 
 function renderPage(area: 'admin' | 'manager' = 'admin') {

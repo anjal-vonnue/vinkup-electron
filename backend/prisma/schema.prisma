@@ -11,18 +11,18 @@ datasource db {
 // Existing rows mapped to MENTOR during role migration. Keep table name `admin`
 // for compatibility with existing review foreign keys.
 model admin {
-  id            String     @id @default(uuid()) @db.Uuid
-  email         String     @unique // stored lower-case
-  name          String
-  role          staff_role @default(MENTOR)
-  is_active     Boolean    @default(true) // false = can no longer log in
-  created_at    DateTime   @default(now()) @db.Timestamptz
-  last_login_at DateTime?  @db.Timestamptz
-
-  reviews           task_review[]
-  review_prompts review_prompt[]
-  leave_reviews     leave_request[] @relation("LeaveReviewer")
-  assigned_trainees trainee[]       @relation("MentorTrainees")
+  id                   String          @id @default(uuid()) @db.Uuid
+  email                String          @unique // stored lower-case
+  name                 String
+  role                 staff_role      @default(MENTOR)
+  is_active            Boolean         @default(true) // false = can no longer log in
+  created_at           DateTime        @default(now()) @db.Timestamptz
+  last_login_at        DateTime?       @db.Timestamptz
+  reviews              task_review[]
+  leave_reviews        leave_request[] @relation("LeaveReviewer")
+  leave_review_history leave_review[]  @relation("LeaveReviewHistory")
+  assigned_trainees    trainee[]       @relation("MentorTrainees")
+  reviewPrompts        review_prompt[]
 }
 
 // ---------- Enums ----------
@@ -70,8 +70,8 @@ enum staff_role {
   MANAGER
 }
 
-// A leave request has exactly one final decision. Historical rows are never
-// deleted when the decision is recorded.
+// A leave request has one current status. Each decision is also kept as an
+// append-only leave_review row so later reviews cannot erase earlier ones.
 enum leave_status {
   PENDING
   APPROVED
@@ -232,29 +232,51 @@ model task_review {
   @@index([trainee_id, reviewed_at])
 }
 
-// Trainee leave application. One row is kept for the whole lifecycle; review
-// writes flip PENDING to a final status once. Restrict on both people keeps
-// historical requests and reviewer details intact if accounts are deleted.
+// Trainee leave application. One row is kept for the whole lifecycle; the row
+// fields mirror the current/final decision while `reviews` is the append-only
+// record of every decision. Restrict on both people keeps historical requests
+// and reviewer details intact if accounts are deleted.
 model leave_request {
-  id            String        @id @default(uuid()) @db.Uuid
-  trainee_id    String        @db.Uuid
-  subject       String        @db.VarChar(200)
-  reason        String        @db.Text
-  status        leave_status  @default(PENDING)
-  reviewer_id   String?       @db.Uuid
+  id            String       @id @default(uuid()) @db.Uuid
+  trainee_id    String       @db.Uuid
+  subject       String       @db.VarChar(200)
+  reason        String       @db.Text
+  status        leave_status @default(PENDING)
+  reviewer_id   String?      @db.Uuid
   reviewer_role staff_role?
   reviewer_name String?
-  feedback      String?       @db.Text
-  submitted_at  DateTime      @default(now()) @db.Timestamptz
-  reviewed_at   DateTime?     @db.Timestamptz
-  created_at    DateTime      @default(now()) @db.Timestamptz
-  updated_at    DateTime      @updatedAt @db.Timestamptz
+  feedback      String?      @db.Text
+  submitted_at  DateTime     @default(now()) @db.Timestamptz
+  reviewed_at   DateTime?    @db.Timestamptz
+  created_at    DateTime     @default(now()) @db.Timestamptz
+  updated_at    DateTime     @updatedAt @db.Timestamptz
 
-  trainee  trainee @relation(fields: [trainee_id], references: [id], onDelete: Restrict)
-  reviewer admin?  @relation("LeaveReviewer", fields: [reviewer_id], references: [id], onDelete: Restrict)
+  trainee  trainee        @relation(fields: [trainee_id], references: [id], onDelete: Restrict)
+  reviewer admin?         @relation("LeaveReviewer", fields: [reviewer_id], references: [id], onDelete: Restrict)
+  reviews  leave_review[]
 
   @@index([trainee_id, submitted_at])
   @@index([status, submitted_at])
+}
+
+// Append-only history: a Mentor approval and a later Manager rejection both
+// survive. One review per role keeps duplicate/concurrent decisions out.
+model leave_review {
+  id               String       @id @default(uuid()) @db.Uuid
+  leave_request_id String       @db.Uuid
+  reviewer_id      String       @db.Uuid
+  reviewer_role    staff_role
+  reviewer_name    String
+  decision         leave_status
+  feedback         String?      @db.Text
+  reviewed_at      DateTime     @default(now()) @db.Timestamptz
+  created_at       DateTime     @default(now()) @db.Timestamptz
+
+  leave_request leave_request @relation(fields: [leave_request_id], references: [id], onDelete: Cascade)
+  reviewer      admin         @relation("LeaveReviewHistory", fields: [reviewer_id], references: [id], onDelete: Restrict)
+
+  @@unique([leave_request_id, reviewer_role])
+  @@index([leave_request_id, reviewed_at])
 }
 
 model day_completion {

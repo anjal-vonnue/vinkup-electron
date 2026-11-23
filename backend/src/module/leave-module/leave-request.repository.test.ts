@@ -6,6 +6,10 @@ const tx = vi.hoisted(() => ({
     updateMany: vi.fn(),
     findUniqueOrThrow: vi.fn(),
   },
+  leave_review: {
+    findUnique: vi.fn(),
+    create: vi.fn(),
+  },
 }));
 
 const prisma = vi.hoisted(() => ({
@@ -45,6 +49,7 @@ const row = {
   feedback: null,
   submitted_at: submittedAt,
   reviewed_at: null,
+  reviews: [],
   created_at: submittedAt,
   updated_at: submittedAt,
   trainee: {
@@ -146,6 +151,17 @@ describe('LeaveRequestRepository.decide', () => {
         feedback: 'Please choose another date.',
       })
     );
+    expect(tx.leave_review.create).toHaveBeenCalledWith({
+      data: {
+        leave_request_id: REQUEST_ID,
+        reviewer_id: MENTOR_ID,
+        reviewer_role: 'MENTOR',
+        reviewer_name: 'Test Mentor',
+        decision: 'REJECTED',
+        feedback: 'Please choose another date.',
+        reviewed_at: expect.any(Date) as Date,
+      },
+    });
   });
 
   it('records a manager decision with the MANAGER role and a review timestamp', async () => {
@@ -188,6 +204,17 @@ describe('LeaveRequestRepository.decide', () => {
       })
     );
     expect(updateCall.data.reviewed_at).toBeInstanceOf(Date);
+    expect(tx.leave_review.create).toHaveBeenCalledWith({
+      data: {
+        leave_request_id: REQUEST_ID,
+        reviewer_id: manager.id,
+        reviewer_role: 'MANAGER',
+        reviewer_name: manager.name,
+        decision: 'APPROVED',
+        feedback: null,
+        reviewed_at: expect.any(Date) as Date,
+      },
+    });
   });
 
   it('does not write when the current status is final', async () => {
@@ -217,6 +244,7 @@ describe('LeaveRequestRepository.decide', () => {
       })
     ).resolves.toEqual({ ok: false, reason: 'already-reviewed' });
     expect(tx.leave_request.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(tx.leave_review.create).not.toHaveBeenCalled();
   });
 
   it('does not expose a request the reviewer cannot access', async () => {

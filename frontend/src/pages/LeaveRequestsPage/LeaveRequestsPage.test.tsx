@@ -28,6 +28,17 @@ const existing: LeaveRequest = {
   reviewerRole: 'MENTOR',
   feedback: 'Please request earlier next time.',
   reviewedAt: '2026-11-21T12:00:00.000Z',
+  reviews: [
+    {
+      id: 'review-1',
+      reviewerId: 'mentor-1',
+      reviewerName: 'Test Mentor',
+      reviewerRole: 'MENTOR',
+      decision: 'REJECTED',
+      feedback: 'Please request earlier next time.',
+      reviewedAt: '2026-11-21T12:00:00.000Z',
+    },
+  ],
   createdAt: submittedAt,
   updatedAt: '2026-11-21T12:00:00.000Z',
 };
@@ -43,6 +54,7 @@ const created: LeaveRequest = {
   reviewerRole: null,
   feedback: null,
   reviewedAt: null,
+  reviews: [],
 };
 
 describe('LeaveRequestsPage', () => {
