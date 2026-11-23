@@ -95,6 +95,26 @@ function ResourcesIcon() {
   );
 }
 
+function CheckpointIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="2.5" width="12" height="13" rx="2" />
+      <path d="M6.5 6.5h5M6.5 9.5h5M6.5 12.5h3" />
+      <path d="m12.5 2.5 1.5-1.5M5.5 2.5 4 1" />
+    </svg>
+  );
+}
+
 function LeaveIcon() {
   return (
     <svg
@@ -272,6 +292,18 @@ export default function Header({ leading, status }: HeaderProps) {
           >
             <JournalIcon />
             <NavLabel text="Journal" />
+          </NavLink>
+          <NavLink
+            to="/checkpoints"
+            end
+            className={({ isActive }) =>
+              `${styles.link} ${isActive ? styles.active : ''} ${
+                location.pathname.startsWith('/checkpoints') ? styles.active : ''
+              }`
+            }
+          >
+            <CheckpointIcon />
+            <NavLabel text="Checkpoints" />
           </NavLink>
           <NavLink
             to="/leave-requests"
