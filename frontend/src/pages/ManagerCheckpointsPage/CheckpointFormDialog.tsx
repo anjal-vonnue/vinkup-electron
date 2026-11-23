@@ -86,6 +86,8 @@ function questionTypeLabel(type: string): string {
       return 'SQL';
     case 'FILE':
       return 'File upload';
+    case 'PRACTICAL':
+      return 'Practical task';
     default:
       return 'Text';
   }
@@ -530,8 +532,11 @@ export default function CheckpointFormDialog({
                 />
                 <p className={styles.helpText}>
                   Supported metadata: <code>Type</code>, <code>Marks</code>, <code>Language</code>,{' '}
-                  <code>Choices</code>, <code>Correct</code>. Write them as plain lines, a bracketed
-                  line, or an HTML comment under the heading.
+                  <code>Choices</code>, <code>Correct</code>. For practical tasks also{' '}
+                  <code>Runtime</code> (node, browser or sql), <code>Run</code> and{' '}
+                  <code>Setup-sql</code>. Add starter files as fenced blocks tagged{' '}
+                  <code>file=path</code>, and setup SQL with <code>setup</code>. Write metadata as
+                  plain lines, a bracketed line, or an HTML comment under the heading.
                 </p>
               </section>
 
@@ -643,6 +648,15 @@ export default function CheckpointFormDialog({
                           </div>
                           <h5>{question.title}</h5>
                           <MarkdownRenderer markdown={question.promptMarkdown} />
+                          {question.type === 'PRACTICAL' && (
+                            <p className={styles.muted}>
+                              Runtime: {question.runtime ?? 'node'}
+                              {question.runCommand ? ` · Run: ${question.runCommand}` : ''}
+                              {question.starterFiles
+                                ? ` · ${question.starterFiles.length} starter file(s)`
+                                : ''}
+                            </p>
+                          )}
                           {question.options && (
                             <ul className={styles.options}>
                               {question.options.map((option, index) => (
