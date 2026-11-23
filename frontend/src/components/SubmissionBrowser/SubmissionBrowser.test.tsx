@@ -34,6 +34,10 @@ describe('SubmissionBrowser', () => {
       'aria-current',
       'true'
     );
+    expect(screen.getByRole('tab', { name: /INSTRUCTIONS\.md/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
     expect(screen.getByRole('heading', { name: 'Task instructions' })).toBeInTheDocument();
   });
 
@@ -42,6 +46,26 @@ describe('SubmissionBrowser', () => {
     renderBrowser();
 
     await user.click(screen.getByRole('treeitem', { name: /index\.ts/ }));
+
+    expect(await screen.findByLabelText('src/index.ts code viewer')).toHaveTextContent(
+      'export const greeting'
+    );
+  });
+
+  it('opens multiple files in tabs and switches content when a tab is selected', async () => {
+    const user = userEvent.setup();
+    renderBrowser();
+
+    await user.click(screen.getByRole('treeitem', { name: /index\.ts/ }));
+    await screen.findByLabelText('src/index.ts code viewer');
+    await user.click(screen.getByRole('treeitem', { name: /format\.ts/ }));
+
+    expect(await screen.findByLabelText('src/utils/format.ts code viewer')).toHaveTextContent(
+      'export function format'
+    );
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
+
+    await user.click(screen.getByRole('tab', { name: /index\.ts/ }));
 
     expect(await screen.findByLabelText('src/index.ts code viewer')).toHaveTextContent(
       'export const greeting'
@@ -65,6 +89,52 @@ describe('SubmissionBrowser', () => {
     renderBrowser(' \n ');
 
     expect(screen.getByText('No instructions for this task.')).toBeInTheDocument();
+  });
+
+  it('activates the right neighbour when the active file tab is closed', async () => {
+    const user = userEvent.setup();
+    renderBrowser();
+
+    await user.click(screen.getByRole('treeitem', { name: /index\.ts/ }));
+    await user.click(screen.getByRole('treeitem', { name: /format\.ts/ }));
+    await screen.findByLabelText('src/utils/format.ts code viewer');
+    await user.click(screen.getByRole('tab', { name: /index\.ts/ }));
+    await user.click(screen.getByRole('button', { name: 'Close index.ts' }));
+
+    expect(await screen.findByLabelText('src/utils/format.ts code viewer')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when all tabs are closed', async () => {
+    const user = userEvent.setup();
+    renderBrowser();
+
+    await user.click(screen.getByRole('button', { name: 'Tab options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Close all tabs' }));
+
+    expect(screen.getByText('Select a file to view')).toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+  });
+
+  it('opens a real root INSTRUCTIONS.md separately from the task instructions tab', async () => {
+    const user = userEvent.setup();
+    const filesWithInstructionsName: TaskFile[] = [
+      ...files,
+      { path: 'INSTRUCTIONS.md', content: '# Submitted file, not task instructions' },
+    ];
+    render(
+      <SubmissionBrowser
+        files={filesWithInstructionsName}
+        instructionsMarkdown="# Task instructions"
+        scope="trainee-1/task-1"
+      />
+    );
+
+    await user.click(screen.getByRole('treeitem', { name: /^INSTRUCTIONS\.md$/ }));
+
+    expect(screen.getAllByRole('tab', { name: /INSTRUCTIONS\.md/ })).toHaveLength(2);
+    expect(await screen.findByLabelText('INSTRUCTIONS.md code viewer')).toHaveTextContent(
+      'Submitted file, not task instructions'
+    );
   });
 
   it('collapses and expands folders', () => {

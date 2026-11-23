@@ -61,11 +61,26 @@
 }
 
 .content {
+  display: flex;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--color-bg-base);
   color: var(--color-text-primary);
+}
+
+.tabBar {
+  min-width: 0;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.contentBody {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
 }
 
 .markdown {

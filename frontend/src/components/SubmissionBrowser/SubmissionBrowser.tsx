@@ -2,12 +2,15 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
 import type { TaskFile } from '@itp/types';
 import { buildFileTree, type TreeNode } from '../../lib/buildFileTree';
+import EditorTabs from '../EditorTabs';
 import FileTree from '../FileTree';
 import MarkdownRenderer from '../MarkdownRenderer';
 import styles from './SubmissionBrowser.module.css';
+import { closeAllTabs, closeTab, initialTabs, INSTRUCTIONS_TAB, openTab } from './submissionTabs';
 
 // Monaco is heavy: only load it when the mentor opens a code file.
 const ReadOnlyCodeViewer = lazy(() => import('../ReadOnlyCodeViewer'));
+const NO_DIRTY_PATHS: ReadonlySet<string> = new Set();
 
 type SubmissionBrowserProps = {
   files: TaskFile[];
@@ -36,9 +39,12 @@ export default function SubmissionBrowser({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(collectFolderPaths(nodes))
   );
-  // null means INSTRUCTIONS.md is selected.
-  const [activePath, setActivePath] = useState<string | null>(null);
-  const activeFile = files.find((file) => file.path === activePath);
+  const [tabs, setTabs] = useState(initialTabs);
+  const activeFile =
+    tabs.activePath && tabs.activePath !== INSTRUCTIONS_TAB
+      ? files.find((file) => file.path === tabs.activePath)
+      : undefined;
+  const isInstructionsActive = tabs.activePath === INSTRUCTIONS_TAB;
 
   const toggleFolder = (path: string) =>
     setExpanded((prev) => {
@@ -54,33 +60,49 @@ export default function SubmissionBrowser({
         <div className={styles.sidebar} role="group" aria-label="Submission files">
           <button
             type="button"
-            className={`${styles.instructions} ${activePath === null ? styles.active : ''}`}
-            aria-current={activePath === null ? 'true' : undefined}
-            onClick={() => setActivePath(null)}
+            className={`${styles.instructions} ${isInstructionsActive ? styles.active : ''}`}
+            aria-current={isInstructionsActive ? 'true' : undefined}
+            onClick={() => setTabs((state) => openTab(state, INSTRUCTIONS_TAB))}
           >
             <FileText aria-hidden="true" />
             INSTRUCTIONS.md
           </button>
           <FileTree
             nodes={nodes}
-            activePath={activePath}
+            activePath={tabs.activePath === INSTRUCTIONS_TAB ? null : tabs.activePath}
             expandedFolders={expanded}
-            onOpenFile={setActivePath}
+            onOpenFile={(path) => setTabs((state) => openTab(state, path))}
             onToggleFolder={toggleFolder}
           />
         </div>
-        <section className={styles.content} aria-label={activeFile?.path ?? 'Instructions'}>
-          {activeFile ? (
-            <Suspense fallback={<p className={styles.status}>Loading code…</p>}>
-              <ReadOnlyCodeViewer files={[activeFile]} scope={scope} />
-            </Suspense>
-          ) : instructionsMarkdown.trim() ? (
-            <div className={styles.markdown}>
-              <MarkdownRenderer markdown={instructionsMarkdown} />
-            </div>
-          ) : (
-            <p className={styles.status}>No instructions for this task.</p>
-          )}
+        <section className={styles.content} aria-label={activeFile?.path ?? 'Submission content'}>
+          <div className={styles.tabBar}>
+            <EditorTabs
+              openPaths={tabs.openPaths}
+              activePath={tabs.activePath}
+              onActivate={(path) => setTabs((state) => openTab(state, path))}
+              onClose={(path) => setTabs((state) => closeTab(state, path))}
+              onCloseAll={() => setTabs(closeAllTabs())}
+              dirtyPaths={NO_DIRTY_PATHS}
+            />
+          </div>
+          <div className={styles.contentBody}>
+            {isInstructionsActive ? (
+              instructionsMarkdown.trim() ? (
+                <div className={styles.markdown}>
+                  <MarkdownRenderer markdown={instructionsMarkdown} />
+                </div>
+              ) : (
+                <p className={styles.status}>No instructions for this task.</p>
+              )
+            ) : activeFile ? (
+              <Suspense fallback={<p className={styles.status}>Loading code…</p>}>
+                <ReadOnlyCodeViewer files={[activeFile]} scope={scope} hideTabs />
+              </Suspense>
+            ) : (
+              <p className={styles.status}>Select a file to view</p>
+            )}
+          </div>
         </section>
       </div>
     </div>
