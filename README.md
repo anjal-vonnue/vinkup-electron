@@ -34,6 +34,10 @@ their code and journal, and add new trainees.
   per-trainee detail with read-only code, journal, flags and a printable progress report.
 - **Manager console** (`/manager`): create, edit, activate and deactivate mentors, managers and
   trainees; assign, reassign and unassign trainees. Reassignment takes effect immediately.
+- **Leave requests:** trainees submit a subject and reason and see only their own history; mentors
+  review requests from assigned trainees and managers review all requests through one shared approval
+  workflow. Decisions are recorded once and cannot be changed. See
+  [roles and assignments](docs/roles-and-assignments.md#7-leave-request-workflow).
 - **Three roles:** trainees, mentors and managers sign in the same way; each role only reaches its
   own pages and endpoints. See [roles and assignments](docs/roles-and-assignments.md).
 

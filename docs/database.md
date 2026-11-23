@@ -1,6 +1,6 @@
 # Vinkup database
 
-The PostgreSQL database behind the Vinkup API: 15 tables in four groups. **Curriculum tables** (`course`, `curriculum_day`, `learning_objective`, `self_check_item`, `task`) are the same for every trainee and are loaded by the seed script. **Trainee tables** hold each trainee's work, progress and activity, and are written by the API. **Accounts:** `trainee` (also a trainee table) and `admin` (mentors and managers, added in v0.2.0). **Desktop auth:** `desktop_auth_transaction` (short-lived sign-in attempts) and `desktop_session` (rotating refresh sessions). The source of truth is `backend/prisma/schema.prisma`; update this document in the same PR as any schema change.
+The PostgreSQL database behind the Vinkup API: 16 tables in four groups. **Curriculum tables** (`course`, `curriculum_day`, `learning_objective`, `self_check_item`, `task`) are the same for every trainee and are loaded by the seed script. **Trainee tables** hold each trainee's work, progress and activity, and are written by the API (`leave_request` records submitted leave and its final decision). **Accounts:** `trainee` (also a trainee table) and `admin` (mentors and managers, added in v0.2.0). **Desktop auth:** `desktop_auth_transaction` (short-lived sign-in attempts) and `desktop_session` (rotating refresh sessions). The source of truth is `backend/prisma/schema.prisma`; update this document in the same PR as any schema change.
 
 ## 1. Entity relationship diagram
 
@@ -10,8 +10,9 @@ Every table in the database and how they relate. A crow's foot marks the many si
 
 _Figure 1: Entity relationship diagram of the training platform database._
 
-The diagram predates the desktop auth tables. `desktop_auth_transaction` and `desktop_session` are
-standalone (they store user snapshots rather than foreign keys) and are described in §2.
+The diagram predates the desktop auth and `leave_request` tables. `desktop_auth_transaction` and
+`desktop_session` are standalone (they store user snapshots rather than foreign keys). `leave_request`
+links a `trainee` to its optional reviewer in `admin` and is described in §2.
 
 ## 2. Data dictionary
 
@@ -217,6 +218,40 @@ _Time a trainee spent on the platform each day._
 
 **Constraints:** UNIQUE (trainee_id, date) — one row per trainee per day.
 
+### leave_request
+
+_A Trainee's leave request and its final decision. A Trainee submits the subject and reason; a Mentor
+or Manager records the decision once. Rows are kept as history: reviewed requests are never deleted or
+overwritten. Full permissions are in [roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow)._
+
+| Column        | Type         | Key | Null? | Description                                                                 |
+| :------------ | :----------- | :-- | :---- | :-------------------------------------------------------------------------- |
+| id            | UUID         | PK  | No    | Unique identifier of the request (generated automatically).                 |
+| trainee_id    | UUID         | FK  | No    | References trainee(id) — the requester. `ON DELETE RESTRICT` keeps history. |
+| subject       | VARCHAR(200) | -   | No    | Short subject, 1–200 chars after trimming.                                  |
+| reason        | TEXT         | -   | No    | Why leave is needed, 1–2,000 chars after trimming.                          |
+| status        | leave_status | -   | No    | `PENDING`, `APPROVED` or `REJECTED`. Default: PENDING.                      |
+| reviewer_id   | UUID         | FK  | Yes   | Admin row that decided; null while pending. `ON DELETE RESTRICT`.           |
+| reviewer_role | staff_role   | -   | Yes   | `MENTOR` or `MANAGER` at decision time; null while pending.                 |
+| reviewer_name | TEXT         | -   | Yes   | Snapshot of the reviewer's name at decision time; null while pending.       |
+| feedback      | TEXT         | -   | Yes   | Optional approval note; required (non-blank) when status is REJECTED.       |
+| submitted_at  | TIMESTAMPTZ  | -   | No    | When the Trainee submitted the request. Default: now.                       |
+| reviewed_at   | TIMESTAMPTZ  | -   | Yes   | When the decision was recorded; null while pending.                         |
+| created_at    | TIMESTAMPTZ  | -   | No    | When the row was created. Default: now.                                     |
+| updated_at    | TIMESTAMPTZ  | -   | No    | When the row was last edited (automatic).                                   |
+
+**Constraints:** INDEX (trainee_id, submitted_at) for an individual Trainee's history, INDEX
+(status, submitted_at) for reviewer lists. `ON DELETE RESTRICT` on both foreign keys preserves
+historical requests when an account is removed.
+
+**Decision integrity (in migration `20261121120000_add_leave_request`):** CHECK constraints require
+non-blank `subject` and `reason`, forbid any reviewer/feedback/reviewed_at fields while `PENDING`,
+require `reviewer_id`, `reviewer_role` and `reviewed_at` once decided, and require non-blank feedback
+for `REJECTED`. A `BEFORE UPDATE OF status` trigger raises an error if a request that is no longer
+`PENDING` changes status, so a decision is final even outside the API. The API additionally uses a
+conditional `UPDATE ... WHERE status = 'PENDING'` inside a transaction so concurrent Mentor/Manager
+reviews cannot both succeed; the loser gets `409 ALREADY_REVIEWED`.
+
 ### desktop_auth_transaction
 
 _A short-lived Electron sign-in attempt (`docs/authentication.md`). Created by the main process, claimed by the Google callback, and consumed when the one-time code is exchanged. Expired rows are rejected and can be pruned._
@@ -267,6 +302,7 @@ _An Electron refresh session. Only the SHA-256 hash of the refresh token is stor
 | Enum            | Allowed values                                          |
 | :-------------- | :------------------------------------------------------ |
 | staff_role      | MENTOR, MANAGER                                         |
+| leave_status    | PENDING, APPROVED, REJECTED                             |
 | task_runtime    | browser, node, sql                                      |
 | task_status     | not_started, in_progress, completed                     |
 | flag_event_type | FULLSCREEN_EXIT, TAB_SWITCH, PASTE_BLOCKED, WINDOW_BLUR |
