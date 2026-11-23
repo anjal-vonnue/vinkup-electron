@@ -10,7 +10,16 @@
 export type CheckpointStatus = 'DRAFT' | 'SCHEDULED' | 'CANCELLED';
 
 export type CheckpointQuestionType =
-  'TEXT' | 'LONG_TEXT' | 'CODE' | 'SQL' | 'MULTIPLE_CHOICE' | 'FILE';
+  'TEXT' | 'LONG_TEXT' | 'CODE' | 'SQL' | 'MULTIPLE_CHOICE' | 'FILE' | 'PRACTICAL';
+
+/** How a practical question executes the trainee's workspace. Mirrors TaskRuntime. */
+export type CheckpointQuestionRuntime = 'browser' | 'node' | 'sql';
+
+/** One file in a practical question's workspace (starter or submitted). */
+export type CheckpointWorkspaceFile = {
+  path: string;
+  content: string;
+};
 
 export type CheckpointResultVisibility = 'IMMEDIATE' | 'AFTER_APPROVAL';
 
@@ -37,6 +46,14 @@ export type ParsedCheckpointQuestion = {
   options: string[] | null;
   correctOption: string | null;
   codeLanguage: string | null;
+  /** Practical questions only: how the workspace is executed. */
+  runtime: CheckpointQuestionRuntime | null;
+  /** node only: the command Run types into the terminal, e.g. "npm test". */
+  runCommand: string | null;
+  /** sql only: schema and seed SQL loaded into the workspace database. */
+  setupSql: string | null;
+  /** Practical questions only: files written into the trainee's workspace. */
+  starterFiles: CheckpointWorkspaceFile[] | null;
 };
 
 export type CheckpointMarkdownPreview = {
@@ -156,6 +173,8 @@ export type ManagerCheckpointAnswer = {
   fileName: string | null;
   fileMimeType: string | null;
   fileSize: number | null;
+  /** Practical questions only: the submitted workspace files. */
+  files: CheckpointWorkspaceFile[] | null;
   awardedMarks: number | null;
   feedback: string | null;
   savedAt: string | null;
@@ -224,6 +243,8 @@ export type TraineeCheckpointAnswer = {
   fileName: string | null;
   fileMimeType: string | null;
   fileSize: number | null;
+  /** Practical questions only: the last saved workspace files. */
+  files: CheckpointWorkspaceFile[] | null;
   clientRevision: number;
   savedAt: string | null;
 };
@@ -263,6 +284,10 @@ export type SaveCheckpointAnswerRequest = {
   selectedOption?: string | null;
   file?: CheckpointFileInput | null;
   clearFile?: boolean;
+  /** Practical questions only: replaces the stored workspace files. */
+  files?: CheckpointWorkspaceFile[] | null;
+  /** Practical questions only: removes every stored workspace file. */
+  clearFiles?: boolean;
 };
 
 export type SaveCheckpointAnswerResponse = {
@@ -302,6 +327,8 @@ export type CheckpointResultAnswer = {
   answerText: string | null;
   selectedOption: string | null;
   fileName: string | null;
+  /** Practical questions only: the submitted workspace files. */
+  files: CheckpointWorkspaceFile[] | null;
   awardedMarks: number | null;
   feedback: string | null;
 };
