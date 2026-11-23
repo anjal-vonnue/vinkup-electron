@@ -11,6 +11,7 @@ type ReadOnlyCodeViewerProps = {
   files: TaskFile[];
   /** Keeps this viewer's editor models apart from the trainee workspace's, e.g. "traineeId/taskId". */
   scope: string;
+  hideTabs?: boolean;
 };
 
 /**
@@ -18,7 +19,11 @@ type ReadOnlyCodeViewerProps = {
  * paste-block or focus-tracking hooks the trainee editor uses (they would log flags).
  * Give it a `key` per task so it starts on the first file again.
  */
-export default function ReadOnlyCodeViewer({ files, scope }: ReadOnlyCodeViewerProps) {
+export default function ReadOnlyCodeViewer({
+  files,
+  scope,
+  hideTabs = false,
+}: ReadOnlyCodeViewerProps) {
   const isDark = usePrefersDark();
   const [activePath, setActivePath] = useState(files[0]?.path ?? null);
 
@@ -31,24 +36,26 @@ export default function ReadOnlyCodeViewer({ files, scope }: ReadOnlyCodeViewerP
 
   return (
     <div className={styles.viewer}>
-      <div className={styles.tabs} role="tablist" aria-label="Files">
-        {files.map((file) => {
-          const isActive = file.path === activeFile.path;
-          return (
-            <button
-              key={file.path}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              className={`${styles.tab} ${isActive ? styles.tabActive : ''}`}
-              onClick={() => setActivePath(file.path)}
-            >
-              <FileTypeBadge path={file.path} />
-              {file.path}
-            </button>
-          );
-        })}
-      </div>
+      {!hideTabs && (
+        <div className={styles.tabs} role="tablist" aria-label="Files">
+          {files.map((file) => {
+            const isActive = file.path === activeFile.path;
+            return (
+              <button
+                key={file.path}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`${styles.tab} ${isActive ? styles.tabActive : ''}`}
+                onClick={() => setActivePath(file.path)}
+              >
+                <FileTypeBadge path={file.path} />
+                {file.path}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {fileType.isText ? (
         <div className={styles.editor}>

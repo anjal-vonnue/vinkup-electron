@@ -6,11 +6,11 @@ import styles from './FileTree.module.css';
 type FileTreeProps = {
   nodes: TreeNode[];
   activePath: string | null;
-  dirtyPaths: ReadonlySet<string>;
+  dirtyPaths?: ReadonlySet<string>;
   expandedFolders: ReadonlySet<string>;
   onOpenFile: (path: string) => void;
   onToggleFolder: (path: string) => void;
-  onDelete: (node: TreeNode) => void;
+  onDelete?: (node: TreeNode) => void;
 };
 
 type FlatRow = { node: TreeNode; depth: number };
@@ -38,7 +38,7 @@ function parentPathOf(path: string): string | null {
 export default function FileTree({
   nodes,
   activePath,
-  dirtyPaths,
+  dirtyPaths = new Set(),
   expandedFolders,
   onOpenFile,
   onToggleFolder,
@@ -125,6 +125,7 @@ export default function FileTree({
       }
       case 'Delete':
       case 'Backspace': {
+        if (!onDelete) break;
         event.preventDefault();
         onDelete(row.node);
         break;
@@ -170,7 +171,7 @@ export default function FileTree({
             setFocusedPath(row.node.path);
             onToggleFolder(row.node.path);
           }}
-          onDelete={() => onDelete(row.node)}
+          onDelete={onDelete ? () => onDelete(row.node) : undefined}
         />
       ))}
     </div>

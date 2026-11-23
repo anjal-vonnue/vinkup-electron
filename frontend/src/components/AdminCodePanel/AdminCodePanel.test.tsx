@@ -45,15 +45,25 @@ function renderPanel(overrides: Partial<Parameters<typeof AdminCodePanel>[0]> = 
 }
 
 describe('AdminCodePanel', () => {
-  it('shows the task, its state and a read-only viewer with every file', async () => {
+  it('shows the task, its state, instructions and the submission file tree', async () => {
     renderPanel();
 
     expect(screen.getByRole('heading', { name: 'Profile page' })).toBeInTheDocument();
     expect(screen.getByText('In progress')).toBeInTheDocument();
     expect(screen.getByText('Saved 02 Oct 2026, 17:42')).toBeInTheDocument();
+    expect(await screen.findByText('Build a profile page.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'INSTRUCTIONS.md' })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /index\.html/ })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /style\.css/ })).toBeInTheDocument();
+  });
+
+  it('shows the selected code file read-only', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(screen.getByRole('treeitem', { name: /index\.html/ }));
+
     expect(await screen.findByLabelText('index.html (read-only)')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /index\.html/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /style\.css/ })).toBeInTheDocument();
     expect(screen.getByText('Read only')).toBeInTheDocument();
   });
 
@@ -61,13 +71,16 @@ describe('AdminCodePanel', () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.click(await screen.findByRole('tab', { name: /style\.css/ }));
+    await user.click(screen.getByRole('treeitem', { name: /style\.css/ }));
 
     expect(screen.getByLabelText('style.css (read-only)')).toBeInTheDocument();
   });
 
   it('offers no way to edit, run, save or submit', async () => {
+    const user = userEvent.setup();
     renderPanel();
+
+    await user.click(screen.getByRole('treeitem', { name: /index\.html/ }));
     await screen.findByLabelText('index.html (read-only)');
 
     expect(

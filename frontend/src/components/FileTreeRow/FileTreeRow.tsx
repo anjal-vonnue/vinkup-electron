@@ -13,7 +13,7 @@ type FileTreeRowProps = {
   tabIndex: number;
   onOpen: () => void;
   onToggle: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 };
 
 function FileTreeRow({
@@ -39,7 +39,7 @@ function FileTreeRow({
 
   function handleDeleteClick(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    onDelete();
+    if (onDelete) onDelete();
   }
 
   return (
@@ -75,14 +75,16 @@ function FileTreeRow({
         </>
       )}
 
-      <button
-        type="button"
-        className={styles.deleteButton}
-        aria-label={`Delete ${node.name}`}
-        onClick={handleDeleteClick}
-      >
-        <Trash2 size={14} aria-hidden="true" />
-      </button>
+      {onDelete && (
+        <button
+          type="button"
+          className={styles.deleteButton}
+          aria-label={`Delete ${node.name}`}
+          onClick={handleDeleteClick}
+        >
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
