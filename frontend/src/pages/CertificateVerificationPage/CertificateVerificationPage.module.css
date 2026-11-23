@@ -7,9 +7,9 @@
 
 .card {
   width: min(760px, 100%);
-  background: var(--surface-1, #fff);
-  color: var(--text-primary, #14162a);
-  border: 1px solid var(--border-subtle, #e5e7eb);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-card);
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 8px 24px rgba(20, 22, 42, 0.06);
@@ -21,7 +21,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--primary, #7c41e4);
+  color: var(--color-accent-text);
 }
 
 .title {
@@ -32,7 +32,7 @@
 
 .description {
   margin: 12px 0 0;
-  color: var(--text-secondary, #5b5d6e);
+  color: var(--color-text-secondary);
   max-width: 62ch;
 }
 
@@ -57,14 +57,14 @@
   min-width: 0;
   padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--surface-0, #fff);
+  border: 1px solid var(--color-border-input);
+  background: var(--color-bg-surface-1);
   color: inherit;
   font: inherit;
 }
 
 .input:focus {
-  outline: 2px solid var(--primary, #7c41e4);
+  outline: 2px solid var(--color-accent-purple);
   outline-offset: 1px;
 }
 
@@ -75,8 +75,8 @@
   padding: 12px 18px;
   border: 0;
   border-radius: 10px;
-  background: var(--primary, #7c41e4);
-  color: #fff;
+  background: var(--color-button-primary-bg);
+  color: var(--color-button-primary-text);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -92,14 +92,14 @@
   padding: 12px 14px;
   border-radius: 10px;
   background: rgba(220, 38, 38, 0.1);
-  color: #b91c1c;
+  color: var(--color-status-error-text);
 }
 
 .result {
   margin-top: 24px;
   padding: 20px;
   border-radius: 14px;
-  border: 1px solid var(--border-subtle, #e5e7eb);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .valid {
@@ -125,7 +125,7 @@
 
 .resultMessage {
   margin: 4px 0 0;
-  color: var(--text-secondary, #5b5d6e);
+  color: var(--color-text-secondary);
 }
 
 .details {
@@ -144,7 +144,7 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-secondary, #5b5d6e);
+  color: var(--color-text-secondary);
 }
 
 .details dd {
