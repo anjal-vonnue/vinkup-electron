@@ -37,15 +37,12 @@ export type SlackOutboxRow = {
 };
 
 export class SlackNotificationRepository {
-  createInTx = async (
-    tx: Prisma.TransactionClient,
-    input: CreateSlackNotificationInput
-  ) => {
+  createInTx = async (tx: Prisma.TransactionClient, input: CreateSlackNotificationInput) => {
     return tx.slack_notification_outbox.create({
       data: {
         event_type: input.eventType,
         channel_id: input.channelId,
-        payload: input.payload as Prisma.InputJsonValue,
+        payload: input.payload,
         dedupe_key: input.dedupeKey,
         max_attempts: input.maxAttempts ?? 5,
         status: slack_notification_status.PENDING,

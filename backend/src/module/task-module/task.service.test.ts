@@ -58,6 +58,8 @@ vi.mock('../../config/env', () => ({
 import { TaskService } from './task.service';
 import { realtimeBroker } from '../realtime-module/realtime.broker';
 
+type SubmitCallback = (tx: unknown, progress: unknown) => Promise<void>;
+
 const traineeId = 'trainee-1';
 const taskId = 'html-day-01-t-1';
 const STARTER = [{ path: 'index.html', content: '<!-- starter -->\n' }];
@@ -326,7 +328,7 @@ describe('TaskService', () => {
         },
       };
       repo.markSubmitted.mockImplementation(
-        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: Function) => {
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
           const progressRow = {
             last_submitted_at: submittedAt,
             submission_count: 2,
@@ -339,22 +341,27 @@ describe('TaskService', () => {
 
       await service.submit(traineeId, taskId);
 
-      expect(slackRepo.createInTx).toHaveBeenCalledWith(
-        tx,
-        expect.objectContaining({
-          eventType: 'task.submission',
-          channelId: 'C0123ABCDEF',
-          dedupeKey: `task_submission:${traineeId}:${taskId}:2`,
-          payload: expect.objectContaining({
-            traineeName: 'Asha',
-            taskTitle: 'Profile page',
-            courseTitle: 'HTML & CSS',
-            dayNumber: 1,
-            submissionCount: 2,
-            reviewStatus: 'pending',
-          }),
-        })
-      );
+      const [passedTx, passedInput] = slackRepo.createInTx.mock.calls[0] as [
+        unknown,
+        {
+          eventType: string;
+          channelId: string;
+          dedupeKey: string;
+          payload: Record<string, unknown>;
+        },
+      ];
+      expect(passedTx).toBe(tx);
+      expect(passedInput.eventType).toBe('task.submission');
+      expect(passedInput.channelId).toBe('C0123ABCDEF');
+      expect(passedInput.dedupeKey).toBe(`task_submission:${traineeId}:${taskId}:2`);
+      expect(passedInput.payload).toMatchObject({
+        traineeName: 'Asha',
+        taskTitle: 'Profile page',
+        courseTitle: 'HTML & CSS',
+        dayNumber: 1,
+        submissionCount: 2,
+        reviewStatus: 'pending',
+      });
     });
 
     it('does not queue Slack notification when mentor has no channel', async () => {
@@ -375,8 +382,12 @@ describe('TaskService', () => {
         },
       };
       repo.markSubmitted.mockImplementation(
-        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: Function) => {
-          const progressRow = { last_submitted_at: submittedAt, submission_count: 1, review_status: 'pending' };
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
           if (onSubmitted) await onSubmitted(tx, progressRow);
           return progressRow;
         }
@@ -404,8 +415,12 @@ describe('TaskService', () => {
         },
       };
       repo.markSubmitted.mockImplementation(
-        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: Function) => {
-          const progressRow = { last_submitted_at: submittedAt, submission_count: 1, review_status: 'pending' };
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
           if (onSubmitted) await onSubmitted(tx, progressRow);
           return progressRow;
         }
@@ -434,8 +449,12 @@ describe('TaskService', () => {
       };
       slackRepo.createInTx.mockRejectedValue(new Error('db write failed'));
       repo.markSubmitted.mockImplementation(
-        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: Function) => {
-          const progressRow = { last_submitted_at: submittedAt, submission_count: 1, review_status: 'pending' };
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
           if (onSubmitted) await onSubmitted(tx, progressRow);
           return progressRow;
         }
@@ -463,14 +482,20 @@ describe('TaskService', () => {
       };
       slackRepo.createInTx.mockRejectedValue({ code: 'P2002' });
       repo.markSubmitted.mockImplementation(
-        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: Function) => {
-          const progressRow = { last_submitted_at: submittedAt, submission_count: 1, review_status: 'pending' };
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
           if (onSubmitted) await onSubmitted(tx, progressRow);
           return progressRow;
         }
       );
 
-      await expect(service.submit(traineeId, taskId)).resolves.toMatchObject({ status: 'completed' });
+      await expect(service.submit(traineeId, taskId)).resolves.toMatchObject({
+        status: 'completed',
+      });
     });
   });
 });

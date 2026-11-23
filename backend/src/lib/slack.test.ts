@@ -45,15 +45,12 @@ describe('postSlackMessage', () => {
 
     const result = await postSlackMessage({ channel: 'C1', text: 'hello', blocks: [] });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://slack.com/api/chat.postMessage',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer xoxb-test',
-        }),
-      })
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://slack.com/api/chat.postMessage');
+    expect(init.method).toBe('POST');
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer xoxb-test');
     expect(result).toEqual({ ok: true, ts: '123.456', channel: 'C1' });
   });
 
@@ -72,7 +69,9 @@ describe('postSlackMessage', () => {
       )
     );
 
-    await expect(postSlackMessage({ channel: 'C1', text: 'hello' })).rejects.toBeInstanceOf(SlackApiError);
+    await expect(postSlackMessage({ channel: 'C1', text: 'hello' })).rejects.toBeInstanceOf(
+      SlackApiError
+    );
     await expect(postSlackMessage({ channel: 'C1', text: 'hello' })).rejects.toMatchObject({
       slackError: 'channel_not_found',
     });

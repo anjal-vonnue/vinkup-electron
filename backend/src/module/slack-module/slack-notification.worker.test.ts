@@ -80,7 +80,11 @@ describe('SlackNotificationWorker', () => {
     vi.clearAllMocks();
     envMock.SLACK_ENABLED = true;
     repoMock.recoverExpiredProcessing.mockResolvedValue(0);
-    slackMock.postSlackMessage.mockResolvedValue({ ok: true, ts: '123.456', channel: 'C0123ABCDEF' });
+    slackMock.postSlackMessage.mockResolvedValue({
+      ok: true,
+      ts: '123.456',
+      channel: 'C0123ABCDEF',
+    });
     worker = new SlackNotificationWorker();
   });
 
@@ -90,7 +94,10 @@ describe('SlackNotificationWorker', () => {
     expect(slackMock.postSlackMessage).toHaveBeenCalledWith(
       expect.objectContaining({ channel: 'C0123ABCDEF' })
     );
-    const sentMessage = slackMock.postSlackMessage.mock.calls[0][0];
+    const sentMessage = slackMock.postSlackMessage.mock.calls[0][0] as {
+      text: string;
+      blocks: unknown[];
+    };
     expect(sentMessage.text).toContain('Asha');
     expect(sentMessage.text).toContain('Profile page');
     expect(JSON.stringify(sentMessage.blocks)).toContain('*Submission:*');
@@ -101,7 +108,11 @@ describe('SlackNotificationWorker', () => {
 
   it('schedules a retry for rate-limited delivery using Retry-After', async () => {
     slackMock.postSlackMessage.mockRejectedValue(
-      new slackMock.SlackApiError('ratelimited', { status: 429, slackError: 'ratelimited', retryAfterSeconds: 30 })
+      new slackMock.SlackApiError('ratelimited', {
+        status: 429,
+        slackError: 'ratelimited',
+        retryAfterSeconds: 30,
+      })
     );
 
     await worker.processRow(row());

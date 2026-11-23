@@ -67,15 +67,16 @@ describe('Slack task notification queueing', () => {
     expect(row!.channel_id).toBe('C0123ABCDEF');
     expect(row!.status).toBe('PENDING');
     expect(row!.event_type).toBe('task.submission');
-    expect(row!.payload).toMatchObject({
+    const payload = row!.payload as Record<string, unknown>;
+    expect(payload).toMatchObject({
       traineeName: trainee.name,
-      taskTitle: expect.any(String),
-      courseTitle: expect.any(String),
       dayNumber: 1,
       submissionCount: 1,
       reviewStatus: 'pending',
       submittedAt: submission.submittedAt,
     });
+    expect(typeof payload.taskTitle).toBe('string');
+    expect(typeof payload.courseTitle).toBe('string');
   });
 
   it('queues a new notification with the correct submission count for resubmission', async () => {
@@ -211,7 +212,9 @@ describe('Slack notification outbox repository', () => {
     expect(retried.last_error).toBe('ratelimited');
 
     await repo.markSent(created.id);
-    const sent = await db.slack_notification_outbox.findUniqueOrThrow({ where: { id: created.id } });
+    const sent = await db.slack_notification_outbox.findUniqueOrThrow({
+      where: { id: created.id },
+    });
     expect(sent.status).toBe('SENT');
     expect(sent.sent_at).not.toBeNull();
     expect(sent.last_error).toBeNull();
