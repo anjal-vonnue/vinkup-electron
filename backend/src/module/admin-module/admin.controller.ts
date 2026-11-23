@@ -5,9 +5,10 @@ import type {
   AdminTaskCode,
   AdminTraineeDetail,
   AdminTraineeSummary,
+  MentorSlackChannelResponse,
 } from '@itp/types';
 import { AdminService } from './admin.service';
-import { analyticsQuerySchema, CreateTraineeBody } from './admin.schema';
+import { analyticsQuerySchema, CreateTraineeBody, SaveSlackChannelBody } from './admin.schema';
 import { AuthenticatedRequest } from '../../types/auth.types';
 import { ValidationError } from '../../errors/AppError';
 
@@ -67,6 +68,49 @@ class AdminController {
       const query = analyticsQuerySchema.safeParse(req.query);
       if (!query.success) throw new ValidationError(query.error.issues);
       res.status(200).json(await adminService.getAnalytics(query.data, mentorId));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getSlackChannel = async (
+    req: Request,
+    res: Response<MentorSlackChannelResponse>,
+    next: NextFunction
+  ) => {
+    try {
+      const mentorId = (req as AuthenticatedRequest).user.id;
+      res.status(200).json(await adminService.getSlackChannel(mentorId));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  saveSlackChannel = async (
+    req: Request,
+    res: Response<MentorSlackChannelResponse>,
+    next: NextFunction
+  ) => {
+    try {
+      const mentorId = (req as AuthenticatedRequest).user.id;
+      const channel = await adminService.saveSlackChannel(
+        mentorId,
+        req.body as SaveSlackChannelBody
+      );
+      res.status(200).json(channel);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deleteSlackChannel = async (
+    req: Request,
+    res: Response<MentorSlackChannelResponse>,
+    next: NextFunction
+  ) => {
+    try {
+      const mentorId = (req as AuthenticatedRequest).user.id;
+      res.status(200).json(await adminService.deleteSlackChannel(mentorId));
     } catch (error) {
       next(error);
     }
