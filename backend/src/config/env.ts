@@ -25,6 +25,15 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:5173'),
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().default('1h'),
+  /**
+   * Ed25519 private key used to sign issued certificates. Accepts a PKCS8 PEM
+   * string or a base64-encoded PKCS8 PEM. Required when certificate issuance is
+   * enabled; issuance fails safely when missing.
+   */
+  CERTIFICATE_SIGNING_PRIVATE_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).optional()
+  ),
   NODE_ENV: z.string().min(1).default('development'),
 });
 

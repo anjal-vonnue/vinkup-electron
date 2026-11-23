@@ -400,12 +400,14 @@ Desktop error codes: `DESKTOP_AUTH_INVALID_STATE`, `DESKTOP_AUTH_INVALID_PKCE`, 
 
 ### GET /api/courses/:courseId/certificate
 
-- **Auth:** required.
+- **Auth:** required trainee.
 - **Path params:** `courseId`: same rules as above.
 - **Business rules** (`certificate.service.ts`):
   1. Unknown course → `404 "Course not found."`.
-  2. A course is finished when the trainee has a `day_completion` row for **every** day of it. Not finished → `403 FORBIDDEN` `"Finish every day of this course to get its certificate."`.
-  3. `completedAt` = the latest `completed_at` among the course's days. `certificateId` = `"VK-"` + the first 10 hex characters, upper-cased, of SHA-256 of `"<traineeId>:<courseId>"`: stable for the same trainee and course, and different for everyone else.
+  2. A course is certificate-eligible when the trainee has completed every curriculum day **and** every required (non-stretch) task has been approved. Not eligible → `403 FORBIDDEN` `"Complete every day and get all required tasks approved to earn this certificate."`.
+  3. Eligible certificates are persisted in the `certificate` table. Issuance is idempotent for the same trainee/course; concurrent requests cannot create duplicates.
+  4. `certificateId` is a cryptographically random public ID (`VK-` + 20 uppercase hex chars).
+  5. Protected fields (`certificateId`, `traineeName`, `courseTitle`, `completedAt`, `issuedAt`) are signed with the backend Ed25519 private key.
 - **Response 200** (`CourseCertificate`):
 
 ```json
@@ -415,11 +417,55 @@ Desktop error codes: `DESKTOP_AUTH_INVALID_STATE`, `DESKTOP_AUTH_INVALID_PKCE`, 
   "traineeName": "Asha K",
   "daysCompleted": 5,
   "completedAt": "2026-10-01T12:40:11.204Z",
-  "certificateId": "VK-3F9A2C71B0"
+  "issuedAt": "2026-10-02T09:00:00.000Z",
+  "certificateId": "VK-3F9A2C71B0ABCDEF1234",
+  "status": "ACTIVE",
+  "signature": "<base64-ed25519-signature>",
+  "signatureAlgorithm": "Ed25519",
+  "signatureVersion": "v1"
 }
 ```
 
-- **Errors:** 400; 401; 403 `FORBIDDEN` (not finished, or a mentor); 404 `"Course not found."` / `"Trainee not found."`.
+- **Errors:** 400; 401; 403 `FORBIDDEN` (not eligible, or non-trainee role); 404 `"Course not found."` / `"Trainee not found."`.
+
+### GET /api/certificates/verify/:certificateId
+
+- **Auth:** none (public endpoint).
+- **Path params:** `certificateId` must match `VK-[A-F0-9]{20}`.
+- **Rate limiting:** basic per-IP rate limit.
+- **Business rules:**
+  1. Unknown certificate → `200` with `valid:false`, `signatureValid:false`, `status:"UNKNOWN"`.
+  2. Signature mismatch over protected DB fields → `200` with `valid:false`, `signatureValid:false`.
+  3. Revoked certificate → `200` with `valid:false`, `signatureValid:true`, `status:"REVOKED"`.
+  4. Active certificate with valid signature → `200` with `valid:true`, `signatureValid:true`, `status:"ACTIVE"`.
+- **Response 200** (`CertificateVerificationResponse`):
+
+```json
+{
+  "valid": true,
+  "signatureValid": true,
+  "status": "ACTIVE",
+  "certificateId": "VK-3F9A2C71B0ABCDEF1234",
+  "traineeName": "Asha K",
+  "courseTitle": "HTML",
+  "completedAt": "2026-10-01T12:40:11.204Z",
+  "issuedAt": "2026-10-02T09:00:00.000Z",
+  "message": "Certificate is valid."
+}
+```
+
+- **Errors:** 400 `VALIDATION_FAILED` (bad certificate ID format); 429 `RATE_LIMITED`.
+
+### POST /api/certificates/:certificateId/revoke
+
+- **Auth:** required mentor or manager.
+- **Path params:** `certificateId` must match `VK-[A-F0-9]{20}`.
+- **Business rules:**
+  1. Unknown certificate → `404 "Certificate not found."`.
+  2. Active certificate → marked `REVOKED`, `revoked_at` set, original data and signature retained.
+  3. Already revoked certificate → returns the revoked certificate (idempotent).
+- **Response 200:** `CourseCertificate` with `status:"REVOKED"`.
+- **Errors:** 400; 401; 403; 404.
 
 ---
 

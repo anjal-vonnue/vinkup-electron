@@ -25,7 +25,8 @@ export type ErrorCode =
   | 'DESKTOP_AUTH_CANCELLED'
   | 'DESKTOP_AUTH_FAILED'
   | 'DESKTOP_SESSION_EXPIRED'
-  | 'DESKTOP_SESSION_REVOKED';
+  | 'DESKTOP_SESSION_REVOKED'
+  | 'RATE_LIMITED';
 
 /** Every error response from the API looks exactly like this. */
 export type ApiErrorResponse = {

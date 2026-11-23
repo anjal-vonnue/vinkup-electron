@@ -23,6 +23,10 @@ import { traineeLeaveRequestRoutes } from './module/leave-module/leave-request.r
 import { adminRoutes } from './module/admin-module/admin.routes';
 import { managerRoutes } from './module/manager-module/manager.routes';
 import realtimeRoutes from './module/realtime-module/realtime.routes';
+import {
+  certificatePublicRoutes,
+  certificateStaffRoutes,
+} from './module/certificate-module/certificate.routes';
 const app: Express = express();
 
 app.use(
@@ -44,6 +48,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/auth/desktop', desktopAuthRoutes);
 app.use('/api/activity', flagRoutes);
 app.use('/api/events', realtimeRoutes);
+app.use('/api/certificates', certificatePublicRoutes);
+app.use('/api/certificates', certificateStaffRoutes);
 
 app.use('/api/profile', requireTrainee, profileRoutes);
 app.use('/api/activity', requireTrainee, activityRoutes);

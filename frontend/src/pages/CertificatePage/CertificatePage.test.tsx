@@ -23,7 +23,12 @@ const certificate: CourseCertificate = {
   traineeName: 'Asha Rao',
   daysCompleted: 15,
   completedAt: '2026-10-06T09:00:00.000Z',
-  certificateId: 'VK-3F9A2C71B0',
+  issuedAt: '2026-10-07T09:00:00.000Z',
+  certificateId: 'VK-3F9A2C71B0ABCDEF1234',
+  status: 'ACTIVE',
+  signature: 'c2lnbmF0dXJl',
+  signatureAlgorithm: 'Ed25519',
+  signatureVersion: 'v1',
 };
 function renderPage(courseId = 'css') {
   return render(
@@ -88,7 +93,8 @@ describe('CertificatePage', () => {
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
     expect(screen.getByText('has completed the CSS course')).toBeInTheDocument();
     expect(screen.getByText('15 days · completed 6 October 2026')).toBeInTheDocument();
-    expect(screen.getByText('Certificate ID VK-3F9A2C71B0')).toBeInTheDocument();
+    expect(screen.getByText('Issued 7 October 2026')).toBeInTheDocument();
+    expect(screen.getByText('Certificate ID VK-3F9A2C71B0ABCDEF1234')).toBeInTheDocument();
     expect(screen.getByText('Vinkup · In-House Trainee Training Platform')).toBeInTheDocument();
   });
 

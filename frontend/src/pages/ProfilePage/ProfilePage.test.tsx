@@ -109,7 +109,12 @@ describe('ProfilePage', () => {
       traineeName: 'Rahul Sharma',
       daysCompleted: 5,
       completedAt: '2026-10-05T10:00:00.000Z',
-      certificateId: 'VK-HTML000000',
+      issuedAt: '2026-10-05T10:05:00.000Z',
+      certificateId: 'VK-HTML0000000000000000',
+      status: 'ACTIVE',
+      signature: 'sig-html',
+      signatureAlgorithm: 'Ed25519',
+      signatureVersion: 'v1',
     },
     {
       courseId: 'css',
@@ -117,7 +122,12 @@ describe('ProfilePage', () => {
       traineeName: 'Rahul Sharma',
       daysCompleted: 5,
       completedAt: '2026-10-06T09:00:00.000Z',
-      certificateId: 'VK-CSS0000000',
+      issuedAt: '2026-10-06T09:05:00.000Z',
+      certificateId: 'VK-CSS00000000000000000',
+      status: 'ACTIVE',
+      signature: 'sig-css',
+      signatureAlgorithm: 'Ed25519',
+      signatureVersion: 'v1',
     },
   ];
 

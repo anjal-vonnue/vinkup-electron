@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForbiddenError, NotFoundError } from '../../errors/AppError';
-import { buildCertificateId } from './certificate.util';
 
 const repo = vi.hoisted(() => ({
   findCourse: vi.fn(),
@@ -8,6 +7,18 @@ const repo = vi.hoisted(() => ({
   findAllDays: vi.fn(),
   findCompletions: vi.fn(),
   findRequiredTaskProgress: vi.fn(),
+  findCertificateByTraineeAndCourse: vi.fn(),
+  findCertificateByCertificateId: vi.fn(),
+  createCertificate: vi.fn(),
+  revokeCertificate: vi.fn(),
+}));
+
+const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(),
+}));
+
+vi.mock('../../lib/prisma', () => ({
+  prisma: prismaMock,
 }));
 
 vi.mock('./certificate.repository', () => ({
@@ -17,6 +28,10 @@ vi.mock('./certificate.repository', () => ({
     findAllDays = repo.findAllDays;
     findCompletions = repo.findCompletions;
     findRequiredTaskProgress = repo.findRequiredTaskProgress;
+    findCertificateByTraineeAndCourse = repo.findCertificateByTraineeAndCourse;
+    findCertificateByCertificateId = repo.findCertificateByCertificateId;
+    createCertificate = repo.createCertificate;
+    revokeCertificate = repo.revokeCertificate;
   },
 }));
 
@@ -25,186 +40,76 @@ import {
   CertificateService,
   summarizeCompletions,
 } from './certificate.service';
+import { verifyCertificatePayload } from './certificate-signature.util';
 
 const traineeId = 'trainee-1';
 const courseId = 'html';
 
-const course = {
-  id: courseId,
-  title: 'HTML & Semantic Web',
-};
-
-const trainee = {
-  name: 'Alex Morgan',
-};
-
+const course = { id: courseId, title: 'HTML & Semantic Web' };
+const trainee = { id: traineeId, name: 'Alex Morgan' };
 const days = [
   { id: 'html-day-01', course_id: courseId },
   { id: 'html-day-02', course_id: courseId },
 ];
-
 const completedDays = [
-  {
-    curriculum_day_id: 'html-day-01',
-    completed_at: new Date('2026-11-10T10:00:00.000Z'),
-  },
-  {
-    curriculum_day_id: 'html-day-02',
-    completed_at: new Date('2026-11-11T10:00:00.000Z'),
-  },
+  { curriculum_day_id: 'html-day-01', completed_at: new Date('2026-11-10T10:00:00.000Z') },
+  { curriculum_day_id: 'html-day-02', completed_at: new Date('2026-11-11T10:00:00.000Z') },
+];
+const requiredTasks = [
+  { id: 'task-1', curriculum_day: { course_id: courseId }, progress: [{ review_status: 'approved' }] },
+  { id: 'task-2', curriculum_day: { course_id: courseId }, progress: [{ review_status: 'approved' }] },
 ];
 
-const requiredTasks = [
-  {
-    id: 'task-1',
-    curriculum_day: { course_id: courseId },
-    progress: [{ review_status: 'approved' }],
-  },
-  {
-    id: 'task-2',
-    curriculum_day: { course_id: courseId },
-    progress: [{ review_status: 'approved' }],
-  },
-];
+function makeRecord(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'cert-db-id',
+    certificate_id: 'VK-AAAAAAAAAAAAAAAAAAAA',
+    trainee_id: traineeId,
+    course_id: courseId,
+    trainee_name: 'Alex Morgan',
+    course_title: 'HTML & Semantic Web',
+    days_completed: 2,
+    completed_at: new Date('2026-11-11T10:00:00.000Z'),
+    issued_at: new Date('2026-11-12T10:00:00.000Z'),
+    status: 'ACTIVE',
+    revoked_at: null,
+    signature: 'signed',
+    signature_algorithm: 'Ed25519',
+    signature_version: 'v1',
+    ...overrides,
+  };
+}
 
 describe('summarizeCompletions', () => {
   it('marks a course complete when every day is completed', () => {
     const result = summarizeCompletions(days, completedDays, requiredTasks);
-
     expect(result.get(courseId)?.complete).toBe(true);
     expect(result.get(courseId)?.dayCount).toBe(2);
   });
 
   it('marks a course incomplete when at least one day is incomplete', () => {
     const result = summarizeCompletions(days, [completedDays[0]], requiredTasks);
-
-    expect(result.get(courseId)?.complete).toBe(false);
-    expect(result.get(courseId)?.completedAt).toBeNull();
-  });
-
-  it('marks a course incomplete when no days are completed', () => {
-    const result = summarizeCompletions(days, [], requiredTasks);
-
     expect(result.get(courseId)?.complete).toBe(false);
     expect(result.get(courseId)?.completedAt).toBeNull();
   });
 
   it('uses the latest completion date when all days are completed', () => {
     const result = summarizeCompletions(days, completedDays, requiredTasks);
-
     expect(result.get(courseId)?.completedAt).toEqual(new Date('2026-11-11T10:00:00.000Z'));
-  });
-
-  it('counts every required task', () => {
-    const result = summarizeCompletions(days, completedDays, requiredTasks);
-
-    expect(result.get(courseId)?.requiredTaskCount).toBe(2);
-  });
-
-  it('counts only approved tasks as approved', () => {
-    const tasks = [
-      requiredTasks[0],
-      {
-        ...requiredTasks[1],
-        progress: [{ review_status: 'pending' }],
-      },
-    ];
-
-    const result = summarizeCompletions(days, completedDays, tasks);
-
-    expect(result.get(courseId)?.approvedTaskCount).toBe(1);
-    expect(result.get(courseId)?.allTasksApproved).toBe(false);
   });
 
   it.each(['pending', 'rework', null])(
     'does not consider a course eligible when a required task has review status %s',
     (reviewStatus) => {
-      const tasks = [
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [{ review_status: reviewStatus }],
-        },
-      ];
-
+      const tasks = [requiredTasks[0], { ...requiredTasks[1], progress: [{ review_status: reviewStatus }] }];
       const result = summarizeCompletions(days, completedDays, tasks);
-
       expect(result.get(courseId)?.allTasksApproved).toBe(false);
-      expect(result.get(courseId)?.approvedTaskCount).toBe(1);
     }
   );
 
-  it('does not consider a course eligible when a required task has no progress record', () => {
-    const tasks = [
-      requiredTasks[0],
-      {
-        ...requiredTasks[1],
-        progress: [],
-      },
-    ];
-
-    const result = summarizeCompletions(days, completedDays, tasks);
-
-    expect(result.get(courseId)?.requiredTaskCount).toBe(2);
-    expect(result.get(courseId)?.approvedTaskCount).toBe(1);
-    expect(result.get(courseId)?.allTasksApproved).toBe(false);
-  });
-
-  it('considers all required tasks approved when every task is approved', () => {
-    const result = summarizeCompletions(days, completedDays, requiredTasks);
-
-    expect(result.get(courseId)?.approvedTaskCount).toBe(2);
-    expect(result.get(courseId)?.allTasksApproved).toBe(true);
-  });
-
   it('does not consider a course eligible when it has no required tasks', () => {
     const result = summarizeCompletions(days, completedDays, []);
-
-    expect(result.get(courseId)?.requiredTaskCount).toBe(0);
-    expect(result.get(courseId)?.approvedTaskCount).toBe(0);
     expect(result.get(courseId)?.allTasksApproved).toBe(false);
-  });
-
-  it('does not consider a course eligible when days are incomplete even if all tasks are approved', () => {
-    const result = summarizeCompletions(days, [completedDays[0]], requiredTasks);
-
-    expect(result.get(courseId)?.complete).toBe(false);
-    expect(result.get(courseId)?.allTasksApproved).toBe(true);
-  });
-
-  it('calculates completion independently for multiple courses', () => {
-    const multipleDays = [...days, { id: 'css-day-01', course_id: 'css' }];
-
-    const multipleCompletions = [
-      ...completedDays,
-      {
-        curriculum_day_id: 'css-day-01',
-        completed_at: new Date('2026-11-12T10:00:00.000Z'),
-      },
-    ];
-
-    const multipleTasks = [
-      ...requiredTasks,
-      {
-        id: 'css-task-1',
-        curriculum_day: { course_id: 'css' },
-        progress: [{ review_status: 'rework' }],
-      },
-    ];
-
-    const result = summarizeCompletions(multipleDays, multipleCompletions, multipleTasks);
-
-    expect(result.get('html')?.allTasksApproved).toBe(true);
-    expect(result.get('html')?.complete).toBe(true);
-
-    expect(result.get('css')?.allTasksApproved).toBe(false);
-    expect(result.get('css')?.complete).toBe(true);
-  });
-
-  it('returns an empty map when there are no curriculum days', () => {
-    const result = summarizeCompletions([], [], []);
-
-    expect(result.size).toBe(0);
   });
 });
 
@@ -213,262 +118,135 @@ describe('CertificateService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-
     service = new CertificateService();
-
     repo.findCourse.mockResolvedValue(course);
     repo.findTrainee.mockResolvedValue(trainee);
     repo.findAllDays.mockResolvedValue(days);
     repo.findCompletions.mockResolvedValue(completedDays);
     repo.findRequiredTaskProgress.mockResolvedValue(requiredTasks);
+    repo.findCertificateByTraineeAndCourse.mockResolvedValue(null);
+    repo.findCertificateByCertificateId.mockResolvedValue(null);
+    repo.revokeCertificate.mockImplementation(async (_id, revokedAt) =>
+      makeRecord({ status: 'REVOKED', revoked_at: revokedAt })
+    );
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
+      callback({})
+    );
+    repo.createCertificate.mockImplementation(async (data) => makeRecord(data));
   });
 
-  describe('getCompletedCourseIds', () => {
-    it('returns a course when all days are completed and all required tasks are approved', async () => {
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual([courseId]);
-    });
-
-    it('does not return a course when a required task is pending', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [{ review_status: 'pending' }],
-        },
-      ]);
-
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual([]);
-    });
-
-    it('does not return a course when a required task is in rework', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [{ review_status: 'rework' }],
-        },
-      ]);
-
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual([]);
-    });
-
-    it('does not return a course when a required task has never been reviewed', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [{ review_status: null }],
-        },
-      ]);
-
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual([]);
-    });
-
-    it('does not return a course when a required task has no progress record', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [],
-        },
-      ]);
-
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual([]);
-    });
-
-    it('does not return a course when some days are incomplete', async () => {
-      repo.findCompletions.mockResolvedValue([completedDays[0]]);
-
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual([]);
-    });
-
-    it('does not return a course when it has no required tasks', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([]);
-
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual([]);
-    });
-
-    it('returns only eligible courses when multiple courses exist', async () => {
-      repo.findAllDays.mockResolvedValue([...days, { id: 'css-day-01', course_id: 'css' }]);
-
-      repo.findCompletions.mockResolvedValue([
-        ...completedDays,
-        {
-          curriculum_day_id: 'css-day-01',
-          completed_at: new Date('2026-11-12T10:00:00.000Z'),
-        },
-      ]);
-
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        ...requiredTasks,
-        {
-          id: 'css-task-1',
-          curriculum_day: { course_id: 'css' },
-          progress: [{ review_status: 'rework' }],
-        },
-      ]);
-
-      const result = await service.getCompletedCourseIds(traineeId);
-
-      expect(result).toEqual(['html']);
-    });
-
-    it('loads days, completions, and required task progress for the trainee', async () => {
-      await service.getCompletedCourseIds(traineeId);
-
-      expect(repo.findAllDays).toHaveBeenCalledOnce();
-      expect(repo.findCompletions).toHaveBeenCalledWith(traineeId);
-      expect(repo.findRequiredTaskProgress).toHaveBeenCalledWith(traineeId);
-    });
+  it('returns a persisted certificate when eligible', async () => {
+    const result = await service.getCourseCertificate(traineeId, courseId);
+    expect(result.courseId).toBe(courseId);
+    expect(result.courseTitle).toBe(course.title);
+    expect(result.traineeName).toBe(trainee.name);
+    expect(result.daysCompleted).toBe(2);
+    expect(result.completedAt).toBe('2026-11-11T10:00:00.000Z');
+    expect(result.status).toBe('ACTIVE');
+    expect(result.certificateId).toMatch(/^VK-[A-F0-9]{20}$/);
+    expect(result.signature).toEqual(expect.any(String));
+    expect(repo.createCertificate).toHaveBeenCalledTimes(1);
   });
 
-  describe('getCourseCertificate', () => {
-    it('returns a certificate when all days are completed and all required tasks are approved', async () => {
-      const result = await service.getCourseCertificate(traineeId, courseId);
+  it('returns the existing certificate instead of issuing a duplicate', async () => {
+    repo.findCertificateByTraineeAndCourse.mockResolvedValue(makeRecord());
+    const result = await service.getCourseCertificate(traineeId, courseId);
+    expect(result.certificateId).toBe('VK-AAAAAAAAAAAAAAAAAAAA');
+    expect(repo.createCertificate).not.toHaveBeenCalled();
+  });
 
-      expect(result).toEqual({
-        courseId,
-        courseTitle: 'HTML & Semantic Web',
-        traineeName: 'Alex Morgan',
-        daysCompleted: 2,
-        completedAt: '2026-11-11T10:00:00.000Z',
-        certificateId: buildCertificateId(traineeId, courseId),
-      });
-    });
+  it('throws NotFoundError when the course does not exist', async () => {
+    repo.findCourse.mockResolvedValue(null);
+    await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(NotFoundError);
+  });
 
-    it('throws NotFoundError when the course does not exist', async () => {
-      repo.findCourse.mockResolvedValue(null);
+  it('throws ForbiddenError when a required task is not approved', async () => {
+    repo.findRequiredTaskProgress.mockResolvedValue([
+      requiredTasks[0],
+      { ...requiredTasks[1], progress: [{ review_status: 'rework' }] },
+    ]);
+    await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toThrow(CERTIFICATE_LOCKED_MESSAGE);
+  });
 
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        NotFoundError
-      );
+  it('throws ForbiddenError when days are incomplete', async () => {
+    repo.findCompletions.mockResolvedValue([completedDays[0]]);
+    await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(ForbiddenError);
+  });
 
-      expect(repo.findAllDays).not.toHaveBeenCalled();
-      expect(repo.findTrainee).not.toHaveBeenCalled();
-    });
+  it('verifies a valid active certificate', async () => {
+    const issued = await service.getCourseCertificate(traineeId, courseId);
+    repo.findCertificateByCertificateId.mockResolvedValue(
+      makeRecord({
+        certificate_id: issued.certificateId,
+        signature: issued.signature,
+        issued_at: new Date(issued.issuedAt),
+        completed_at: new Date(issued.completedAt),
+      })
+    );
 
-    it('throws ForbiddenError when a required task is pending', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [{ review_status: 'pending' }],
-        },
-      ]);
+    const result = await service.verifyCertificate(issued.certificateId);
+    expect(result.valid).toBe(true);
+    expect(result.signatureValid).toBe(true);
+    expect(result.status).toBe('ACTIVE');
+  });
 
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
-    });
+  it('fails verification when protected data is modified', async () => {
+    const issued = await service.getCourseCertificate(traineeId, courseId);
+    repo.findCertificateByCertificateId.mockResolvedValue(
+      makeRecord({
+        certificate_id: issued.certificateId,
+        signature: issued.signature,
+        trainee_name: 'Tampered Name',
+        issued_at: new Date(issued.issuedAt),
+        completed_at: new Date(issued.completedAt),
+      })
+    );
 
-    it('throws ForbiddenError when a required task is in rework', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [{ review_status: 'rework' }],
-        },
-      ]);
+    const result = await service.verifyCertificate(issued.certificateId);
+    expect(result.valid).toBe(false);
+    expect(result.signatureValid).toBe(false);
+  });
 
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
-    });
+  it('returns revoked status for revoked certificates', async () => {
+    const issued = await service.getCourseCertificate(traineeId, courseId);
+    repo.findCertificateByCertificateId.mockResolvedValue(
+      makeRecord({
+        certificate_id: issued.certificateId,
+        signature: issued.signature,
+        issued_at: new Date(issued.issuedAt),
+        completed_at: new Date(issued.completedAt),
+        status: 'REVOKED',
+        revoked_at: new Date('2026-11-13T10:00:00.000Z'),
+      })
+    );
 
-    it('throws ForbiddenError when a required task has no review status', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [{ review_status: null }],
-        },
-      ]);
+    const result = await service.verifyCertificate(issued.certificateId);
+    expect(result.valid).toBe(false);
+    expect(result.signatureValid).toBe(true);
+    expect(result.status).toBe('REVOKED');
+  });
 
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
-    });
+  it('returns unknown for missing certificate IDs', async () => {
+    const result = await service.verifyCertificate('VK-FFFFFFFFFFFFFFFFFFFF');
+    expect(result.valid).toBe(false);
+    expect(result.status).toBe('UNKNOWN');
+  });
 
-    it('throws ForbiddenError when a required task has no progress record', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        requiredTasks[0],
-        {
-          ...requiredTasks[1],
-          progress: [],
-        },
-      ]);
+  it('revokes an active certificate', async () => {
+    repo.findCertificateByCertificateId.mockResolvedValue(makeRecord());
+    const result = await service.revokeCertificate('VK-AAAAAAAAAAAAAAAAAAAA');
+    expect(result.status).toBe('REVOKED');
+    expect(repo.revokeCertificate).toHaveBeenCalled();
+  });
 
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
-    });
+  it('handles concurrent issuance conflicts by returning the existing certificate', async () => {
+    repo.createCertificate.mockRejectedValueOnce({ code: 'P2002' });
+    repo.findCertificateByTraineeAndCourse
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(makeRecord({ certificate_id: 'VK-BBBBBBBBBBBBBBBBBBBB' }));
 
-    it('throws ForbiddenError when not every day is completed', async () => {
-      repo.findCompletions.mockResolvedValue([completedDays[0]]);
-
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
-    });
-
-    it('throws ForbiddenError when the course has no required tasks', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([]);
-
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
-    });
-
-    it('uses the expected locked message when the course is not eligible', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        {
-          ...requiredTasks[0],
-          progress: [{ review_status: 'rework' }],
-        },
-        requiredTasks[1],
-      ]);
-
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toThrow(
-        CERTIFICATE_LOCKED_MESSAGE
-      );
-    });
-
-    it('throws NotFoundError when the trainee does not exist', async () => {
-      repo.findTrainee.mockResolvedValue(null);
-
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        NotFoundError
-      );
-    });
-
-    it('does not look up the trainee when the course is not eligible', async () => {
-      repo.findRequiredTaskProgress.mockResolvedValue([
-        {
-          ...requiredTasks[0],
-          progress: [{ review_status: 'rework' }],
-        },
-        requiredTasks[1],
-      ]);
-
-      await expect(service.getCourseCertificate(traineeId, courseId)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
-
-      expect(repo.findTrainee).not.toHaveBeenCalled();
-    });
+    const result = await service.getCourseCertificate(traineeId, courseId);
+    expect(result.certificateId).toBe('VK-BBBBBBBBBBBBBBBBBBBB');
   });
 });

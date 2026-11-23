@@ -31,13 +31,32 @@ export type DaySummary = {
   status: DayStatus;
 };
 
+export type CertificateStatus = 'ACTIVE' | 'REVOKED';
+
 export type CourseCertificate = {
   courseId: string;
   courseTitle: string;
   traineeName: string;
   daysCompleted: number;
   completedAt: string; // ISO, latest day_completion.completed_at in the course
-  certificateId: string; // e.g. VK-3F9A2C71B0
+  issuedAt: string; // ISO, when the certificate was issued
+  certificateId: string; // e.g. VK-...
+  status: CertificateStatus;
+  signature: string;
+  signatureAlgorithm: string;
+  signatureVersion: string;
+};
+
+export type CertificateVerificationResponse = {
+  valid: boolean;
+  signatureValid: boolean;
+  status: CertificateStatus | 'UNKNOWN';
+  certificateId: string;
+  traineeName: string | null;
+  courseTitle: string | null;
+  completedAt: string | null;
+  issuedAt: string | null;
+  message: string;
 };
 /** GET /api/courses/:courseId/days */
 export type CourseDaysResponse = DaySummary[];
