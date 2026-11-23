@@ -26,7 +26,7 @@ their code and journal, and add new trainees.
   tabs is recorded for mentors and turned into an integrity score out of 100 (it never blocks the
   trainee).
 - **Dashboard, profile and typing test:** progress, time spent, typing speed and daily activity.
-- **Course certificates:** finishing every day of a course unlocks a printable certificate.
+- **Course certificates:** eligible trainees receive a persisted, signed certificate with a unique certificate ID. Certificates can be verified publicly and revoked by authorized staff. See [certificate security](docs/certificate-security.md).
 - **Journal, help and reference pages:** past journal entries with search, a help guide, and reading
   material for every day.
 - **Mentor dashboard** (`/admin`): only the trainees assigned to that mentor; cohort summary;
@@ -138,6 +138,7 @@ Training-platform/
 | [API reference](docs/api-specifications.md)            | Every endpoint, with requests, responses and errors                  |
 | [Database](docs/database.md)                           | ER diagram and data dictionary                                       |
 | [Roles and assignments](docs/roles-and-assignments.md) | Role hierarchy, mentor assignment, authorization, migration strategy |
+| [Certificate security](docs/certificate-security.md)   | Certificate issuance, signatures, verification, revocation           |
 | [Release notes v0.2.0](docs/release-notes/v0.2.0.md)   | Mentor dashboard, certificates, integrity score and other changes    |
 | [Release notes v0.1.0](docs/release-notes/v0.1.0.md)   | What's in the first beta, known limitations and future scope         |
 
