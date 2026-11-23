@@ -6,13 +6,22 @@ import type { CertificateVerificationResponse } from '@itp/types';
 import CertificateVerificationPage from './CertificateVerificationPage';
 import { verifyCertificate } from '../../api/certificate';
 import { ApiError } from '../../api/errors';
+import { useAuth } from '../../context/Useauth';
 
 vi.mock('../../api/certificate', () => ({
   verifyCertificate: vi.fn(),
 }));
 
+vi.mock('../../context/Useauth', () => ({
+  useAuth: vi.fn(),
+}));
+
 vi.mock('../../components/Header', () => ({
-  default: () => <header>Header</header>,
+  default: () => <header>TraineeHeader</header>,
+}));
+
+vi.mock('../../components/AdminHeader', () => ({
+  default: ({ badge }: { badge?: string }) => <header>{badge ? `AdminHeader:${badge}` : 'AdminHeader'}</header>,
 }));
 
 function renderPage() {
@@ -38,6 +47,7 @@ const validResult: CertificateVerificationResponse = {
 describe('CertificateVerificationPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue({ user: null } as ReturnType<typeof useAuth>);
   });
 
   it('verifies a certificate and displays valid details', async () => {
@@ -131,5 +141,22 @@ describe('CertificateVerificationPage', () => {
     await user.click(screen.getByRole('button', { name: /Verify/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many requests.');
+  });
+
+  it('shows trainee header for public/trainee users', () => {
+    renderPage();
+    expect(screen.getByText('TraineeHeader')).toBeInTheDocument();
+  });
+
+  it('shows admin header for mentor users', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: { role: 'mentor' } } as ReturnType<typeof useAuth>);
+    renderPage();
+    expect(screen.getByText('AdminHeader')).toBeInTheDocument();
+  });
+
+  it('shows manager admin header for manager users', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: { role: 'manager' } } as ReturnType<typeof useAuth>);
+    renderPage();
+    expect(screen.getByText('AdminHeader:Manager view')).toBeInTheDocument();
   });
 });

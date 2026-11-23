@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import { Search, ShieldCheck, ShieldX, ShieldAlert } from 'lucide-react';
 import type { CertificateVerificationResponse } from '@itp/types';
+import AdminHeader from '../../components/AdminHeader';
 import Header from '../../components/Header';
 import { verifyCertificate } from '../../api/certificate';
 import { ApiError } from '../../api/errors';
+import { useAuth } from '../../context/Useauth';
 import { formatCertificateDate } from '../../lib/certificate';
 import styles from './CertificateVerificationPage.module.css';
+
+const MANAGER_NAV = [
+  { to: '/manager', label: 'Users & assignments', end: true },
+  { to: '/manager/leave-requests', label: 'Leave requests', end: true },
+  { to: '/manager/verify-certificate', label: 'Verify certificate', end: true },
+];
 
 function statusLabel(result: CertificateVerificationResponse): string {
   if (result.valid) return 'Authentic certificate';
@@ -24,6 +32,7 @@ function StatusIcon({ result }: { result: CertificateVerificationResponse }) {
 }
 
 export default function CertificateVerificationPage() {
+  const { user } = useAuth();
   const [certificateId, setCertificateId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<CertificateVerificationResponse | null>(null);
@@ -56,9 +65,23 @@ export default function CertificateVerificationPage() {
     }
   };
 
+  const header =
+    user?.role === 'manager' ? (
+      <AdminHeader
+        homePath="/manager"
+        badge="Manager view"
+        navItems={MANAGER_NAV}
+        navLabel="Manager navigation"
+      />
+    ) : user?.role === 'mentor' ? (
+      <AdminHeader />
+    ) : (
+      <Header />
+    );
+
   return (
     <>
-      <Header />
+      {header}
       <main className={styles.page}>
         <section className={styles.card} aria-labelledby="verify-certificate-title">
           <p className={styles.kicker}>Certificate verification</p>
