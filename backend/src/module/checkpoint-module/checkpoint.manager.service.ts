@@ -38,6 +38,17 @@ function parsePaper(markdown: string): CheckpointMarkdownPreview {
       },
     ]);
   }
+  const missingRuntime = parsed.questions.find(
+    (question) => question.type === 'PRACTICAL' && !question.runtime
+  );
+  if (missingRuntime) {
+    throw new ValidationError([
+      {
+        path: ['sourceMarkdown'],
+        message: `Question ${missingRuntime.orderIndex} is practical but has no runtime. Add "Runtime: node", "Runtime: browser" or "Runtime: sql".`,
+      },
+    ]);
+  }
   return parsed;
 }
 

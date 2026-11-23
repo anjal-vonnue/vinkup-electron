@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 const MAX_MARKDOWN_BYTES = 500_000;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_WORKSPACE_FILES = 200;
+const MAX_WORKSPACE_FILE_CHARS = 200_000;
+const MAX_WORKSPACE_TOTAL_CHARS = 5_000_000;
 
 const isoDate = z.string().trim().datetime({ offset: true, message: 'Use a valid date and time.' });
 
@@ -9,6 +12,32 @@ const markdown = z
   .string()
   .min(1, 'Upload or paste the Markdown question paper.')
   .max(MAX_MARKDOWN_BYTES, 'The Markdown file is too large.');
+
+const workspacePath = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .refine((value) => {
+    if (value.startsWith('/') || value.includes('\\') || value.includes('\0')) return false;
+    return value
+      .split('/')
+      .every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+  }, 'Use a safe relative file path.');
+
+const workspaceFiles = z
+  .array(
+    z.object({
+      path: workspacePath,
+      content: z.string().max(MAX_WORKSPACE_FILE_CHARS, 'A workspace file is too large.'),
+    })
+  )
+  .max(MAX_WORKSPACE_FILES, 'Too many workspace files.')
+  .refine(
+    (files) =>
+      files.reduce((total, file) => total + file.content.length, 0) <= MAX_WORKSPACE_TOTAL_CHARS,
+    'The workspace files are too large.'
+  );
 
 const checkpointFields = z.object({
   title: z
@@ -77,13 +106,17 @@ export const saveAnswerSchema = z
       .nullable()
       .optional(),
     clearFile: z.boolean().optional(),
+    files: workspaceFiles.nullable().optional(),
+    clearFiles: z.boolean().optional(),
   })
   .refine(
     (body) =>
       body.answerText !== undefined ||
       body.selectedOption !== undefined ||
       body.file !== undefined ||
-      body.clearFile === true,
+      body.clearFile === true ||
+      body.files !== undefined ||
+      body.clearFiles === true,
     'Provide an answer value.'
   );
 

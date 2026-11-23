@@ -4,6 +4,7 @@ import type {
   CheckpointResultVisibility,
   CheckpointStatus,
   CheckpointSubmissionReason,
+  CheckpointWorkspaceFile,
   ParsedCheckpointQuestion,
 } from '@itp/types';
 import { Prisma } from '../../generated/prisma/client';
@@ -98,6 +99,10 @@ async function writeQuestions(
       options: question.options ?? undefined,
       correct_option: question.correctOption,
       code_language: question.codeLanguage,
+      runtime: question.runtime,
+      run_command: question.runCommand,
+      setup_sql: question.setupSql,
+      starter_files: question.starterFiles ?? undefined,
     })),
   });
 }
@@ -499,9 +504,21 @@ export class CheckpointRepository {
       file_mime_type?: string | null;
       file_size?: number | null;
       file_data?: string | null;
+      workspace_files?: CheckpointWorkspaceFile[] | null;
     };
     now: Date;
   }): Promise<{ clientRevision: number; savedAt: Date; stale: boolean }> => {
+    const { workspace_files, ...scalarFields } = input.fields;
+    const jsonFields =
+      workspace_files === undefined
+        ? {}
+        : {
+            workspace_files:
+              workspace_files === null
+                ? Prisma.DbNull
+                : (workspace_files as unknown as Prisma.InputJsonValue),
+          };
+
     const updated = await prisma.checkpoint_answer.updateMany({
       where: {
         attempt_id: input.attemptId,
@@ -509,7 +526,8 @@ export class CheckpointRepository {
         client_revision: { lt: input.clientRevision },
       },
       data: {
-        ...input.fields,
+        ...scalarFields,
+        ...jsonFields,
         client_revision: input.clientRevision,
         saved_at: input.now,
       },
@@ -542,7 +560,8 @@ export class CheckpointRepository {
         data: {
           attempt_id: input.attemptId,
           question_id: input.questionId,
-          ...input.fields,
+          ...scalarFields,
+          ...jsonFields,
           client_revision: input.clientRevision,
           saved_at: input.now,
         },

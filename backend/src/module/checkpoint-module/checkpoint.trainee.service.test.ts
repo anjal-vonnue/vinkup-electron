@@ -431,6 +431,57 @@ describe('CheckpointTraineeService', () => {
       });
     });
 
+    it('saves practical workspace files and can clear them', async () => {
+      const practicalQuestion = {
+        ...question,
+        id: 'practical-1',
+        type: 'PRACTICAL',
+        options: null,
+      };
+      const row = attemptRow({
+        checkpoint: { ...attemptRow().checkpoint, questions: [practicalQuestion] },
+      });
+      repo.findAttemptWithCheckpoint.mockResolvedValue(row);
+      repo.saveAnswer.mockResolvedValue({ clientRevision: 5, savedAt: new Date(), stale: false });
+
+      const files = [
+        { path: 'index.html', content: '<h1>Hello</h1>' },
+        { path: 'src/app.js', content: 'console.log("hi");' },
+      ];
+
+      await service.saveAnswer(traineeId, attemptId, practicalQuestion.id, {
+        clientRevision: 5,
+        files,
+      });
+
+      const saved = repo.saveAnswer.mock.calls[0][0] as unknown as {
+        fields: Record<string, unknown>;
+      };
+      expect(saved.fields).toEqual({ workspace_files: files });
+
+      await service.saveAnswer(traineeId, attemptId, practicalQuestion.id, {
+        clientRevision: 6,
+        clearFiles: true,
+      });
+
+      const cleared = repo.saveAnswer.mock.calls[1][0] as unknown as {
+        fields: Record<string, unknown>;
+      };
+      expect(cleared.fields).toEqual({ workspace_files: null });
+    });
+
+    it('rejects workspace files on a non-practical question', async () => {
+      repo.findAttemptWithCheckpoint.mockResolvedValue(attemptRow());
+
+      await expect(
+        service.saveAnswer(traineeId, attemptId, question.id, {
+          clientRevision: 1,
+          files: [{ path: 'index.html', content: '<h1>Hello</h1>' }],
+        })
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+      expect(repo.saveAnswer).not.toHaveBeenCalled();
+    });
+
     it('returns the stored revision when the write is rejected as stale', async () => {
       repo.findAttemptWithCheckpoint.mockResolvedValue(attemptRow());
       const savedAt = new Date();

@@ -1,10 +1,12 @@
 import type {
   CheckpointAvailability,
   CheckpointQuestion,
+  CheckpointQuestionRuntime,
   CheckpointQuestionType,
   CheckpointResult,
   CheckpointResultVisibility,
   CheckpointSubmissionReason,
+  CheckpointWorkspaceFile,
   ManagerCheckpointAttemptDetail,
   ManagerCheckpointAttemptSummary,
   ManagerCheckpointAnswer,
@@ -106,6 +108,10 @@ export function toQuestion(row: {
   options: unknown;
   correct_option: string | null;
   code_language: string | null;
+  runtime: string | null;
+  run_command: string | null;
+  setup_sql: string | null;
+  starter_files: unknown;
 }): CheckpointQuestion {
   return {
     id: row.id,
@@ -119,7 +125,25 @@ export function toQuestion(row: {
       : null,
     correctOption: row.correct_option,
     codeLanguage: row.code_language,
+    runtime: (row.runtime as CheckpointQuestionRuntime | null) ?? null,
+    runCommand: row.run_command,
+    setupSql: row.setup_sql,
+    starterFiles: toWorkspaceFiles(row.starter_files),
   };
+}
+
+/** JSON columns cross the database boundary untyped; keep only well-formed entries. */
+function toWorkspaceFiles(value: unknown): CheckpointWorkspaceFile[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const files: CheckpointWorkspaceFile[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.path !== 'string' || typeof record.content !== 'string') continue;
+    files.push({ path: record.path, content: record.content });
+  }
+  return files.length > 0 ? files : null;
 }
 
 export function toManagerDetail(row: CheckpointDetailRow): ManagerCheckpointDetail {
@@ -336,6 +360,7 @@ export function toTraineeAttempt(
       fileName: answer.file_name,
       fileMimeType: answer.file_mime_type,
       fileSize: answer.file_size,
+      files: toWorkspaceFiles(answer.workspace_files),
       clientRevision: answer.client_revision,
       savedAt: iso(answer.saved_at),
     })),
@@ -396,6 +421,7 @@ export function toManagerAttemptDetail(row: AttemptDetailRow): ManagerCheckpoint
         fileName: answer?.file_name ?? null,
         fileMimeType: answer?.file_mime_type ?? null,
         fileSize: answer?.file_size ?? null,
+        files: toWorkspaceFiles(answer?.workspace_files),
         awardedMarks: answer?.awarded_marks ?? null,
         feedback: answer?.feedback ?? null,
         savedAt: iso(answer?.saved_at),
@@ -443,6 +469,7 @@ export function toCheckpointResult(row: AttemptDetailRow): CheckpointResult {
         answerText: answer?.answer_text ?? null,
         selectedOption: answer?.selected_option ?? null,
         fileName: answer?.file_name ?? null,
+        files: toWorkspaceFiles(answer?.workspace_files),
         awardedMarks: answer?.awarded_marks ?? null,
         feedback: answer?.feedback ?? null,
       };

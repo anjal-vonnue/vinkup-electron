@@ -268,6 +268,12 @@ export class CheckpointTraineeService {
       }
     }
 
+    if (question.type !== 'PRACTICAL' && (body.files !== undefined || body.clearFiles)) {
+      throw new ValidationError([
+        { path: ['files'], message: 'Workspace files are only accepted for practical questions.' },
+      ]);
+    }
+
     const fields: Parameters<CheckpointRepository['saveAnswer']>[0]['fields'] = {};
     if (body.answerText !== undefined) fields.answer_text = body.answerText;
     if (body.selectedOption !== undefined) fields.selected_option = body.selectedOption;
@@ -282,6 +288,12 @@ export class CheckpointTraineeService {
       fields.file_mime_type = null;
       fields.file_size = null;
       fields.file_data = null;
+    }
+
+    if (body.files !== undefined) {
+      fields.workspace_files = body.files;
+    } else if (body.clearFiles) {
+      fields.workspace_files = null;
     }
 
     const saved = await repository.saveAnswer({
