@@ -346,6 +346,7 @@ enum checkpoint_question_type {
   SQL
   MULTIPLE_CHOICE
   FILE
+  PRACTICAL
 }
 
 enum checkpoint_result_visibility {
@@ -404,6 +405,11 @@ model checkpoint_question {
   options         Json?
   correct_option  String?
   code_language   String?
+  // Practical questions: how the trainee's workspace runs and what it starts with.
+  runtime         String?
+  run_command     String?
+  setup_sql       String?  @db.Text
+  starter_files   Json?
 
   checkpoint checkpoint        @relation(fields: [checkpoint_id], references: [id], onDelete: Cascade)
   answers    checkpoint_answer[]
@@ -496,6 +502,7 @@ model checkpoint_answer {
   file_mime_type String?
   file_size      Int?
   file_data      String?  @db.Text // base64 payload
+  workspace_files Json?   // practical questions: submitted workspace files
   client_revision Int     @default(0)
   awarded_marks  Float?
   feedback       String?  @db.Text
