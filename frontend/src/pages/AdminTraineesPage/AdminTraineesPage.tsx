@@ -20,6 +20,7 @@ import {
 } from '../../lib/adminTrainees';
 import { csvFilename, downloadCsv } from '../../lib/downloadCsv';
 import { todayKey } from '../../lib/platformDate';
+import PendingReviewPanel from './PendingReviewPanel';
 
 function UsersIcon() {
   return (
@@ -64,7 +65,8 @@ export default function AdminTraineesPage() {
 
     getAdminTrainees()
       .then((data) => {
-        if (!isCancelled) setTrainees(sortTraineesByName(data));
+        if (isCancelled) return;
+        setTrainees(sortTraineesByName(data));
       })
       .catch((caught: unknown) => {
         if (!isCancelled) {
@@ -175,6 +177,8 @@ export default function AdminTraineesPage() {
             </button>
           ))}
         </div>
+
+        {view === 'dashboard' && <PendingReviewPanel trainees={trainees} />}
 
         {/* key={view}: a new panel on each switch, so its fade-in plays again. */}
         <div

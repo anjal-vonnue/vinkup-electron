@@ -1,6 +1,8 @@
-import { createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
-export function buildCertificateId(traineeId: string, courseId: string): string {
-  const hash = createHash('sha256').update(`${traineeId}:${courseId}`).digest('hex');
-  return `VK-${hash.slice(0, 10).toUpperCase()}`;
+export const CERTIFICATE_ID_PREFIX = 'VK-';
+export const CERTIFICATE_ID_PATTERN = /^VK-[A-F0-9]{20}$/;
+
+export function generateCertificateId(): string {
+  return `${CERTIFICATE_ID_PREFIX}${randomBytes(10).toString('hex').toUpperCase()}`;
 }

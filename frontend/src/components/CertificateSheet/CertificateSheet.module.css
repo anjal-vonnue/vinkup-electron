@@ -73,6 +73,12 @@
   font-weight: 700;
 }
 
+.metaSecondary {
+  margin: 0.5cqw 0 0;
+  font-size: 1.5cqw;
+  color: #5b5d6e;
+}
+
 .id {
   margin: 0.8cqw 0 0;
   font-family: var(--font-mono);

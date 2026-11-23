@@ -26,6 +26,7 @@ export type ErrorCode =
   | 'DESKTOP_AUTH_FAILED'
   | 'DESKTOP_SESSION_EXPIRED'
   | 'DESKTOP_SESSION_REVOKED'
+  | 'RATE_LIMITED'
   | 'PROMPT_NAME_TAKEN';
 
 /** Every error response from the API looks exactly like this. */

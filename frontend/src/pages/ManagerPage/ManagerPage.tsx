@@ -39,6 +39,7 @@ const PAGE_SIZE = 5;
 const MANAGER_NAV = [
   { to: '/manager', label: 'Users & assignments', end: true },
   { to: '/manager/leave-requests', label: 'Leave requests', end: true },
+  { to: '/manager/verify-certificate', label: 'Verify certificate', end: true },
 ];
 
 function byName<T extends { name: string }>(items: T[]): T[] {

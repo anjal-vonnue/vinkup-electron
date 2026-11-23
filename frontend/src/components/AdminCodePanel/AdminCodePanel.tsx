@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useContext, useEffect, useRef, useState } from 'react';
 import { Check, Clock, RefreshCw, X } from 'lucide-react';
 import type { AdminTaskCode, ReviewStatus, TaskReview } from '@itp/types';
 import { approveTask, getAdminTaskReviews, requestRework } from '../../api/admin';
@@ -6,11 +6,14 @@ import type { ApiError } from '../../api/errors';
 import { TASK_STATUS_LABELS } from '../../lib/adminLabels';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import CollapsibleMarkdown from '../CollapsibleMarkdown/CollapsibleMarkdown';
+import LoaderOverlay from '../Common/LoadingState';
+import { ErrorState } from '../Common/ErrorState';
 import { ToastContext } from '../Toast';
-import TaskCodeViewer, { TaskCodeViewerProvider } from '../TaskCodeViewer/TaskCodeViewer';
 import styles from './AdminCodePanel.module.css';
 
 const MAX_REWORK_MARKDOWN_CHARS = 10000;
+
+const SubmissionBrowser = lazy(() => import('../SubmissionBrowser/SubmissionBrowser'));
 
 type AdminCodePanelProps = {
   traineeId: string;
@@ -316,9 +319,37 @@ export default function AdminCodePanel({
       )}
 
       <div className={styles.body}>
-        <TaskCodeViewerProvider value={{ code, isLoading, error, onRetry, showMetadata: false }}>
-          <TaskCodeViewer traineeId={traineeId} taskId={code?.taskId ?? ''} />
-        </TaskCodeViewerProvider>
+        {isLoading && <LoaderOverlay label="Loading code…" />}
+
+        {code?.isStarterCode && (
+          <p role="note">Starter code: this trainee hasn&rsquo;t saved any work on this task.</p>
+        )}
+
+        {code && !code.isStarterCode && code.status === 'in_progress' && (
+          <p role="note">
+            Draft: the trainee hasn&rsquo;t submitted this task yet. Approve and Rework appear once
+            they submit.
+          </p>
+        )}
+
+        {error && (
+          <ErrorState
+            title="Unable to load code"
+            message={error.message}
+            onRetry={error.code === 'NOT_FOUND' ? undefined : onRetry}
+          />
+        )}
+
+        {code && (
+          <Suspense fallback={<LoaderOverlay label="Opening viewer…" />}>
+            <SubmissionBrowser
+              key={code.taskId}
+              files={code.files}
+              instructionsMarkdown={code.instructionsMarkdown}
+              scope={`${traineeId}/${code.taskId}`}
+            />
+          </Suspense>
+        )}
       </div>
 
       {/* Rework Modal */}

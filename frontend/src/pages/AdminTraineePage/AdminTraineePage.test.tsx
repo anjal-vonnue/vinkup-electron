@@ -311,6 +311,16 @@ describe('AdminTraineePage', () => {
     );
   });
 
+  it('opens with the Pending review filter when linked from the dashboard queue', async () => {
+    renderPage(`/admin/trainees/${traineeId}?filter=pending`);
+
+    await screen.findByRole('tabpanel');
+    expect(screen.getByRole('button', { name: /^Pending review \(/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
   it('shows journal responses on the Journal tab', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -388,6 +398,11 @@ describe('AdminTraineePage', () => {
 
     expect(getAdminTaskCode).toHaveBeenCalledWith(traineeId, completed.taskId);
     const viewer = await screen.findByRole('region', { name: completed.title });
+    const firstFile = (await within(viewer).findAllByRole('treeitem')).find(
+      (row) => row.getAttribute('aria-expanded') === null
+    );
+    if (!firstFile) throw new Error('submitted task has no file row');
+    await user.click(firstFile);
     expect(await within(viewer).findByText('Read only')).toBeInTheDocument();
     expect(
       within(viewer).queryByRole('button', { name: /run|save|reset|submit/i })

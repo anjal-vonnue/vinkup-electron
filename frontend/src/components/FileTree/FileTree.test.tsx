@@ -91,4 +91,20 @@ describe('FileTree', () => {
     fireEvent.keyDown(cRow, { key: 'Delete' });
     expect(onDelete).toHaveBeenCalledWith({ type: 'file', name: 'c.js', path: 'c.js' });
   });
+
+  it('does not render delete controls or handle Delete when onDelete is omitted', () => {
+    renderTree({ onDelete: undefined, dirtyPaths: undefined });
+
+    const cRow = screen.getByText('c.js').closest('[role="treeitem"]') as HTMLElement;
+    cRow.focus();
+    const deleteEvent = new KeyboardEvent('keydown', {
+      key: 'Delete',
+      bubbles: true,
+      cancelable: true,
+    });
+    cRow.dispatchEvent(deleteEvent);
+
+    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+    expect(deleteEvent.defaultPrevented).toBe(false);
+  });
 });

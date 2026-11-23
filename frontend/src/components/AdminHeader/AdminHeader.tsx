@@ -98,6 +98,7 @@ function getInitials(name: string): string {
 const MENTOR_NAV: AdminNavItem[] = [
   { to: '/admin', label: 'My trainees', end: true },
   { to: '/admin/leave-requests', label: 'Leave requests', end: true },
+  { to: '/admin/verify-certificate', label: 'Verify certificate', end: true },
 ];
 
 export default function AdminHeader({
