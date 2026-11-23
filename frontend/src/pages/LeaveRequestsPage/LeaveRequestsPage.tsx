@@ -4,6 +4,7 @@ import { createLeaveRequest, getMyLeaveRequests } from '../../api/leave';
 import type { ApiError } from '../../api/errors';
 import Header from '../../components/Header';
 import HelpButton from '../../components/HelpButton';
+import LeaveReviewHistory from '../../components/LeaveReviewHistory';
 import LeaveStatusBadge from '../../components/LeaveStatusBadge/LeaveStatusBadge';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import {
@@ -202,27 +203,8 @@ export default function LeaveRequestsPage() {
                       <dt>Submitted</dt>
                       <dd>{formatIstDateTime(request.submittedAt)}</dd>
                     </div>
-                    {request.reviewerName && (
-                      <div>
-                        <dt>Reviewed by</dt>
-                        <dd>
-                          {request.reviewerName}
-                          {request.reviewerRole ? ` (${request.reviewerRole.toLowerCase()})` : ''}
-                        </dd>
-                      </div>
-                    )}
-                    {request.reviewedAt && (
-                      <div>
-                        <dt>Review date</dt>
-                        <dd>{formatIstDateTime(request.reviewedAt)}</dd>
-                      </div>
-                    )}
                   </dl>
-                  {request.feedback && (
-                    <p className={styles.feedback}>
-                      <strong>Feedback:</strong> {request.feedback}
-                    </p>
-                  )}
+                  <LeaveReviewHistory reviews={request.reviews} />
                 </li>
               ))}
             </ul>

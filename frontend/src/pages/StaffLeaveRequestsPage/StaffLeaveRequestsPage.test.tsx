@@ -135,7 +135,7 @@ describe('StaffLeaveRequestsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'View' }));
     expect(screen.getByText('Changing address.')).toBeTruthy();
     expect(screen.getByText(/Mock Mentor \(mentor\)/)).toBeTruthy();
-    expect(screen.getByText('All the best with the move.')).toBeTruthy();
+    expect(screen.getByText(/All the best with the move./)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
   });
 
@@ -185,7 +185,22 @@ describe('StaffLeaveRequestsPage', () => {
     vi.mocked(reviewLeaveRequest).mockRejectedValue(
       new ApiError(409, 'ALREADY_REVIEWED', 'Another reviewer already decided this request.')
     );
-    const refreshed: LeaveRequest = { ...pending, status: 'APPROVED', reviewerName: 'Manager' };
+    const refreshed: LeaveRequest = {
+      ...pending,
+      status: 'APPROVED',
+      reviewerName: 'Manager',
+      reviews: [
+        {
+          id: 'review-3',
+          reviewerId: 'manager-2',
+          reviewerName: 'Manager',
+          reviewerRole: 'MANAGER',
+          decision: 'APPROVED',
+          feedback: null,
+          reviewedAt: '2026-11-21T13:00:00.000Z',
+        },
+      ],
+    };
     vi.mocked(getLeaveRequestsForReviewer)
       .mockResolvedValueOnce([pending, decided])
       .mockResolvedValueOnce([refreshed, decided]);
@@ -197,7 +212,7 @@ describe('StaffLeaveRequestsPage', () => {
 
     expect(await screen.findByText('Another reviewer already decided this request.')).toBeTruthy();
     await waitFor(() => expect(getLeaveRequestsForReviewer).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.getByText('Manager')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Manager \(manager\)/)).toBeTruthy());
   });
 
   it('shows the assigned Mentor column in the manager area', async () => {
@@ -207,6 +222,61 @@ describe('StaffLeaveRequestsPage', () => {
     expect(await screen.findByText('Mock Mentor')).toBeTruthy();
     expect(screen.getByText('Other Mentor')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Review' })).toHaveLength(2);
+  });
+
+  it('lets a Manager reject a Mentor-approved request and shows both reviews', async () => {
+    vi.mocked(getLeaveRequestsForReviewer).mockResolvedValue([decided]);
+    vi.mocked(reviewLeaveRequest).mockResolvedValue({
+      ...decided,
+      status: 'REJECTED',
+      reviewerId: 'manager-1',
+      reviewerName: 'Mock Manager',
+      reviewerRole: 'MANAGER',
+      feedback: 'The dates changed.',
+      reviewedAt: '2026-11-21T14:00:00.000Z',
+      reviews: [
+        ...(decided.reviews ?? []),
+        {
+          id: 'review-2',
+          reviewerId: 'manager-1',
+          reviewerName: 'Mock Manager',
+          reviewerRole: 'MANAGER',
+          decision: 'REJECTED',
+          feedback: 'The dates changed.',
+          reviewedAt: '2026-11-21T14:00:00.000Z',
+        },
+      ],
+    });
+    renderPage('manager');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+    expect(screen.getByText(/Mock Mentor \(mentor\)/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    expect(await screen.findByText('Add feedback before rejecting the request.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Feedback / note'), {
+      target: { value: 'The dates changed.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+
+    await waitFor(() =>
+      expect(reviewLeaveRequest).toHaveBeenCalledWith('manager', 'request-3', {
+        decision: 'REJECTED',
+        feedback: 'The dates changed.',
+      })
+    );
+    expect(await screen.findByText('Leave request rejected.')).toBeTruthy();
+  });
+
+  it('does not offer a Mentor any action on a decided request', async () => {
+    vi.mocked(getLeaveRequestsForReviewer).mockResolvedValue([decided]);
+    renderPage('admin');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View' }));
+    expect(screen.getByText(/Mock Mentor \(mentor\)/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
   });
 
   it('shows a load error with a retry action', async () => {
