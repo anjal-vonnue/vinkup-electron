@@ -13,6 +13,7 @@ const TABLES = [
   'journal_response',
   'day_completion',
   'task_review',
+  'leave_request',
   'task_progress',
   'self_check_item',
   'learning_objective',

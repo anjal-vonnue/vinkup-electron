@@ -16,6 +16,8 @@ import type {
   TaskReview,
   TaskReviewSummary,
   AdminFeedbackEntry,
+  CreateLeaveRequestInput,
+  LeaveRequest,
 } from '@itp/types';
 import { mockUser } from '../test/fixtures/user';
 import {
@@ -58,7 +60,68 @@ function currentMockUser() {
 
 const savedFiles = new Map<string, TaskFile[]>();
 const mockReviews: TaskReview[] = [];
+const mockLeaveRequests: LeaveRequest[] = [];
 const JOURNAL_STORAGE_KEY = 'itp-mock-journals-v1';
+
+/** Which staff area the mock server is pretending to be. */
+function mockStaffArea(): 'admin' | 'manager' | null {
+  const role = import.meta.env.VITE_MOCK_ROLE;
+  if (role === 'manager') return 'manager';
+  if (role === 'mentor' || role === 'admin') return 'admin';
+  return null;
+}
+
+function seedMockLeaveRequests(): void {
+  const otherMentor = { id: 'mock-admin-002', name: 'Other Mentor' };
+  const base = {
+    traineeName: 'Mock Trainee',
+    subject: 'Medical appointment',
+    reason: 'A hospital appointment during lab hours.',
+    reviewerId: null,
+    reviewerName: null,
+    reviewerRole: null,
+    feedback: null,
+    reviewedAt: null,
+  };
+  mockLeaveRequests.push(
+    {
+      ...base,
+      id: 'mock-leave-1',
+      traineeId: 'mock-trainee-1',
+      assignedMentor: { id: mockAdmin.id, name: mockAdmin.name },
+      status: 'PENDING',
+      submittedAt: '2026-11-20T09:00:00.000Z',
+      createdAt: '2026-11-20T09:00:00.000Z',
+      updatedAt: '2026-11-20T09:00:00.000Z',
+    },
+    {
+      ...base,
+      id: 'mock-leave-2',
+      traineeId: 'mock-trainee-2',
+      assignedMentor: { id: mockAdmin.id, name: mockAdmin.name },
+      subject: 'Family event',
+      reason: 'Travel for a family celebration.',
+      status: 'PENDING',
+      submittedAt: '2026-11-19T11:30:00.000Z',
+      createdAt: '2026-11-19T11:30:00.000Z',
+      updatedAt: '2026-11-19T11:30:00.000Z',
+    },
+    {
+      ...base,
+      id: 'mock-leave-3',
+      traineeId: 'mock-trainee-3',
+      assignedMentor: otherMentor,
+      subject: 'Exam preparation',
+      reason: 'Need a day to prepare for a certification exam.',
+      status: 'PENDING',
+      submittedAt: '2026-11-18T06:15:00.000Z',
+      createdAt: '2026-11-18T06:15:00.000Z',
+      updatedAt: '2026-11-18T06:15:00.000Z',
+    }
+  );
+}
+
+seedMockLeaveRequests();
 
 function readSavedJournals(): Record<string, string | null> {
   try {
@@ -107,6 +170,27 @@ function errorResponse(
   const data: ApiErrorResponse = { error: { code, message } };
   const response = respond(config, status, data);
   return Promise.reject(new AxiosError(message, undefined, config, undefined, response));
+}
+
+function buildMockLeaveRequest(body: CreateLeaveRequestInput): LeaveRequest {
+  const now = new Date().toISOString();
+  return {
+    id: `leave-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    traineeId: mockUser.id,
+    traineeName: mockUser.name,
+    assignedMentor: null,
+    subject: body.subject.trim(),
+    reason: body.reason.trim(),
+    status: 'PENDING',
+    submittedAt: now,
+    reviewerId: null,
+    reviewerName: null,
+    reviewerRole: null,
+    feedback: null,
+    reviewedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 // Tasks: test scenarios first (/tasks/t-browser, t-node, t-sql, … see mockTasks/scenarios.ts),
@@ -168,6 +252,10 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
   const adminTaskReviewsMatch = /^\/admin\/trainees\/([^/]+)\/tasks\/([^/]+)\/reviews$/.exec(url);
   const adminFeedbackMatch = /^\/admin\/trainees\/([^/]+)\/feedback$/.exec(url);
   const courseCertificateMatch = /^\/courses\/([^/]+)\/certificate$/.exec(url);
+  const leaveRequestMatch = /^\/leave-requests\/([^/]+)$/.exec(url);
+  const staffLeaveRequestsMatch = /^\/(admin|manager)\/leave-requests$/.exec(url);
+  const staffLeaveReviewMatch = /^\/(admin|manager)\/leave-requests\/([^/]+)\/review$/.exec(url);
+  const staffLeaveRequestMatch = /^\/(admin|manager)\/leave-requests\/([^/]+)$/.exec(url);
 
   if (method === 'get' && codeMatch) {
     const taskId = codeMatch[1];
@@ -262,6 +350,103 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
 
   if (method === 'get' && url === '/auth/me') {
     return respond(config, 200, currentMockUser());
+  }
+
+  if (url === '/leave-requests') {
+    if (currentMockUser().role !== 'trainee') {
+      return errorResponse(config, 403, 'FORBIDDEN', 'This page is for trainees.');
+    }
+    if (method === 'post') {
+      const body = JSON.parse(config.data as string) as CreateLeaveRequestInput;
+      if (!body.subject?.trim() || !body.reason?.trim()) {
+        return errorResponse(config, 400, 'VALIDATION_FAILED', 'Subject and reason are required.');
+      }
+      const created = buildMockLeaveRequest(body);
+      mockLeaveRequests.unshift(created);
+      return respond(config, 201, created);
+    }
+    if (method === 'get') {
+      return respond(
+        config,
+        200,
+        mockLeaveRequests.filter((request) => request.traineeId === mockUser.id)
+      );
+    }
+  }
+
+  if (method === 'get' && leaveRequestMatch) {
+    const request = mockLeaveRequests.find((item) => item.id === leaveRequestMatch[1]);
+    if (!request || request.traineeId !== mockUser.id) {
+      return errorResponse(config, 404, 'NOT_FOUND', 'Leave request not found.');
+    }
+    return respond(config, 200, request);
+  }
+
+  if (staffLeaveRequestsMatch && method === 'get') {
+    if (mockStaffArea() !== staffLeaveRequestsMatch[1]) {
+      return errorResponse(config, 403, 'FORBIDDEN', 'You cannot review leave requests.');
+    }
+    const visible =
+      staffLeaveRequestsMatch[1] === 'manager'
+        ? mockLeaveRequests
+        : mockLeaveRequests.filter(
+            (request) => request.assignedMentor?.id === currentMockUser().id
+          );
+    return respond(
+      config,
+      200,
+      [...visible].sort((a, b) => a.status.localeCompare(b.status))
+    );
+  }
+
+  if (staffLeaveRequestMatch && method === 'get') {
+    if (mockStaffArea() !== staffLeaveRequestMatch[1]) {
+      return errorResponse(config, 403, 'FORBIDDEN', 'You cannot review leave requests.');
+    }
+    const request = mockLeaveRequests.find((item) => item.id === staffLeaveRequestMatch[2]);
+    const allowed =
+      staffLeaveRequestMatch[1] === 'manager' ||
+      request?.assignedMentor?.id === currentMockUser().id;
+    if (!request || !allowed) {
+      return errorResponse(config, 404, 'NOT_FOUND', 'Leave request not found.');
+    }
+    return respond(config, 200, request);
+  }
+
+  if (staffLeaveReviewMatch && method === 'patch') {
+    if (mockStaffArea() !== staffLeaveReviewMatch[1]) {
+      return errorResponse(config, 403, 'FORBIDDEN', 'You cannot review leave requests.');
+    }
+    const request = mockLeaveRequests.find((item) => item.id === staffLeaveReviewMatch[2]);
+    const allowed =
+      staffLeaveReviewMatch[1] === 'manager' ||
+      request?.assignedMentor?.id === currentMockUser().id;
+    if (!request || !allowed) {
+      return errorResponse(config, 404, 'NOT_FOUND', 'Leave request not found.');
+    }
+    if (request.status !== 'PENDING') {
+      return errorResponse(config, 409, 'ALREADY_REVIEWED', 'This request was already reviewed.');
+    }
+    const body = JSON.parse(config.data as string) as {
+      decision: 'APPROVED' | 'REJECTED';
+      feedback?: string;
+    };
+    if (body.decision === 'REJECTED' && !body.feedback?.trim()) {
+      return errorResponse(config, 400, 'VALIDATION_FAILED', 'Add feedback before rejecting.');
+    }
+    const now = new Date().toISOString();
+    const reviewed: LeaveRequest = {
+      ...request,
+      status: body.decision,
+      reviewerId: currentMockUser().id,
+      reviewerName: currentMockUser().name,
+      reviewerRole: staffLeaveReviewMatch[1] === 'manager' ? 'MANAGER' : 'MENTOR',
+      feedback: body.feedback?.trim() || null,
+      reviewedAt: now,
+      updatedAt: now,
+    };
+    Object.assign(request, reviewed);
+    return respond(config, 200, reviewed);
   }
 
   if (method === 'get' && dayContentMatch) {
@@ -444,7 +629,6 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
       return respond(config, 200, buildAdminTrainees());
     }
 
-
     if (adminTaskReviewsMatch) {
       const [, , taskId] = adminTaskReviewsMatch;
       const reviews = mockReviews.filter((r) => r.taskId === taskId);
@@ -478,7 +662,7 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
       return analytics
         ? respond(config, 200, analytics)
         : errorResponse(config, 404, 'NOT_FOUND', 'Trainee not found.');
-  }
+    }
 
     if (adminFlagsMatch) {
       const flags = buildAdminFlags(adminFlagsMatch[1]);

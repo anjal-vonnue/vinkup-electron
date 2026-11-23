@@ -95,6 +95,25 @@ function ResourcesIcon() {
   );
 }
 
+function LeaveIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="4" width="13" height="11" rx="2" />
+      <path d="M6 2.5v3M12 2.5v3M2.5 8h13M6.5 11h2" />
+    </svg>
+  );
+}
+
 function getInitials(name?: string) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -253,6 +272,14 @@ export default function Header({ leading, status }: HeaderProps) {
           >
             <JournalIcon />
             <NavLabel text="Journal" />
+          </NavLink>
+          <NavLink
+            to="/leave-requests"
+            end
+            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+          >
+            <LeaveIcon />
+            <NavLabel text="Leave" />
           </NavLink>
           <NavLink
             to="/resources"

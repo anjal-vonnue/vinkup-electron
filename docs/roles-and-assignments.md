@@ -5,8 +5,8 @@ decides which mentor sees each trainee. A mentor only sees the trainees assigned
 only sees their own workspace.
 
 This document covers the role hierarchy, the assignment lifecycle, the authorization changes, the
-database migration strategy and the deployment steps. For the review lifecycle itself see
-[task-review-workflow.md](./task-review-workflow.md); for every endpoint see
+leave request workflow, the database migration strategy and the deployment steps. For the task review
+lifecycle see [task-review-workflow.md](./task-review-workflow.md); for every endpoint see
 [api-specifications.md](./api-specifications.md).
 
 ## 1. Role hierarchy
@@ -21,12 +21,15 @@ database migration strategy and the deployment steps. For the review lifecycle i
 Manager
   ├── creates, edits, activates and deactivates mentors and managers
   ├── creates, edits, activates and deactivates trainees
-  └── assigns, reassigns and unassigns trainees
+  ├── assigns, reassigns and unassigns trainees
+  └── sees and reviews every leave request
 Mentor
   ├── sees only assigned trainees in lists, detail, analytics, reviews and exports
+  ├── sees and reviews leave requests from assigned trainees only
   └── creates trainees; a created trainee is assigned to that mentor immediately
 Trainee
-  └── sees only their own dashboard, tasks, journal, profile and certificates
+  ├── sees only their own dashboard, tasks, journal, profile and certificates
+  └── submits leave requests and sees only their own request history
 ```
 
 Key rules:
@@ -80,7 +83,7 @@ model trainee {
 - `trainee_mentor_id_idx` keeps assignment lookups and mentor lists fast.
 
 There is no assignment-history table yet; the current link is the source of truth. See
-[Limitations](#8-limitations).
+[Limitations](#9-limitations).
 
 ## 2. Assignment workflow
 
@@ -146,13 +149,14 @@ Because the guards run at the router mount:
 
 ### Endpoint map
 
-| Prefix                                        | Guard                                                             | Notes                           |
-| --------------------------------------------- | ----------------------------------------------------------------- | ------------------------------- |
-| `/api/profile`, `/api/dashboard`, `/api/days` | `requireTrainee`                                                  | Trainee identity from the token |
-| `/api/tasks`, `/api/journal`, `/api/activity` | `requireTrainee`                                                  | Same                            |
-| `/api/typing-test`, `/api/courses`            | `requireTrainee`                                                  | Same                            |
-| `/api/admin/*`                                | `requireMentor` + `requireAssignedTrainee` on `:traineeId` routes | Mentor-only                     |
-| `/api/manager/*`                              | `requireManager`                                                  | Manager-only                    |
+| Prefix                                        | Guard                                                             | Notes                                                    |
+| --------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------- |
+| `/api/profile`, `/api/dashboard`, `/api/days` | `requireTrainee`                                                  | Trainee identity from the token                          |
+| `/api/tasks`, `/api/journal`, `/api/activity` | `requireTrainee`                                                  | Same                                                     |
+| `/api/typing-test`, `/api/courses`            | `requireTrainee`                                                  | Same                                                     |
+| `/api/leave-requests`                         | `requireTrainee`                                                  | Trainee: own requests only                               |
+| `/api/admin/*`                                | `requireMentor` + `requireAssignedTrainee` on `:traineeId` routes | Mentor-only; leave list/detail scoped by `mentor_id`     |
+| `/api/manager/*`                              | `requireManager`                                                  | Manager-only; leave list/detail has no assignment filter |
 
 The assignment guard covers **every** mentor route that names a trainee: detail, flags, task code,
 submit review (approve/rework), review history and the feedback feed. Unassignment therefore closes
@@ -177,15 +181,17 @@ New error codes: `STAFF_EXISTS`, `STAFF_HAS_TRAINEES`, plus the existing `INVALI
 
 ## 4. Frontend routing and UI
 
-| Role    | Home       | Routes                                                       |
-| ------- | ---------- | ------------------------------------------------------------ |
-| Trainee | `/`        | Dashboard, days, tasks, journal, profile, certificates, help |
-| Mentor  | `/admin`   | Assigned trainee list and detail                             |
-| Manager | `/manager` | Users & assignments console                                  |
+| Role    | Home       | Routes                                                              |
+| ------- | ---------- | ------------------------------------------------------------------- |
+| Trainee | `/`        | Dashboard, days, tasks, journal, profile, certificates, help, leave |
+| Mentor  | `/admin`   | Assigned trainee list and detail, leave requests                    |
+| Manager | `/manager` | Users & assignments console, leave requests                         |
 
-`RoleRoute` sends a signed-in user who opens another role's route to their own home. The staff
-header (`AdminHeader`) is shared: the mentor view shows "My trainees", the manager view shows
-"Users & assignments".
+`RoleRoute` sends a signed-in user who opens another role's route to their own home. The trainee
+header (`Header`) adds a **Leave requests** link for trainees. The staff header (`AdminHeader`) is
+shared: the mentor view shows "My trainees", the manager view shows "Users & assignments"; both add
+a **Leave requests** link. Mentor and Manager use the same `StaffLeaveRequestsPage` component with
+an `area` prop that selects the API prefix and shows the Manager-only "Assigned Mentor" column.
 
 The manager console has explicit loading, error-with-retry, empty, busy and confirmation states:
 
@@ -280,6 +286,12 @@ lookup, and the middleware guards. API contract tests cover:
   unassignment;
 - deactivation preserving records and the assignment.
 
+Leave-specific tests cover the Trainee, Mentor and Manager flows: submission and validation, own-only
+history, mentor assignment scoping, manager platform-wide access, recorded reviewer and feedback,
+rejection validation, and duplicate/conflicting reviews (including a simultaneous Mentor and Manager
+decision). They live in `backend/src/module/leave-module`, the frontend `LeaveRequestsPage` and
+`StaffLeaveRequestsPage` tests, and `backend/src/test/api/leave-request.api.test.ts`.
+
 Run them with:
 
 ```bash
@@ -294,7 +306,44 @@ apply the migrations first:
 DATABASE_URL="<TEST_DATABASE_URL>" npx prisma migrate deploy --config prisma7.config.ts
 ```
 
-## 7. Manual verification checklist
+## 7. Leave request workflow
+
+Trainees request time off from the trainee header (**Leave requests**, `/leave-requests`). A Mentor
+reviews requests from their assigned trainees at `/admin/leave-requests`; a Manager reviews every
+request at `/manager/leave-requests`. Both roles use one shared page and one shared approval workflow.
+
+**Permissions (enforced in middleware, service and every DB query):**
+
+| Role    | Submit | Read                                            | Decide                                        |
+| ------- | ------ | ----------------------------------------------- | --------------------------------------------- |
+| Trainee | Yes    | Only their own requests                         | Never — no trainee review endpoint exists     |
+| Mentor  | No     | Only requests for `trainee.mentor_id = user.id` | `PENDING` requests for assigned trainees only |
+| Manager | No     | Every request                                   | Any `PENDING` request                         |
+
+Trainees own the request content (`subject`, `reason`) but never the decision. The trainee id always
+comes from the JWT, so a trainee cannot submit on another's behalf or read their requests by guessing
+an id (an out-of-scope detail returns `404 NOT_FOUND`). Mentors get a `404` for unassigned requests on
+both read and review, and cannot use the manager prefix; managers cannot use the mentor prefix.
+
+**Lifecycle:**
+
+1. A Trainee submits a subject (1–200 chars) and reason (1–2,000 chars). The request starts `PENDING`
+   with no reviewer, feedback or review time.
+2. A Mentor or Manager opens the request and chooses **Approve** or **Reject**. Feedback is optional
+   for an approval and required (non-blank) for a rejection, both capped at 2,000 chars.
+3. The reviewer id, role (`MENTOR` or `MANAGER`), name and `reviewed_at` are recorded on the same row.
+   The Trainee can then see the decision and feedback in their own history.
+
+**Conflict handling:** a decision is final. The service runs in a transaction and uses a conditional
+`UPDATE ... WHERE status = 'PENDING'`; if another reviewer decides first, the loser gets
+`409 ALREADY_REVIEWED` and the UI refreshes the list. The database enforces the same rule with CHECK
+constraints and a `BEFORE UPDATE OF status` trigger, so a decided request cannot be changed by any
+other code path. Historical rows are retained (`ON DELETE RESTRICT`).
+
+See [api-specifications.md](./api-specifications.md#leave-requests) for request/response shapes and
+[database.md](./database.md) for the `leave_request` columns, constraints and indexes.
+
+## 8. Manual verification checklist
 
 1. Sign in as a manager. Confirm you land on `/manager` and `/admin` redirects back to `/manager`.
 2. Create a mentor and a trainee. Leave the trainee unassigned and confirm the row says Unassigned.
@@ -308,18 +357,32 @@ DATABASE_URL="<TEST_DATABASE_URL>" npx prisma migrate deploy --config prisma7.co
 8. Deactivate a trainee and confirm they cannot sign in, while the manager still sees their records.
 9. Sign in as a trainee and confirm `/manager` and `/admin` are inaccessible.
 
-## 8. Limitations
+**Leave workflow:**
+
+10. As a Trainee, submit a leave request and confirm it appears only in your history as `PENDING`.
+    Try to open a staff review URL: expect a redirect to the trainee home, and no review endpoint
+    is reachable with the trainee cookie (`403`).
+11. As that Trainee's Mentor, confirm the request appears in `/admin/leave-requests` and a request
+    from an unassigned trainee does not. Reject one without feedback: expect a validation message.
+    Approve the other and confirm the reviewer role is `MENTOR` and the Trainee sees the decision.
+12. Try to review the decided request again (as Mentor or Manager): expect `ALREADY_REVIEWED`.
+13. As a Manager, confirm `/manager/leave-requests` lists every request with its assigned Mentor and
+    that you can approve a request belonging to a trainee assigned to another mentor.
+
+## 9. Limitations
 
 - **No assignment history.** Only the current mentor is stored. If an audit trail is needed later,
   add an append-only `trainee_mentor_assignment` table written in the same transaction as the
   update.
-- **Managers cannot act as mentors.** Managers cannot open `/api/admin` or review tasks; they manage
-  accounts only. A manager who also mentors needs a separate mentor account.
+- **Managers cannot act as mentors.** Managers cannot open `/api/admin` or review _tasks_; they manage
+  accounts only. The exception is leave requests: a Manager reviews all of them through the separate
+  `/api/manager/leave-requests` routes. A manager who also mentors needs a separate mentor account.
 - **Existing trainees stay unassigned** until a manager assigns them, by design.
 - **No bulk assignment.** The console assigns one trainee at a time.
-- **Mock mode covers trainees and mentors only.** The frontend mock adapter (`VITE_USE_MOCKS=true`)
-  has no `/manager` endpoints, so the manager console needs the real API. Previews without a backend
-  still show the trainee and mentor views.
+- **Mock mode does not cover the manager console.** The frontend mock adapter (`VITE_USE_MOCKS=true`)
+  has no `/manager` account/assignment endpoints, so that console needs the real API. Leave requests
+  do have mock handlers for all three roles (`VITE_MOCK_ROLE=trainee|mentor|manager`), and previews
+  without a backend still show the trainee, mentor and manager leave pages.
 - **Promotion is blocked while trainees are assigned.** This avoids silently orphaning access;
   reassign first.
 - **Account creation does not send invitations.** Staff and trainees still sign in with the

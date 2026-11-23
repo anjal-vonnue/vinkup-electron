@@ -36,6 +36,11 @@ type ActiveTab = 'staff' | 'trainees';
 
 const PAGE_SIZE = 5;
 
+const MANAGER_NAV = [
+  { to: '/manager', label: 'Users & assignments', end: true },
+  { to: '/manager/leave-requests', label: 'Leave requests', end: true },
+];
+
 function byName<T extends { name: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -270,7 +275,7 @@ export default function ManagerPage() {
         <AdminHeader
           homePath="/manager"
           badge="Manager view"
-          navItems={[{ to: '/manager', label: 'Users & assignments', end: true }]}
+          navItems={MANAGER_NAV}
           navLabel="Manager navigation"
         />
         <main className={styles.page}>
@@ -291,7 +296,7 @@ export default function ManagerPage() {
         <AdminHeader
           homePath="/manager"
           badge="Manager view"
-          navItems={[{ to: '/manager', label: 'Users & assignments', end: true }]}
+          navItems={MANAGER_NAV}
           navLabel="Manager navigation"
         />
         <main className={styles.page}>
@@ -309,7 +314,7 @@ export default function ManagerPage() {
       <AdminHeader
         homePath="/manager"
         badge="Manager view"
-        navItems={[{ to: '/manager', label: 'Users & assignments', end: true }]}
+        navItems={MANAGER_NAV}
         navLabel="Manager navigation"
       />
 
