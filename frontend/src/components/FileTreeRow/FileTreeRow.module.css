@@ -87,3 +87,13 @@
 .deleteButton:hover {
   color: var(--color-status-error-text);
 }
+
+.row.rowDropTarget {
+  background-color: var(--color-accent-purple-wash);
+  outline: 1px dashed var(--color-accent-border);
+  outline-offset: -1px;
+}
+
+.rowDragging {
+  opacity: 0.5;
+}

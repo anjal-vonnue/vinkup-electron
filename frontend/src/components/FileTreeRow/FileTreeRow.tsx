@@ -29,6 +29,9 @@ type FileTreeRowProps = {
   onNewFile?: () => void;
   onNewFolder?: () => void;
   onStartRename?: () => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
 };
 
 function FileTreeRow({
@@ -47,6 +50,9 @@ function FileTreeRow({
   onNewFile,
   onNewFolder,
   onStartRename,
+  draggable,
+  isDragging,
+  isDropTarget,
 }: FileTreeRowProps) {
   const isFolder = node.type === 'folder';
 
@@ -81,7 +87,15 @@ function FileTreeRow({
       aria-expanded={isFolder ? isExpanded : undefined}
       aria-selected={!isFolder ? isActive : undefined}
       tabIndex={tabIndex}
-      className={isActive ? `${styles.row} ${styles.rowActive}` : styles.row}
+      draggable={draggable && !isRenaming}
+      className={[
+        styles.row,
+        isActive && styles.rowActive,
+        isDropTarget && styles.rowDropTarget,
+        isDragging && styles.rowDragging,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={{ paddingLeft: 12 + depth * 16 }}
       onClick={handleActivate}
       data-path={node.path}

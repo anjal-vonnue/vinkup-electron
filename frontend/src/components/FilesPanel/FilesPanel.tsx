@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
+import { ToastContext } from '../Toast';
 import { FolderOpen, FilePlus, FolderPlus, RefreshCw, ChevronsDownUp } from 'lucide-react';
 import { buildFileTree, type TreeNode } from '../../lib/buildFileTree';
 import NewFolderInput from '../NewFolderInput';
@@ -30,6 +31,10 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
   const [creating, setCreating] = useState<Creating | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TreeNode | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null);
+
+  const toastContext = useContext(ToastContext);
+  const showToast = toastContext?.show ?? (() => {});
 
   const visiblePaths = selectVisiblePaths(state);
   const dirtyPaths = new Set(selectDirtyPaths(state));
@@ -77,6 +82,31 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
 
     setPendingDelete(null);
   }
+
+  function handleMove(fromPath: string, targetFolder: string) {
+    const name = fromPath.slice(fromPath.lastIndexOf('/') + 1);
+    const target = targetFolder ? `${targetFolder}/${name}` : name;
+
+    const plan = planRelocation(visiblePaths, fromPath, target);
+    if (!plan.ok) {
+      showToast({ message: plan.message, variant: 'error' });
+      return;
+    }
+    if (plan.unchanged) return; // dropped where it already is
+    setPendingMove({ from: plan.from, to: plan.to });
+  }
+
+  function handleConfirmMove() {
+    if (!pendingMove) return;
+    dispatch({ type: 'pathRelocated', from: pendingMove.from, to: pendingMove.to });
+    setPendingMove(null);
+  }
+
+  const moveName = pendingMove ? pendingMove.from.slice(pendingMove.from.lastIndexOf('/') + 1) : '';
+  const moveDestination =
+    pendingMove && pendingMove.to.includes('/')
+      ? pendingMove.to.slice(0, pendingMove.to.lastIndexOf('/'))
+      : 'the top level';
 
   return (
     <div className={styles.panel}>
@@ -146,6 +176,7 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
         onRenameCancel={() => setRenamingPath(null)}
         onNewFile={(node) => setCreating({ kind: 'file', parent: node.path })}
         onNewFolder={(node) => setCreating({ kind: 'folder', parent: node.path })}
+        onMove={handleMove}
       />
 
       <div className={styles.footer}>{fileCount} files</div>
@@ -159,6 +190,16 @@ export default function FilesPanel({ onRefresh }: FilesPanelProps) {
         onCancel={() => setPendingDelete(null)}
       >
         This can&rsquo;t be undone.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={pendingMove !== null}
+        title={`Move ${moveName} into ${moveDestination}?`}
+        confirmLabel="Move"
+        onConfirm={handleConfirmMove}
+        onCancel={() => setPendingMove(null)}
+      >
+        Open tabs and unsaved changes move with it.
       </ConfirmDialog>
     </div>
   );
