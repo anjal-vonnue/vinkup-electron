@@ -223,8 +223,8 @@ _Time a trainee spent on the platform each day._
 
 _A Trainee's leave request and its current/final decision. A Trainee submits the subject and reason;
 reviewers decide through the [leave workflow](./leave-request-workflow.md). The review columns mirror
-the latest decision; the full decision history lives in `leave_review`, so a Manager's rejection does
-not erase the preceding Mentor approval. Rows are kept as history and never deleted._
+the latest decision; the full decision history lives in `leave_review`, so a Manager's decision does
+not erase the preceding Mentor approval or rejection. Rows are kept as history and never deleted._
 
 | Column        | Type         | Key | Null? | Description                                                                               |
 | :------------ | :----------- | :-- | :---- | :---------------------------------------------------------------------------------------- |
@@ -246,20 +246,23 @@ not erase the preceding Mentor approval. Rows are kept as history and never dele
 (status, submitted_at) for reviewer lists. `ON DELETE RESTRICT` on both foreign keys preserves
 historical requests when an account is removed.
 
-**Decision integrity (migrations `20261121120000_add_leave_request` and
-`20261123150000_add_leave_review_history`):** CHECK constraints require non-blank `subject` and
-`reason`, forbid any reviewer/feedback/reviewed_at fields while `PENDING`, require `reviewer_id`,
-`reviewer_role` and `reviewed_at` once decided, and require non-blank feedback for `REJECTED`. The
-`leave_request_status_guard` trigger allows only `PENDING → APPROVED/REJECTED` and an `APPROVED`
-(Mentor) → `REJECTED` (Manager) transition; it also blocks changes to review fields without a valid
-transition. The API uses a conditional `UPDATE` inside a transaction so concurrent reviews cannot both
-succeed; the loser gets `409 ALREADY_REVIEWED`.
+**Decision integrity (migrations `20261121120000_add_leave_request`,
+`20261123150000_add_leave_review_history` and
+`20261123160000_allow_manager_review_of_mentor_rejection`):** CHECK constraints require non-blank
+`subject` and `reason`, forbid any reviewer/feedback/reviewed_at fields while `PENDING`, require
+`reviewer_id`, `reviewer_role` and `reviewed_at` once decided, and require non-blank feedback for
+`REJECTED`. The `leave_request_status_guard` trigger allows only `PENDING → APPROVED/REJECTED` and
+Mentor-decision → Manager-decision transitions (`APPROVED → REJECTED` and
+`REJECTED → APPROVED/REJECTED`); it also blocks changes to review fields without a valid transition.
+The API uses a conditional `UPDATE` inside a transaction so concurrent reviews cannot both succeed;
+the loser gets `409 ALREADY_REVIEWED`.
 
 ### leave_review
 
 _Append-only history of decisions on a leave request. One row per reviewer role preserves a Mentor
-approval when a Manager later rejects the same request. Backfilled from `leave_request` by migration
-`20261123150000_add_leave_review_history`; no existing records are deleted._
+decision when a Manager later reviews the same request (approve or re-reject). Backfilled from
+`leave_request` by migration `20261123150000_add_leave_review_history`; no existing records are
+deleted._
 
 | Column           | Type         | Key | Null? | Description                                                                     |
 | :--------------- | :----------- | :-- | :---- | :------------------------------------------------------------------------------ |

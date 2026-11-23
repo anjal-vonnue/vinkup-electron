@@ -128,15 +128,20 @@ export class LeaveRequestRepository {
       const decision =
         input.decision === 'APPROVED' ? leave_status.APPROVED : leave_status.REJECTED;
 
-      // Only two writes are legal: a first decision on PENDING, or a Manager
-      // rejecting an approval that is still recorded as the Mentor's.
+      // Only three writes are legal: a first decision on PENDING, a Manager
+      // rejecting a Mentor approval, or a Manager overriding a Mentor rejection
+      // (approve or re-reject). In both override cases the row must still be
+      // recorded as the Mentor's decision.
       const reviewingPending = current.status === leave_status.PENDING;
+      const managerOverridingMentor =
+        input.reviewer.role === 'MANAGER' && current.reviewer_role === staff_role.MENTOR;
       const managerRejectingApproval =
-        input.reviewer.role === 'MANAGER' &&
+        managerOverridingMentor &&
         decision === leave_status.REJECTED &&
-        current.status === leave_status.APPROVED &&
-        current.reviewer_role === staff_role.MENTOR;
-      if (!reviewingPending && !managerRejectingApproval) {
+        current.status === leave_status.APPROVED;
+      const managerReviewingMentorRejection =
+        managerOverridingMentor && current.status === leave_status.REJECTED;
+      if (!reviewingPending && !managerRejectingApproval && !managerReviewingMentorRejection) {
         return { ok: false, reason: 'already-reviewed' } as const;
       }
 
@@ -152,11 +157,19 @@ export class LeaveRequestRepository {
       if (alreadyReviewedByRole) return { ok: false, reason: 'already-reviewed' } as const;
 
       const reviewedAt = new Date();
+      // Re-check the expected current decision in the UPDATE itself, so a
+      // competing review that commits after the read above makes this affect
+      // zero rows and the loser gets a 409.
+      const expectedStatus = managerRejectingApproval
+        ? leave_status.APPROVED
+        : managerReviewingMentorRejection
+          ? leave_status.REJECTED
+          : leave_status.PENDING;
       const updated = await tx.leave_request.updateMany({
         where: {
           id: input.requestId,
-          status: managerRejectingApproval ? leave_status.APPROVED : leave_status.PENDING,
-          ...(managerRejectingApproval ? { reviewer_role: staff_role.MENTOR } : {}),
+          status: expectedStatus,
+          ...(managerOverridingMentor ? { reviewer_role: staff_role.MENTOR } : {}),
           ...leaveScopeFor(input.reviewer),
         },
         data: {

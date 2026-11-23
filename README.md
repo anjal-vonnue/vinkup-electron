@@ -36,8 +36,8 @@ their code and journal, and add new trainees.
   trainees; assign, reassign and unassign trainees. Reassignment takes effect immediately.
 - **Leave requests:** trainees submit a subject and reason and see only their own history; mentors
   review requests from assigned trainees and managers review all requests, including rejecting a
-  Mentor-approved request with feedback. Every decision is kept in an append-only review history, so
-  trainees see who approved or rejected and why. See the
+  Mentor-approved request or approving/re-rejecting a Mentor-rejected one. Every decision is kept in
+  an append-only review history, so trainees see who approved or rejected and why. See the
   [leave workflow](docs/leave-request-workflow.md) and
   [roles and assignments](docs/roles-and-assignments.md#7-leave-request-workflow).
 - **Three roles:** trainees, mentors and managers sign in the same way; each role only reaches its

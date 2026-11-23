@@ -434,9 +434,20 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
       return errorResponse(config, 400, 'VALIDATION_FAILED', 'Add feedback before rejecting.');
     }
     const reviewerRole = staffLeaveReviewMatch[1] === 'manager' ? 'MANAGER' : 'MENTOR';
+    const managerOverridingMentor = reviewerRole === 'MANAGER' && request.reviewerRole === 'MENTOR';
     const isManagerRejectionOfApproval =
-      reviewerRole === 'MANAGER' && body.decision === 'REJECTED' && request.status === 'APPROVED';
-    if (request.status !== 'PENDING' && !isManagerRejectionOfApproval) {
+      managerOverridingMentor && body.decision === 'REJECTED' && request.status === 'APPROVED';
+    const isManagerReviewOfMentorRejection =
+      managerOverridingMentor && request.status === 'REJECTED';
+    const alreadyReviewedByRole = request.reviews.some(
+      (review) => review.reviewerRole === reviewerRole
+    );
+    if (
+      (request.status !== 'PENDING' &&
+        !isManagerRejectionOfApproval &&
+        !isManagerReviewOfMentorRejection) ||
+      alreadyReviewedByRole
+    ) {
       return errorResponse(config, 409, 'ALREADY_REVIEWED', 'This request was already reviewed.');
     }
     const now = new Date().toISOString();

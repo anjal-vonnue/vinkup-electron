@@ -288,9 +288,10 @@ lookup, and the middleware guards. API contract tests cover:
 
 Leave-specific tests cover the Trainee, Mentor and Manager flows: submission and validation, own-only
 history, mentor assignment scoping, manager platform-wide access, recorded reviewer and feedback,
-rejection validation, and duplicate/conflicting reviews (including a simultaneous Mentor and Manager
-decision). They live in `backend/src/module/leave-module`, the frontend `LeaveRequestsPage` and
-`StaffLeaveRequestsPage` tests, and `backend/src/test/api/leave-request.api.test.ts`.
+rejection validation, Manager overrides of both Mentor approvals and Mentor rejections, and
+duplicate/conflicting reviews (including simultaneous decisions). They live in
+`backend/src/module/leave-module`, the frontend `LeaveRequestsPage` and `StaffLeaveRequestsPage`
+tests, and `backend/src/test/api/leave-request.api.test.ts`.
 
 Run them with:
 
@@ -311,16 +312,16 @@ DATABASE_URL="<TEST_DATABASE_URL>" npx prisma migrate deploy --config prisma7.co
 Trainees request time off from the trainee header (**Leave requests**, `/leave-requests`). A Mentor
 reviews requests from their assigned trainees at `/admin/leave-requests`; a Manager reviews every
 request at `/manager/leave-requests`. Both roles use one shared page with role-specific actions.
-The full workflow, including the Manager's ability to reject a Mentor-approved request, is documented
-in [leave-request-workflow.md](./leave-request-workflow.md).
+The full workflow, including the Manager's ability to reject a Mentor-approved request or override a
+Mentor rejection, is documented in [leave-request-workflow.md](./leave-request-workflow.md).
 
 **Permissions (enforced in middleware, service and every DB query):**
 
-| Role    | Submit | Read                                            | Decide                                                             |
-| ------- | ------ | ----------------------------------------------- | ------------------------------------------------------------------ |
-| Trainee | Yes    | Only their own requests                         | Never — no trainee review endpoint exists                          |
-| Mentor  | No     | Only requests for `trainee.mentor_id = user.id` | `PENDING` requests for assigned trainees only                      |
-| Manager | No     | Every request                                   | Any `PENDING` request, plus rejection of a Mentor-approved request |
+| Role    | Submit | Read                                            | Decide                                                                                   |
+| ------- | ------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Trainee | Yes    | Only their own requests                         | Never — no trainee review endpoint exists                                                |
+| Mentor  | No     | Only requests for `trainee.mentor_id = user.id` | `PENDING` requests for assigned trainees only                                            |
+| Manager | No     | Every request                                   | Any `PENDING` request; reject a Mentor approval; approve or re-reject a Mentor rejection |
 
 Trainees own the request content (`subject`, `reason`) but never the decision. The trainee id always
 comes from the JWT, so a trainee cannot submit on another's behalf or read their requests by guessing
@@ -332,9 +333,10 @@ both read and review, and cannot use the manager prefix; managers cannot use the
 1. A Trainee submits a subject (1–200 chars) and reason (1–2,000 chars). The request starts `PENDING`.
 2. A Mentor or Manager approves or rejects a `PENDING` request. Feedback is optional for approval and
    required (non-blank) for rejection, both capped at 2,000 chars.
-3. A Manager may reject a request a Mentor approved: the final status is `REJECTED`, and the Mentor's
-   approval remains in the append-only `leave_review` history. Mentors cannot change decided requests,
-   and Managers cannot approve an already approved one.
+3. A Manager may reject a request a Mentor approved, or approve or re-reject a request a Mentor
+   rejected. The row's current-decision snapshot changes, and both decisions remain in the
+   append-only `leave_review` history. Mentors cannot change decided requests, and nobody can change
+   a decision already recorded as their own.
 4. Every `LeaveRequest` response includes the complete `reviews` history; the Trainee and staff views
    show each reviewer, role, decision, timestamp and feedback.
 
@@ -342,8 +344,8 @@ both read and review, and cannot use the manager prefix; managers cannot use the
 history insert in one transaction. A competing reviewer gets `409 ALREADY_REVIEWED` and the UI refreshes
 the list. CHECK constraints, a unique `(leave_request_id, reviewer_role)` review index and the
 `leave_request_status_guard` trigger protect the same rule outside the API; only `PENDING →
-APPROVED/REJECTED` and Mentor-approval → Manager-rejection are permitted. Historical rows are
-retained (`ON DELETE RESTRICT`).
+APPROVED/REJECTED` and Mentor-decision → Manager-decision (`APPROVED → REJECTED` and
+`REJECTED → APPROVED/REJECTED`) are permitted. Historical rows are retained (`ON DELETE RESTRICT`).
 
 See [api-specifications.md](./api-specifications.md#leave-requests) for request/response shapes and
 [database.md](./database.md) for the `leave_request` and `leave_review` tables.
@@ -375,6 +377,10 @@ See [api-specifications.md](./api-specifications.md#leave-requests) for request/
     approve a pending request from another Mentor's trainee, and reject a Mentor-approved request
     with feedback. Confirm the Trainee still sees the Mentor's approval in the review history.
 14. Try to approve an already approved request as a Manager: expect `ALREADY_REVIEWED`.
+15. As a Manager, approve a Mentor-rejected request and confirm the final status is `APPROVED` with
+    both the Mentor's rejection and the Manager's approval in the review history.
+16. As a Manager, re-reject another Mentor-rejected request with feedback and confirm the final status
+    is `REJECTED` with both reviews preserved. Try a second review: expect `ALREADY_REVIEWED`.
 
 ## 9. Limitations
 

@@ -6,11 +6,11 @@ A decision is kept as an append-only review record, so a later decision cannot e
 
 ## Roles and responsibilities
 
-| Role    | Submit | Read                                            | Allowed decisions                                                     |
-| ------- | ------ | ----------------------------------------------- | --------------------------------------------------------------------- |
-| Trainee | Yes    | Only their own requests                         | None — there is no trainee review endpoint                            |
-| Mentor  | No     | Only requests for `trainee.mentor_id = user.id` | Approve or reject `PENDING` requests for assigned trainees            |
-| Manager | No     | Every request                                   | Approve or reject any `PENDING` request; reject an `APPROVED` request |
+| Role    | Submit | Read                                            | Allowed decisions                                                                                                         |
+| ------- | ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Trainee | Yes    | Only their own requests                         | None — there is no trainee review endpoint                                                                                |
+| Mentor  | No     | Only requests for `trainee.mentor_id = user.id` | Approve or reject `PENDING` requests for assigned trainees                                                                |
+| Manager | No     | Every request                                   | Approve or reject any `PENDING` request; reject an `APPROVED` request; approve or re-reject a `REJECTED` (Mentor) request |
 
 Mentors cannot review requests for trainees who are not currently assigned to them; an unknown or
 out-of-scope id returns `404 NOT_FOUND`. Managers can review any request, including one belonging to a
@@ -27,8 +27,11 @@ body.
    chars). The current status becomes `APPROVED` or `REJECTED`.
 3. If a Mentor approved the request, a Manager can still review it and **reject** it. Feedback is
    required. The final status becomes `REJECTED`; the Mentor's approval stays in the review history.
-4. No other change is allowed: Mentors cannot modify decided requests, and Managers cannot approve a
-   request that is already approved or change a decision that is already final.
+4. If a Mentor rejected the request, a Manager can review it again and either **approve** it or record
+   their own **rejection** (feedback is required to reject). The row snapshot of the current decision
+   changes, but both decisions remain in the review history.
+5. No other change is allowed: Mentors cannot modify decided requests, and Managers cannot change a
+   decision that is already recorded as their own.
 
 | Current status | Reviewer | Decision | Result                         |
 | -------------- | -------- | -------- | ------------------------------ |
@@ -39,7 +42,9 @@ body.
 | `APPROVED`     | Mentor   | Any      | `409 ALREADY_REVIEWED`         |
 | `APPROVED`     | Manager  | Reject   | `REJECTED` (requires feedback) |
 | `APPROVED`     | Manager  | Approve  | `409 ALREADY_REVIEWED`         |
-| `REJECTED`     | Anyone   | Any      | `409 ALREADY_REVIEWED`         |
+| `REJECTED`     | Mentor   | Any      | `409 ALREADY_REVIEWED`         |
+| `REJECTED`     | Manager  | Approve  | `APPROVED`                     |
+| `REJECTED`     | Manager  | Reject   | `REJECTED` (requires feedback) |
 
 ## Review history and feedback
 
@@ -50,8 +55,8 @@ Two structures are written in the same transaction:
   clients continue to read these fields.
 - `leave_review` is an **append-only** row per decision with the reviewer id, role, name, decision,
   feedback and timestamp. At most one row per role exists for a request
-  (`UNIQUE (leave_request_id, reviewer_role)`), so a Manager's rejection cannot overwrite or delete
-  the Mentor's approval.
+  (`UNIQUE (leave_request_id, reviewer_role)`), so a Manager's decision cannot overwrite or delete
+  the Mentor's earlier approval or rejection.
 
 Every `LeaveRequest` API response contains `reviews`, an array of `LeaveReview` objects ordered oldest
 first. Trainees, Mentors and Managers all see the same complete history: the Trainee page shows it in
@@ -59,7 +64,9 @@ each history card, and the shared staff page shows it in the detail dialog. Each
 reviewed the request, their role, the decision, the timestamp and any feedback. Pending requests have
 an empty `reviews` array.
 
-Example of a request approved by a Mentor and then rejected by a Manager:
+Example of a request approved by a Mentor and then rejected by a Manager (the same applies when a
+Manager overrides a Mentor rejection — the Mentor's `REJECTED` entry stays alongside the Manager's
+`APPROVED`/`REJECTED` entry):
 
 ```json
 {
@@ -94,21 +101,25 @@ Example of a request approved by a Mentor and then rejected by a Manager:
 
 The repository performs the scope check, status check, conditional `updateMany` and history insert in
 one transaction. A conditional `UPDATE ... WHERE status = 'PENDING'` (or
-`status = 'APPROVED' AND reviewer_role = 'MENTOR'` for a Manager rejection) guarantees that only one
-of two concurrent decisions wins; the loser receives `409 ALREADY_REVIEWED`. The
-`UNIQUE (leave_request_id, reviewer_role)` index on `leave_review` is a second guard against duplicate
-reviews.
+`status = 'APPROVED' AND reviewer_role = 'MENTOR'` for a Manager rejection, or
+`status = 'REJECTED' AND reviewer_role = 'MENTOR'` for a Manager override of a Mentor rejection)
+guarantees that only one of two concurrent decisions wins; the loser receives
+`409 ALREADY_REVIEWED`. The `UNIQUE (leave_request_id, reviewer_role)` index on `leave_review` is a
+second guard against duplicate reviews.
 
 Database constraints still enforce non-blank subjects, reasons and rejection feedback, forbid review
 fields while `PENDING`, and require reviewer details once decided. The
 `leave_request_status_guard` trigger permits only `PENDING → APPROVED/REJECTED` and
-`APPROVED → REJECTED` (Mentor approval to Manager rejection); all other status or review-field
-changes are rejected even outside the API. Foreign keys use `ON DELETE RESTRICT` so removing an
-account cannot erase request or review history.
+Mentor-decision → Manager-decision transitions (`APPROVED → REJECTED` and
+`REJECTED → APPROVED/REJECTED`); all other status or review-field changes are rejected even outside
+the API. Foreign keys use `ON DELETE RESTRICT` so removing an account cannot erase request or review
+history.
 
 The migration `20261123150000_add_leave_review_history` creates the history table, backfills a review
 row for every already-decided request from its existing columns, and replaces the old "decision is
-final" trigger. No records are deleted.
+final" trigger. `20261123160000_allow_manager_review_of_mentor_rejection` extends that trigger for the
+rejection override; it only replaces the trigger function and touches no data. No records are deleted
+by either migration.
 
 See [api-specifications.md](./api-specifications.md#leave-requests) for endpoints and
 [database.md](./database.md) for table definitions.

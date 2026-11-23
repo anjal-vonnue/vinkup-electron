@@ -87,9 +87,13 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
 
   const selected = requests?.find((request) => request.id === selectedId) ?? null;
 
-  /** A Manager may reject an approval recorded by a Mentor; nobody may change it otherwise. */
+  /**
+   * A Manager may reject a Mentor approval or override a Mentor rejection
+   * (approve or re-reject). Nobody else may change a decided request.
+   */
   const canReview = (request: LeaveRequest) =>
-    request.status === 'PENDING' || (isManager && request.status === 'APPROVED');
+    request.status === 'PENDING' ||
+    (isManager && (request.status === 'APPROVED' || request.status === 'REJECTED'));
 
   const openRequest = (request: LeaveRequest) => {
     setSelectedId(request.id);
@@ -204,7 +208,7 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
   }
 
   const subtitle = isManager
-    ? 'Every leave request submitted by a Trainee. Review pending requests or reject one a Mentor approved.'
+    ? 'Every leave request submitted by a Trainee. Review pending requests, reject a Mentor approval, or override a Mentor rejection.'
     : 'Requests from Trainees assigned to you. You can review pending requests.';
 
   return (
@@ -326,9 +330,14 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
 
             {canReview(selected) ? (
               <div className={styles.reviewForm}>
-                {selected.status === 'APPROVED' && (
+                {isManager && selected.status === 'APPROVED' && (
                   <p className={styles.subtitle}>
                     A Mentor approved this request. Add feedback to reject it.
+                  </p>
+                )}
+                {isManager && selected.status === 'REJECTED' && (
+                  <p className={styles.subtitle}>
+                    A Mentor rejected this request. You can approve it or record your own rejection.
                   </p>
                 )}
                 <label htmlFor={feedbackId} className={styles.label}>
@@ -370,7 +379,8 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
                   >
                     Reject
                   </button>
-                  {selected.status === 'PENDING' && (
+                  {(selected.status === 'PENDING' ||
+                    (isManager && selected.status === 'REJECTED')) && (
                     <button
                       type="button"
                       className={styles.primaryButton}

@@ -276,6 +276,159 @@ describe('LeaveRequestRepository.decide', () => {
     });
   });
 
+  it('lets a Manager approve a Mentor rejection and append the decision to history', async () => {
+    tx.leave_request.findFirst.mockResolvedValue({
+      status: 'REJECTED',
+      reviewer_role: 'MENTOR',
+    });
+    tx.leave_review.findUnique.mockResolvedValue(null);
+    tx.leave_request.updateMany.mockResolvedValue({ count: 1 });
+    tx.leave_request.findUniqueOrThrow.mockResolvedValue({
+      ...row,
+      status: 'APPROVED',
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER',
+      feedback: 'Reconsidered — approved.',
+      reviews: [
+        { id: 'review-1', reviewer_role: 'MENTOR', decision: 'REJECTED' },
+        { id: 'review-2', reviewer_role: 'MANAGER', decision: 'APPROVED' },
+      ],
+    });
+
+    const outcome = await repository.decide({
+      requestId: REQUEST_ID,
+      reviewer: manager,
+      decision: 'APPROVED',
+      feedback: 'Reconsidered — approved.',
+    });
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      request: { status: 'APPROVED', reviews: [{ id: 'review-1' }, { id: 'review-2' }] },
+    });
+    const updateCall = tx.leave_request.updateMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(updateCall.where).toEqual({
+      id: REQUEST_ID,
+      status: 'REJECTED',
+      reviewer_role: 'MENTOR',
+    });
+    expect(updateCall.data).toMatchObject({
+      status: 'APPROVED',
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER',
+      reviewer_name: manager.name,
+      feedback: 'Reconsidered — approved.',
+    });
+    expect(tx.leave_review.create).toHaveBeenCalledWith({
+      data: {
+        leave_request_id: REQUEST_ID,
+        reviewer_id: manager.id,
+        reviewer_role: 'MANAGER',
+        reviewer_name: manager.name,
+        decision: 'APPROVED',
+        feedback: 'Reconsidered — approved.',
+        reviewed_at: expect.any(Date) as Date,
+      },
+    });
+  });
+
+  it('lets a Manager re-reject a Mentor rejection with their own feedback', async () => {
+    tx.leave_request.findFirst.mockResolvedValue({
+      status: 'REJECTED',
+      reviewer_role: 'MENTOR',
+    });
+    tx.leave_review.findUnique.mockResolvedValue(null);
+    tx.leave_request.updateMany.mockResolvedValue({ count: 1 });
+    tx.leave_request.findUniqueOrThrow.mockResolvedValue({
+      ...row,
+      status: 'REJECTED',
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER',
+      feedback: 'Manager confirms the rejection.',
+      reviews: [
+        { id: 'review-1', reviewer_role: 'MENTOR', decision: 'REJECTED' },
+        { id: 'review-2', reviewer_role: 'MANAGER', decision: 'REJECTED' },
+      ],
+    });
+
+    const outcome = await repository.decide({
+      requestId: REQUEST_ID,
+      reviewer: manager,
+      decision: 'REJECTED',
+      feedback: 'Manager confirms the rejection.',
+    });
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      request: { status: 'REJECTED', reviews: [{ id: 'review-1' }, { id: 'review-2' }] },
+    });
+    const updateCall = tx.leave_request.updateMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(updateCall.where).toEqual({
+      id: REQUEST_ID,
+      status: 'REJECTED',
+      reviewer_role: 'MENTOR',
+    });
+    expect(updateCall.data).toMatchObject({
+      status: 'REJECTED',
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER',
+      feedback: 'Manager confirms the rejection.',
+    });
+    expect(tx.leave_review.create).toHaveBeenCalledWith({
+      data: {
+        leave_request_id: REQUEST_ID,
+        reviewer_id: manager.id,
+        reviewer_role: 'MANAGER',
+        reviewer_name: manager.name,
+        decision: 'REJECTED',
+        feedback: 'Manager confirms the rejection.',
+        reviewed_at: expect.any(Date) as Date,
+      },
+    });
+  });
+
+  it('does not let a Manager change a decision that is already theirs after an override', async () => {
+    tx.leave_request.findFirst.mockResolvedValue({
+      status: 'REJECTED',
+      reviewer_role: 'MANAGER',
+    });
+
+    await expect(
+      repository.decide({
+        requestId: REQUEST_ID,
+        reviewer: manager,
+        decision: 'APPROVED',
+        feedback: 'Changed my mind.',
+      })
+    ).resolves.toEqual({ ok: false, reason: 'already-reviewed' });
+    expect(tx.leave_request.updateMany).not.toHaveBeenCalled();
+    expect(tx.leave_review.create).not.toHaveBeenCalled();
+  });
+
+  it('does not let a Mentor change a rejection recorded by a Mentor', async () => {
+    tx.leave_request.findFirst.mockResolvedValue({
+      status: 'REJECTED',
+      reviewer_role: 'MENTOR',
+    });
+
+    await expect(
+      repository.decide({
+        requestId: REQUEST_ID,
+        reviewer: mentor,
+        decision: 'APPROVED',
+        feedback: null,
+      })
+    ).resolves.toEqual({ ok: false, reason: 'already-reviewed' });
+    expect(tx.leave_request.updateMany).not.toHaveBeenCalled();
+    expect(tx.leave_review.create).not.toHaveBeenCalled();
+  });
+
   it('does not let a Manager approve a request a Mentor already approved', async () => {
     tx.leave_request.findFirst.mockResolvedValue({
       status: 'APPROVED',
