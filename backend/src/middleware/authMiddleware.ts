@@ -63,6 +63,23 @@ export function requireManager(request: Request, response: Response, next: NextF
   });
 }
 
+/** Signed in as an active mentor or manager (checked on every request). */
+export function requireStaff(request: Request, response: Response, next: NextFunction) {
+  requireAuth(request, response, (error?: unknown) => {
+    if (error) return next(error);
+    const user = (request as AuthenticatedRequest).user;
+    if (user.role !== 'mentor' && user.role !== 'manager') {
+      return next(new ForbiddenError());
+    }
+    authRepository
+      .findActiveStaffById(user.id)
+      .then((staff) =>
+        staff?.role === 'MENTOR' || staff?.role === 'MANAGER' ? next() : next(new ForbiddenError())
+      )
+      .catch(next);
+  });
+}
+
 /**
  * Backward-compatible alias: historically "admin" meant the mentor/reviewer role.
  * New code should prefer requireMentor or requireManager.
