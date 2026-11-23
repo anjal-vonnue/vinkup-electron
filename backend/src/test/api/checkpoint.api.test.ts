@@ -64,6 +64,7 @@ type CheckpointOverrides = {
   traineeIds?: string[];
   groupIds?: string[];
   maxAttempts?: number;
+  markdown?: string;
 };
 
 async function createCheckpoint(
@@ -82,7 +83,7 @@ async function createCheckpoint(
       allowEarlySubmission: overrides.allowEarlySubmission ?? true,
       allowLateEntry: overrides.allowLateEntry ?? true,
       resultVisibility: overrides.resultVisibility ?? 'AFTER_APPROVAL',
-      sourceMarkdown: PAPER,
+      sourceMarkdown: overrides.markdown ?? PAPER,
       traineeIds: overrides.traineeIds ?? [a.id],
       groupIds: overrides.groupIds ?? [],
     },
@@ -415,6 +416,70 @@ describe('checkpoint trainee API', () => {
       visible: true,
     });
     expect(result.answers).toHaveLength(2);
+  });
+
+  it('stores practical workspace files and returns them to the manager and result', async () => {
+    const practicalPaper = `# Practical checkpoint
+
+## Question 1: Build the greeting
+Type: practical
+Marks: 10
+Runtime: node
+Run: npm test
+
+Write the greeting.
+
+\`\`\`html file=index.html
+<h1>Start</h1>
+\`\`\`
+`;
+    const scheduled = await createScheduledCheckpoint({ markdown: practicalPaper });
+    const attempt = await startAttempt(a, scheduled.id);
+    const [questionId] = questionIds(attempt);
+
+    expect(attempt.questions[0]).toMatchObject({
+      type: 'PRACTICAL',
+      runtime: 'node',
+      runCommand: 'npm test',
+      starterFiles: [{ path: 'index.html', content: '<h1>Start</h1>' }],
+    });
+
+    const files = [
+      { path: 'index.html', content: '<h1>Done</h1>' },
+      { path: 'app.js', content: 'console.log("done");' },
+    ];
+    const save = await api.put(
+      `/api/checkpoints/attempts/${attempt.id}/answers/${questionId}`,
+      { clientRevision: 1, files },
+      a.cookie
+    );
+    expect(save.status).toBe(200);
+
+    const refreshed = body<TraineeCheckpointAttempt>(
+      await api.get(`/api/checkpoints/attempts/${attempt.id}`, a.cookie)
+    );
+    expect(refreshed.answers.find((answer) => answer.questionId === questionId)?.files).toEqual(
+      files
+    );
+
+    await api.post(`/api/checkpoints/attempts/${attempt.id}/submit`, {}, a.cookie);
+
+    const detail = body<ManagerCheckpointAttemptDetail>(
+      await api.get(`/api/manager/checkpoints/attempts/${attempt.id}`, manager.cookie)
+    );
+    expect(detail.answers.find((answer) => answer.questionId === questionId)?.files).toEqual(files);
+
+    await api.post(
+      `/api/manager/checkpoints/attempts/${attempt.id}/grade`,
+      { marks: [{ questionId, awardedMarks: 8 }] },
+      manager.cookie
+    );
+    await api.post(`/api/manager/checkpoints/${scheduled.id}/publish-results`, {}, manager.cookie);
+
+    const result = body<CheckpointResult>(
+      await api.get(`/api/checkpoints/attempts/${attempt.id}/result`, a.cookie)
+    );
+    expect(result.answers[0].files).toEqual(files);
   });
 
   it('rejects a manual submit when early submission is disabled', async () => {
