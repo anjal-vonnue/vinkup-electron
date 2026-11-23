@@ -25,6 +25,7 @@ import AnswerEditor from './AnswerEditor';
 import { isAnswerProvided } from './answerUtils';
 import { useAttemptCountdown } from './useAttemptCountdown';
 import { useCheckpointAutosave, type AnswerSaveSummary } from './useCheckpointAutosave';
+import { checkpointWorkspaceId } from './practicalWorkspaceFiles';
 import styles from './CheckpointAttemptPage.module.css';
 
 function questionTypeLabel(type: string): string {
@@ -39,6 +40,8 @@ function questionTypeLabel(type: string): string {
       return 'SQL';
     case 'FILE':
       return 'File upload';
+    case 'PRACTICAL':
+      return 'Practical task';
     default:
       return 'Text';
   }
@@ -435,6 +438,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
                     question={currentQuestion}
                     draft={currentDraft}
                     disabled={disabled}
+                    workspaceId={checkpointWorkspaceId(attempt.id, currentQuestion.orderIndex)}
                     onChangeText={(text) => {
                       setFileError(null);
                       autosave.updateText(currentQuestion.id, text);
@@ -445,6 +449,13 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
                       autosave.attachFile(currentQuestion.id, file);
                     }}
                     onRemoveFile={() => autosave.removeFile(currentQuestion.id)}
+                    onChangeFiles={(files) => {
+                      setFileError(null);
+                      autosave.updateFiles(currentQuestion.id, files);
+                    }}
+                    onSaveFiles={() => {
+                      void autosave.flushQuestion(currentQuestion.id);
+                    }}
                     onFileError={setFileError}
                   />
                   {fileError && (

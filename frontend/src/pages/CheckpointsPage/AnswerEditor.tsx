@@ -1,10 +1,11 @@
 import { useId, useState } from 'react';
-import type { CheckpointFileInput, CheckpointQuestion } from '@itp/types';
+import type { CheckpointFileInput, CheckpointQuestion, CheckpointWorkspaceFile } from '@itp/types';
 import Editor from '@monaco-editor/react';
 import { FileText, Paperclip, Trash2, Upload } from 'lucide-react';
 import '../../lib/monacoSetup';
 import type { DraftAnswer } from './useCheckpointAutosave';
 import { readDeliverableFile } from './answerUtils';
+import PracticalWorkspace from './PracticalWorkspace';
 import styles from './AnswerEditor.module.css';
 
 function formatBytes(size: number | null): string {
@@ -23,10 +24,13 @@ type Props = {
   question: CheckpointQuestion;
   draft: DraftAnswer | undefined;
   disabled: boolean;
+  workspaceId: string;
   onChangeText: (text: string) => void;
   onSelectOption: (option: string) => void;
   onAttachFile: (file: CheckpointFileInput) => void;
   onRemoveFile: () => void;
+  onChangeFiles: (files: CheckpointWorkspaceFile[]) => void;
+  onSaveFiles: () => void;
   onFileError: (message: string) => void;
 };
 
@@ -34,10 +38,13 @@ export default function AnswerEditor({
   question,
   draft,
   disabled,
+  workspaceId,
   onChangeText,
   onSelectOption,
   onAttachFile,
   onRemoveFile,
+  onChangeFiles,
+  onSaveFiles,
   onFileError,
 }: Props) {
   const fileInputId = useId();
@@ -56,6 +63,21 @@ export default function AnswerEditor({
     } finally {
       setFileBusy(false);
     }
+  }
+
+  if (question.type === 'PRACTICAL') {
+    return (
+      <PracticalWorkspace
+        key={question.id}
+        question={question}
+        initialFiles={draft?.files ?? question.starterFiles ?? []}
+        submittedFiles={draft?.files ?? null}
+        workspaceId={workspaceId}
+        disabled={disabled}
+        onFilesChange={onChangeFiles}
+        onSave={onSaveFiles}
+      />
+    );
   }
 
   if (question.type === 'MULTIPLE_CHOICE') {
