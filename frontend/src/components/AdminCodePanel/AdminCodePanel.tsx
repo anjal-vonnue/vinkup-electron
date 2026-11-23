@@ -13,8 +13,7 @@ import styles from './AdminCodePanel.module.css';
 
 const MAX_REWORK_MARKDOWN_CHARS = 10000;
 
-// Monaco is heavy; load it only when an admin actually opens some code.
-const ReadOnlyCodeViewer = lazy(() => import('../ReadOnlyCodeViewer'));
+const SubmissionBrowser = lazy(() => import('../SubmissionBrowser/SubmissionBrowser'));
 
 type AdminCodePanelProps = {
   traineeId: string;
@@ -345,9 +344,10 @@ export default function AdminCodePanel({
 
         {code && (
           <Suspense fallback={<LoaderOverlay label="Opening viewer…" />}>
-            <ReadOnlyCodeViewer
+            <SubmissionBrowser
               key={code.taskId}
               files={code.files}
+              instructionsMarkdown={code.instructionsMarkdown}
               scope={`${traineeId}/${code.taskId}`}
             />
           </Suspense>

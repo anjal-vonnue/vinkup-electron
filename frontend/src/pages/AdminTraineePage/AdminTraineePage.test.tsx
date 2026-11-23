@@ -388,6 +388,11 @@ describe('AdminTraineePage', () => {
 
     expect(getAdminTaskCode).toHaveBeenCalledWith(traineeId, completed.taskId);
     const viewer = await screen.findByRole('region', { name: completed.title });
+    const firstFile = (await within(viewer).findAllByRole('treeitem')).find(
+      (row) => row.getAttribute('aria-expanded') === null
+    );
+    if (!firstFile) throw new Error('submitted task has no file row');
+    await user.click(firstFile);
     expect(await within(viewer).findByText('Read only')).toBeInTheDocument();
     expect(
       within(viewer).queryByRole('button', { name: /run|save|reset|submit/i })
