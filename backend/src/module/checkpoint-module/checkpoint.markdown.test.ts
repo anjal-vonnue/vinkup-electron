@@ -70,4 +70,70 @@ describe('parseCheckpointMarkdown', () => {
     const parsed = parseCheckpointMarkdown('## Q1: First\r\n\r\nAnswer here\r\n');
     expect(parsed.questions[0]).toMatchObject({ orderIndex: 1, title: 'First' });
   });
+
+  it('extracts practical runtime, starter files and setup SQL', () => {
+    const parsed = parseCheckpointMarkdown(`# Practical checkpoint
+
+## Question 1: Build the page
+Type: practical
+Marks: 10
+Runtime: node
+Run: npm test
+
+Create a page that greets the visitor.
+
+\`\`\`html file=index.html
+<h1>Hello</h1>
+\`\`\`
+
+\`\`\`css file=styles.css
+h1 { color: teal; }
+\`\`\`
+
+## Question 2: Design the schema
+Type: practical
+Marks: 5
+Runtime: sql
+
+\`\`\`sql setup
+create table people (id serial primary key, name text not null);
+\`\`\`
+
+Write the missing indexes.
+`);
+
+    expect(parsed.questions[0]).toMatchObject({
+      type: 'PRACTICAL',
+      runtime: 'node',
+      runCommand: 'npm test',
+      marks: 10,
+      starterFiles: [
+        { path: 'index.html', content: '<h1>Hello</h1>' },
+        { path: 'styles.css', content: 'h1 { color: teal; }' },
+      ],
+    });
+    expect(parsed.questions[0].promptMarkdown).toContain('Create a page');
+    expect(parsed.questions[0].promptMarkdown).not.toContain('<h1>Hello</h1>');
+    expect(parsed.questions[1]).toMatchObject({
+      type: 'PRACTICAL',
+      runtime: 'sql',
+      setupSql: 'create table people (id serial primary key, name text not null);',
+      starterFiles: null,
+    });
+    expect(parsed.questions[1].promptMarkdown).not.toContain('create table');
+  });
+
+  it('warns about unsafe starter file paths instead of storing them', () => {
+    const parsed = parseCheckpointMarkdown(`## Q1: Unsafe
+Type: practical
+
+\`\`\`text file=../escape.txt
+bad
+\`\`\`
+`);
+
+    expect(parsed.questions[0].starterFiles).toBeNull();
+    expect(parsed.questions[0].promptMarkdown).toContain('../escape.txt');
+    expect(parsed.warnings.join(' ')).toContain('not a valid starter file path');
+  });
 });

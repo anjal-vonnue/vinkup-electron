@@ -1,6 +1,8 @@
 import type {
   CheckpointMarkdownPreview,
+  CheckpointQuestionRuntime,
   CheckpointQuestionType,
+  CheckpointWorkspaceFile,
   ParsedCheckpointQuestion,
 } from '@itp/types';
 
@@ -22,6 +24,21 @@ import type {
  *   Choices: A | B | C
  *   Correct: B
  *
+ * Practical questions run a workspace like a daily task. Their metadata selects a
+ * runtime and the fenced blocks with `file=` become starter files:
+ *
+ *   Type: practical
+ *   Runtime: node
+ *   Run: npm test
+ *
+ *   ```javascript file=index.js
+ *   console.log('start here');
+ *   ```
+ *
+ *   ```sql setup
+ *   create table people (id serial primary key);
+ *   ```
+ *
  * `## Q1` and `### Question 1` are also accepted. No metadata means a text
  * question worth one mark; the manager can still edit the paper and re-upload.
  */
@@ -31,9 +48,11 @@ type Metadata = Record<string, string>;
 const QUESTION_HEADING = /^#{2,4}\s*(?:question|q)\s*(\d+)\s*[.:)\-–—]?\s*(.*?)\s*$/i;
 const MARK_IN_TITLE = /[([]\s*(\d+)\s*marks?\s*[\])]\s*[:\-–—]?\s*/i;
 const META_LINE =
-  /^(type|marks?|points?|language|lang|choices?|options?|correct|answer|file)\s*[:=]\s*(.*)$/i;
+  /^(type|marks?|points?|language|lang|choices?|options?|correct|answer|file|runtime|environment|env|run|run-command|command|setup|setup-sql|sql-setup)\s*[:=]\s*(.*)$/i;
 const BRACKET_META = /^\[([^\]]+)\]$/;
 const HTML_META = /^<!--([\s\S]*?)-->$/;
+const FENCE_OPEN = /^\s*(`{3,}|~{3,})\s*(.*)$/;
+const FENCE_CLOSE = /^\s*(`{3,}|~{3,})\s*$/;
 
 const TYPE_ALIASES: Record<string, CheckpointQuestionType> = {
   text: 'TEXT',
@@ -55,6 +74,29 @@ const TYPE_ALIASES: Record<string, CheckpointQuestionType> = {
   file: 'FILE',
   upload: 'FILE',
   file_upload: 'FILE',
+  practical: 'PRACTICAL',
+  workspace: 'PRACTICAL',
+  terminal: 'PRACTICAL',
+  task: 'PRACTICAL',
+  build: 'PRACTICAL',
+  coding_task: 'PRACTICAL',
+};
+
+const RUNTIME_ALIASES: Record<string, CheckpointQuestionRuntime> = {
+  node: 'node',
+  nodejs: 'node',
+  javascript: 'node',
+  js: 'node',
+  typescript: 'node',
+  ts: 'node',
+  browser: 'browser',
+  web: 'browser',
+  html: 'browser',
+  css: 'browser',
+  sql: 'sql',
+  postgres: 'sql',
+  postgresql: 'sql',
+  psql: 'sql',
 };
 
 function normalizeKey(key: string): string {
@@ -68,6 +110,9 @@ function normalizeKey(key: string): string {
   }
   if (lower === 'correct' || lower === 'answer') return 'correct';
   if (lower === 'file' || lower === 'upload') return 'file';
+  if (lower === 'runtime' || lower === 'environment' || lower === 'env') return 'runtime';
+  if (lower === 'run' || lower === 'run-command' || lower === 'command') return 'runCommand';
+  if (lower === 'setup' || lower === 'setup-sql' || lower === 'sql-setup') return 'setupSql';
   return 'type';
 }
 
@@ -156,6 +201,142 @@ function readLeadingMetadata(lines: string[]): { metadata: Metadata; start: numb
   return { metadata, start: index };
 }
 
+type FenceBlock = {
+  start: number;
+  end: number;
+  content: string;
+  file: string | null;
+  setup: boolean;
+};
+
+function parseFenceInfo(info: string): Pick<FenceBlock, 'file' | 'setup'> {
+  const fileMatch = info.match(/(?:^|\s)(?:file|path|filename)=("[^"]+"|'[^']+'|\S+)/i);
+  const file = fileMatch ? fileMatch[1].replace(/^['"]|['"]$/g, '') : null;
+  const setup = /(?:^|\s)(?:setup|setup-sql|sql-setup)(?:\s|$)/i.test(info);
+  return { file, setup };
+}
+
+/** Finds fenced code blocks and their positional range, so starter files can be removed. */
+function findFencedBlocks(lines: string[]): FenceBlock[] {
+  const blocks: FenceBlock[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const open = lines[index].match(FENCE_OPEN);
+    if (!open) {
+      index += 1;
+      continue;
+    }
+
+    const marker = open[1];
+    const fenceChar = marker[0];
+    const fenceLength = marker.length;
+    let end = -1;
+
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const close = lines[cursor].match(FENCE_CLOSE);
+      if (!close) continue;
+      if (close[1][0] !== fenceChar || close[1].length < fenceLength) continue;
+      end = cursor;
+      break;
+    }
+
+    if (end === -1) {
+      index += 1;
+      continue;
+    }
+
+    blocks.push({
+      start: index,
+      end,
+      content: lines.slice(index + 1, end).join('\n'),
+      ...parseFenceInfo(open[2] ?? ''),
+    });
+    index = end + 1;
+  }
+
+  return blocks;
+}
+
+function safeWorkspacePath(value: string): string | null {
+  const path = value.trim().replace(/^\.\//, '');
+  if (!path || path.length > 200) return null;
+  if (path.includes('\\') || path.includes('\0')) return null;
+  if (path.startsWith('/')) return null;
+  if (path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    return null;
+  }
+  return path;
+}
+
+function extractWorkspace(
+  lines: string[],
+  orderIndex: number,
+  warnings: string[]
+): {
+  promptLines: string[];
+  starterFiles: CheckpointWorkspaceFile[];
+  setupSql: string | null;
+} {
+  const blocks = findFencedBlocks(lines);
+  const starterFiles: CheckpointWorkspaceFile[] = [];
+  const removed = new Set<number>();
+  let setupSql: string | null = null;
+
+  for (const block of blocks) {
+    if (block.file) {
+      const path = safeWorkspacePath(block.file);
+      if (!path) {
+        warnings.push(
+          `Question ${orderIndex}: "${block.file}" is not a valid starter file path; the block was kept in the prompt.`
+        );
+        continue;
+      }
+
+      const existingIndex = starterFiles.findIndex((file) => file.path === path);
+      if (existingIndex >= 0) {
+        warnings.push(
+          `Question ${orderIndex}: starter file "${path}" appears more than once; the last block wins.`
+        );
+        starterFiles[existingIndex] = { path, content: block.content };
+      } else {
+        starterFiles.push({ path, content: block.content });
+      }
+      for (let line = block.start; line <= block.end; line += 1) removed.add(line);
+    } else if (block.setup) {
+      setupSql = block.content.trim();
+      for (let line = block.start; line <= block.end; line += 1) removed.add(line);
+    }
+  }
+
+  return {
+    promptLines: lines.filter((_, index) => !removed.has(index)),
+    starterFiles,
+    setupSql,
+  };
+}
+
+function resolveRuntime(
+  metadata: Metadata,
+  type: CheckpointQuestionType,
+  orderIndex: number,
+  warnings: string[]
+): CheckpointQuestionRuntime | null {
+  if (type !== 'PRACTICAL') return null;
+
+  const raw = metadata.runtime?.trim().toLowerCase().replace(/\s+/g, '_');
+  if (raw) {
+    const runtime = RUNTIME_ALIASES[raw];
+    if (runtime) return runtime;
+    warnings.push(`Question ${orderIndex}: unknown runtime "${metadata.runtime}"; using node.`);
+    return 'node';
+  }
+
+  if (metadata.setupSql) return 'sql';
+  if (metadata.runCommand) return 'node';
+  return 'node';
+}
+
 function buildQuestion(
   title: string,
   bodyLines: string[],
@@ -163,10 +344,25 @@ function buildQuestion(
   warnings: string[]
 ): ParsedCheckpointQuestion {
   const { metadata, start } = readLeadingMetadata(bodyLines);
-  const promptMarkdown = bodyLines.slice(start).join('\n').trim();
 
   const choices = metadata.choices ? parseChoices(metadata.choices) : [];
   const type = inferType(metadata, choices.length > 0);
+
+  const promptBody = bodyLines.slice(start);
+  let promptLines = promptBody;
+  let runtime: CheckpointQuestionRuntime | null = null;
+  let starterFiles: CheckpointWorkspaceFile[] | null = null;
+  let setupSql = metadata.setupSql?.trim() || null;
+
+  if (type === 'PRACTICAL') {
+    const extracted = extractWorkspace(promptBody, orderIndex, warnings);
+    promptLines = extracted.promptLines;
+    starterFiles = extracted.starterFiles.length > 0 ? extracted.starterFiles : null;
+    setupSql = extracted.setupSql ?? setupSql;
+    runtime = resolveRuntime(metadata, type, orderIndex, warnings);
+  }
+
+  const promptMarkdown = promptLines.join('\n').trim();
 
   const parsedMarks = Number.parseInt(metadata.marks ?? '', 10);
   const marks = Number.isFinite(parsedMarks) && parsedMarks > 0 ? parsedMarks : 1;
@@ -201,6 +397,10 @@ function buildQuestion(
     correctOption:
       type === 'MULTIPLE_CHOICE' ? resolveCorrectOption(metadata.correct, choices) : null,
     codeLanguage: language,
+    runtime,
+    runCommand: type === 'PRACTICAL' ? metadata.runCommand?.trim() || null : null,
+    setupSql: type === 'PRACTICAL' ? setupSql : null,
+    starterFiles: type === 'PRACTICAL' ? starterFiles : null,
   };
 }
 
