@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type {
   CheckpointQuestion,
   CheckpointWorkspaceFile,
@@ -13,7 +13,7 @@ import RuntimeHost from '../../runtimes/RuntimeHost';
 import { EditorProvider } from '../../pages/TaskPage/state/EditorContext';
 import { WorkspaceProvider, useWorkspaceState } from '../../pages/TaskPage/state/WorkspaceContext';
 import WorkspaceFilesViewer from './WorkspaceFilesViewer';
-import { workspaceFilesFromRecord, workspaceFilesSignature } from './practicalWorkspaceFiles';
+import { useWorkspaceFilesReporter } from './useWorkspaceFilesReporter';
 import styles from './PracticalWorkspace.module.css';
 
 type PracticalWorkspaceProps = {
@@ -71,19 +71,8 @@ function PracticalWorkspaceBody({
 }: PracticalWorkspaceBodyProps) {
   const state = useWorkspaceState();
   const runner = useRunner();
-  const initialSignature = useRef(workspaceFilesSignature(initialFiles));
-  const reportedRef = useRef(false);
 
-  useEffect(() => {
-    const signature = workspaceFilesSignature(workspaceFilesFromRecord(state.files));
-    if (!reportedRef.current) {
-      // Opening the starter files is not an answer by itself; only an actual edit
-      // (or a saved snapshot that differs) should start an autosave.
-      if (signature === initialSignature.current) return;
-      reportedRef.current = true;
-    }
-    onFilesChange(workspaceFilesFromRecord(state.files));
-  }, [state.files, onFilesChange]);
+  useWorkspaceFilesReporter(state.files, initialFiles, onFilesChange);
 
   return (
     <div className={styles.workspaceShell}>
