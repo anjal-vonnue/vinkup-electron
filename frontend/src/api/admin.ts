@@ -1,12 +1,14 @@
 import type {
-  AdminFeedbackEntry,
   AdminAnalytics,
   AdminAnalyticsQuery,
+   AdminFeedbackEntry,
   AdminFlagEvent,
   AdminTaskCode,
   AdminTraineeDetail,
   AdminTraineeSummary,
   CreateTraineeRequest,
+  MentorSlackChannelResponse,
+  SaveMentorSlackChannelRequest,
   TaskReview,
   AnalyzeTasksRequest,
   AnalyzeTasksResponse,
@@ -126,4 +128,21 @@ export async function analyzeTasks(
     { timeout: 5 * 60 * 1000 }
   );
   return data;
+}
+
+export async function getMentorSlackChannel(): Promise<MentorSlackChannelResponse> {
+  const res = await apiClient.get<MentorSlackChannelResponse>('/admin/slack-channel');
+  return res.data;
+}
+
+export async function saveMentorSlackChannel(
+  body: SaveMentorSlackChannelRequest
+): Promise<MentorSlackChannelResponse> {
+  const res = await apiClient.put<MentorSlackChannelResponse>('/admin/slack-channel', body);
+  return res.data;
+}
+
+export async function deleteMentorSlackChannel(): Promise<MentorSlackChannelResponse> {
+  const res = await apiClient.delete<MentorSlackChannelResponse>('/admin/slack-channel');
+  return res.data;
 }

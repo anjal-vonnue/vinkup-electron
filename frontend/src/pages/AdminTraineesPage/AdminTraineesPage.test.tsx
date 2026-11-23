@@ -2,7 +2,14 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
-import { getAdminAnalytics, getAdminTrainee, getAdminTrainees } from '../../api/admin';
+import {
+  deleteMentorSlackChannel,
+  getAdminAnalytics,
+  getAdminTrainee,
+  getAdminTrainees,
+  getMentorSlackChannel,
+  saveMentorSlackChannel,
+} from '../../api/admin';
 import { downloadCsv } from '../../lib/downloadCsv';
 import {
   buildAdminAnalytics,
@@ -26,6 +33,9 @@ vi.mock('../../api/admin', () => ({
   getAdminTrainee: vi.fn(),
   getAdminAnalytics: vi.fn(),
   createAdminTrainee: vi.fn(),
+  getMentorSlackChannel: vi.fn(),
+  saveMentorSlackChannel: vi.fn(),
+  deleteMentorSlackChannel: vi.fn(),
 }));
 vi.mock('../../lib/downloadCsv', () => ({
   downloadCsv: vi.fn(),
@@ -60,6 +70,9 @@ beforeEach(() => {
   vi.mocked(getAdminAnalytics).mockImplementation((query) =>
     Promise.resolve(buildAdminAnalytics(query)!)
   );
+  vi.mocked(getMentorSlackChannel).mockResolvedValue({ channelId: null });
+  vi.mocked(saveMentorSlackChannel).mockResolvedValue({ channelId: 'C0123ABCDEF' });
+  vi.mocked(deleteMentorSlackChannel).mockResolvedValue({ channelId: null });
   vi.mocked(downloadCsv).mockReset();
   vi.mocked(getAdminAnalytics).mockClear();
 });

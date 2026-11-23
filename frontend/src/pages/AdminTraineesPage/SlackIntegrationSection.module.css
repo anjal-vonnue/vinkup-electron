@@ -1,0 +1,162 @@
+.card {
+  margin-top: 20px;
+  padding: 24px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.description {
+  margin: 8px 0 0;
+  max-width: 42rem;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-accent-tint);
+  color: var(--color-accent-purple);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.configured {
+  margin-top: 20px;
+}
+
+.channelRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.channelLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.channelValue {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-bg-subtle, rgba(124, 65, 228, 0.08));
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.form {
+  margin-top: 20px;
+  max-width: 32rem;
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.input:focus {
+  outline: 2px solid var(--color-accent-purple);
+  outline-offset: 1px;
+}
+
+.input:disabled {
+  opacity: 0.7;
+}
+
+.help {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--color-status-error, #d92d20);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.primaryButton {
+  border: 1px solid var(--color-accent-purple);
+  background: var(--color-accent-purple);
+  color: var(--color-text-on-accent);
+}
+
+.secondaryButton {
+  border: 1px solid var(--color-border-card);
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.dangerButton {
+  border: 1px solid var(--color-status-error, #d92d20);
+  background: transparent;
+  color: var(--color-status-error, #d92d20);
+}
