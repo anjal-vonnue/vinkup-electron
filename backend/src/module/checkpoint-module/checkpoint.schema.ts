@@ -46,6 +46,7 @@ const checkpointFields = z.object({
     .min(3, 'Enter a title.')
     .max(160, 'Keep the title under 160 characters.'),
   description: z.string().trim().max(5000),
+  mode: z.enum(['MCQ', 'PRACTICAL']).optional(),
   durationMinutes: z.coerce.number().int().min(1).max(1440),
   totalMarks: z.coerce.number().int().min(1).max(10_000),
   passingMarks: z.coerce.number().int().min(1).max(10_000),
@@ -58,6 +59,10 @@ const checkpointFields = z.object({
   sourceMarkdown: markdown,
   traineeIds: z.array(z.string().uuid()).max(2000).optional(),
   groupIds: z.array(z.string().uuid()).max(500).optional(),
+  practicalRuntime: z.enum(['browser', 'node', 'sql']).optional(),
+  practicalRunCommand: z.string().trim().max(500).nullable().optional(),
+  practicalSetupSql: z.string().max(MAX_MARKDOWN_BYTES).nullable().optional(),
+  practicalStarterFiles: workspaceFiles.optional(),
 });
 
 export const createCheckpointSchema = checkpointFields

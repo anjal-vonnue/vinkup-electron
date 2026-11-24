@@ -1,10 +1,14 @@
 import type {
   CheckpointGroup,
   CheckpointMarkdownPreview,
+  CheckpointMode,
+  CheckpointQuestionRuntime,
+  CheckpointWorkspaceFile,
   ManagerCheckpointAttemptDetail,
   ManagerCheckpointAttemptSummary,
   ManagerCheckpointDetail,
   ManagerCheckpointSummary,
+  ParsedCheckpointQuestion,
 } from '@itp/types';
 import { AppError, NotFoundError, ValidationError } from '../../errors/AppError';
 import { parseCheckpointMarkdown } from './checkpoint.markdown';
@@ -50,6 +54,33 @@ function parsePaper(markdown: string): CheckpointMarkdownPreview {
     ]);
   }
   return parsed;
+}
+
+/** Build a single-question checkpoint from PRACTICAL mode fields. */
+function buildPracticalQuestion(body: CreateCheckpointBody): {
+  instructionsMarkdown: string;
+  questions: ParsedCheckpointQuestion[];
+} {
+  const runtime: CheckpointQuestionRuntime = body.practicalRuntime ?? 'node';
+  const starterFiles: CheckpointWorkspaceFile[] = body.practicalStarterFiles ?? [];
+  const instructionsMarkdown = body.sourceMarkdown;
+
+  const question: ParsedCheckpointQuestion = {
+    orderIndex: 1,
+    title: body.title,
+    promptMarkdown: instructionsMarkdown,
+    type: 'PRACTICAL',
+    marks: body.totalMarks,
+    options: null,
+    correctOption: null,
+    codeLanguage: null,
+    runtime,
+    runCommand: body.practicalRunCommand?.trim() || null,
+    setupSql: body.practicalSetupSql?.trim() || null,
+    starterFiles: starterFiles.length > 0 ? starterFiles : null,
+  };
+
+  return { instructionsMarkdown, questions: [question] };
 }
 
 function assertMarksFit(
@@ -140,10 +171,31 @@ export class CheckpointManagerService {
     managerId: string,
     body: CreateCheckpointBody
   ): Promise<ManagerCheckpointDetail> => {
-    const parsed = parsePaper(body.sourceMarkdown);
+    const mode: CheckpointMode = body.mode ?? 'MCQ';
+    let parsed: CheckpointMarkdownPreview | null = null;
+    let questions: ParsedCheckpointQuestion[];
+    let instructionsMarkdown: string;
+
+    if (mode === 'PRACTICAL') {
+      const result = buildPracticalQuestion(body);
+      questions = result.questions;
+      instructionsMarkdown = result.instructionsMarkdown;
+    } else {
+      parsed = parsePaper(body.sourceMarkdown);
+      questions = parsed.questions;
+      instructionsMarkdown = parsed.instructionsMarkdown;
+    }
+
     const totalMarks = body.totalMarks;
     const passingMarks = body.passingMarks;
-    assertMarksFit(parsed, totalMarks, passingMarks);
+    if (mode === 'MCQ' && parsed) {
+      assertMarksFit(parsed, totalMarks, passingMarks);
+    }
+    if (passingMarks > totalMarks) {
+      throw new ValidationError([
+        { path: ['passingMarks'], message: 'Passing marks cannot be greater than total marks.' },
+      ]);
+    }
 
     const selection = normalizeSelection(body) ?? { traineeIds: [], groupIds: [] };
     await validateSelection(managerId, selection);
@@ -151,9 +203,10 @@ export class CheckpointManagerService {
     const fields: CheckpointWriteFields = {
       title: body.title,
       description: body.description,
+      mode,
       source_file_name: body.sourceFileName ?? null,
       source_markdown: body.sourceMarkdown,
-      instructions_markdown: parsed.instructionsMarkdown,
+      instructions_markdown: instructionsMarkdown,
       duration_minutes: body.durationMinutes,
       total_marks: totalMarks,
       passing_marks: passingMarks,
@@ -164,12 +217,7 @@ export class CheckpointManagerService {
       result_visibility: body.resultVisibility ?? 'AFTER_APPROVAL',
     };
 
-    const created = await repository.createCheckpoint(
-      managerId,
-      fields,
-      parsed.questions,
-      selection
-    );
+    const created = await repository.createCheckpoint(managerId, fields, questions, selection);
     console.info(`[checkpoint] ${managerId} created draft ${created.id}`);
     return toManagerDetail(created);
   };
@@ -197,11 +245,38 @@ export class CheckpointManagerService {
       );
     }
 
+    const mode: CheckpointMode = body.mode ?? existing.mode ?? 'MCQ';
     const sourceMarkdown = body.sourceMarkdown ?? existing.source_markdown;
-    const parsed = parsePaper(sourceMarkdown);
+
+    let parsed: CheckpointMarkdownPreview | null = null;
+    let questions: ParsedCheckpointQuestion[];
+    let instructionsMarkdown: string;
+
+    if (mode === 'PRACTICAL') {
+      const result = buildPracticalQuestion({
+        ...body,
+        sourceMarkdown,
+        title: body.title ?? existing.title,
+        totalMarks: body.totalMarks ?? existing.total_marks,
+      } as CreateCheckpointBody);
+      questions = result.questions;
+      instructionsMarkdown = result.instructionsMarkdown;
+    } else {
+      parsed = parsePaper(sourceMarkdown);
+      questions = parsed.questions;
+      instructionsMarkdown = parsed.instructionsMarkdown;
+    }
+
     const totalMarks = body.totalMarks ?? existing.total_marks;
     const passingMarks = body.passingMarks ?? existing.passing_marks;
-    assertMarksFit(parsed, totalMarks, passingMarks);
+    if (mode === 'MCQ' && parsed) {
+      assertMarksFit(parsed, totalMarks, passingMarks);
+    }
+    if (passingMarks > totalMarks) {
+      throw new ValidationError([
+        { path: ['passingMarks'], message: 'Passing marks cannot be greater than total marks.' },
+      ]);
+    }
 
     const requestedSelection = normalizeSelection(body);
     if (requestedSelection) await validateSelection(managerId, requestedSelection);
@@ -216,10 +291,11 @@ export class CheckpointManagerService {
     const fields: CheckpointWriteFields = {
       title: body.title ?? existing.title,
       description: body.description ?? existing.description,
+      mode,
       source_file_name:
         body.sourceFileName !== undefined ? body.sourceFileName : existing.source_file_name,
       source_markdown: sourceMarkdown,
-      instructions_markdown: parsed.instructionsMarkdown,
+      instructions_markdown: instructionsMarkdown,
       duration_minutes: body.durationMinutes ?? existing.duration_minutes,
       total_marks: totalMarks,
       passing_marks: passingMarks,
@@ -233,7 +309,7 @@ export class CheckpointManagerService {
     const updated = await repository.updateCheckpoint(
       checkpointId,
       fields,
-      parsed.questions,
+      questions,
       requestedSelection
     );
     console.info(`[checkpoint] ${managerId} updated checkpoint ${checkpointId}`);

@@ -63,6 +63,7 @@ export type AttemptDetailRow = Prisma.checkpoint_attemptGetPayload<{
 export type CheckpointWriteFields = {
   title: string;
   description: string;
+  mode: 'MCQ' | 'PRACTICAL';
   source_file_name: string | null;
   source_markdown: string;
   instructions_markdown: string;

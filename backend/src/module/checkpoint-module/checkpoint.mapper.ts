@@ -79,6 +79,7 @@ export function toManagerSummary(row: CheckpointSummaryRow): ManagerCheckpointSu
     id: row.id,
     title: row.title,
     description: row.description,
+    mode: row.mode,
     status: row.status,
     startAt: iso(row.start_at),
     durationMinutes: row.duration_minutes,
