@@ -36,6 +36,7 @@ export default function CertificateVerificationPage() {
   const [certificateId, setCertificateId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<CertificateVerificationResponse | null>(null);
+  const [resultRevision, setResultRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -49,12 +50,13 @@ export default function CertificateVerificationPage() {
 
     setIsLoading(true);
     setError(null);
-    setResult(null);
 
     try {
       const response = await verifyCertificate(trimmed);
       setResult(response);
+      setResultRevision((revision) => revision + 1);
     } catch (err) {
+      setResult(null);
       if (err instanceof ApiError) {
         setError(err.message || 'Unable to verify the certificate. Please try again.');
       } else {
@@ -121,55 +123,65 @@ export default function CertificateVerificationPage() {
             </p>
           )}
 
-          {result && (
-            <section
-              className={`${styles.result} ${result.valid ? styles.valid : styles.invalid}`}
-              aria-live="polite"
-            >
-              <div className={styles.resultHeader}>
-                <StatusIcon result={result} />
-                <div>
-                  <h2 className={styles.resultTitle}>{statusLabel(result)}</h2>
-                  <p className={styles.resultMessage}>{result.message}</p>
-                </div>
-              </div>
+          <div
+            className={`${styles.resultReveal} ${result ? styles.resultRevealVisible : ''}`}
+            aria-hidden={!result}
+            aria-live="polite"
+          >
+            <div className={styles.resultRevealInner}>
+              {result && (
+                <section
+                  key={resultRevision}
+                  className={`${styles.result} ${result.valid ? styles.valid : styles.invalid}`}
+                >
+                  <div className={styles.resultHeader}>
+                    <StatusIcon result={result} />
+                    <div>
+                      <h2 className={styles.resultTitle}>{statusLabel(result)}</h2>
+                      <p className={styles.resultMessage}>{result.message}</p>
+                    </div>
+                  </div>
 
-              <dl className={styles.details}>
-                <div>
-                  <dt>Certificate ID</dt>
-                  <dd>{result.certificateId}</dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{result.status}</dd>
-                </div>
-                <div>
-                  <dt>Signature</dt>
-                  <dd>{result.signatureValid ? 'Valid' : 'Invalid'}</dd>
-                </div>
-                <div>
-                  <dt>Trainee</dt>
-                  <dd>{result.traineeName ?? 'Unavailable'}</dd>
-                </div>
-                <div>
-                  <dt>Course</dt>
-                  <dd>{result.courseTitle ?? 'Unavailable'}</dd>
-                </div>
-                <div>
-                  <dt>Completed</dt>
-                  <dd>
-                    {result.completedAt ? formatCertificateDate(result.completedAt) : 'Unavailable'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Issued</dt>
-                  <dd>
-                    {result.issuedAt ? formatCertificateDate(result.issuedAt) : 'Unavailable'}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          )}
+                  <dl className={styles.details}>
+                    <div>
+                      <dt>Certificate ID</dt>
+                      <dd>{result.certificateId}</dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{result.status}</dd>
+                    </div>
+                    <div>
+                      <dt>Signature</dt>
+                      <dd>{result.signatureValid ? 'Valid' : 'Invalid'}</dd>
+                    </div>
+                    <div>
+                      <dt>Trainee</dt>
+                      <dd>{result.traineeName ?? 'Unavailable'}</dd>
+                    </div>
+                    <div>
+                      <dt>Course</dt>
+                      <dd>{result.courseTitle ?? 'Unavailable'}</dd>
+                    </div>
+                    <div>
+                      <dt>Completed</dt>
+                      <dd>
+                        {result.completedAt
+                          ? formatCertificateDate(result.completedAt)
+                          : 'Unavailable'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Issued</dt>
+                      <dd>
+                        {result.issuedAt ? formatCertificateDate(result.issuedAt) : 'Unavailable'}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+              )}
+            </div>
+          </div>
         </section>
       </main>
     </>
