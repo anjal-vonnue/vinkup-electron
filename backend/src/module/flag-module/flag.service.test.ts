@@ -65,6 +65,23 @@ describe('FlagService', () => {
     expect(new Date(event.timestamp).getTime()).toBeLessThanOrEqual(after);
   });
 
+  it('stores an idle flag as NORMAL priority, even when it is very long', async () => {
+    await service.logFlag({ type: 'IDLE', durationMs: 3 * 60 * 60_000 }, traineeId, taskId);
+
+    expect(repository.createFlag).toHaveBeenCalledWith(
+      { type: 'IDLE', durationMs: 3 * 60 * 60_000, taskId },
+      'NORMAL',
+      traineeId
+    );
+  });
+
+  it('does not send a live notification for an idle flag', async () => {
+    await service.logFlag({ type: 'IDLE', durationMs: 18 * 60_000 }, traineeId, taskId);
+
+    expect(repository.createFlag).toHaveBeenCalledTimes(1);
+    expect(notify.publishToMentor).not.toHaveBeenCalled();
+  });
+
   it('stores nothing and sends nothing for a duplicate flag', async () => {
     repository.findRecentFlag.mockResolvedValue({ id: 'flag-0' });
 

@@ -1,5 +1,5 @@
 import type { AdminFeedbackEntry, AdminFlagEvent, AdminTraineeDetail } from '@itp/types';
-import { FLAG_PRIORITY_LABELS, FLAG_TYPE_LABELS, formatFlagDuration } from '../../lib/adminLabels';
+import { FLAG_PRIORITY_LABELS, describeFlag, formatFlagDuration } from '../../lib/adminLabels';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import type { PrintReportOptions } from '../../lib/printReport';
 import StatsSummary from '../StatsSummary';
@@ -149,7 +149,8 @@ export default function PrintReport({
             <>
               <p className={styles.note}>
                 {importantFlags.length} important events out of {flags.length} recorded. Focus
-                events are a guide for review, not proof.
+                events are a guide for review, not proof. Idle means no keyboard or mouse input; it
+                can also mean reading or thinking.
               </p>
 
               <div className={styles.tableCard}>
@@ -167,7 +168,7 @@ export default function PrintReport({
                   <tbody>
                     {shownFlags.map((flag) => (
                       <tr key={flag.id}>
-                        <td>{FLAG_TYPE_LABELS[flag.type]}</td>
+                        <td>{describeFlag(flag)}</td>
                         <td>{flag.taskTitle}</td>
                         <td>{dayLabel(dayLabels, flag.dayId)}</td>
                         <td>{formatFlagDuration(flag.durationMs)}</td>

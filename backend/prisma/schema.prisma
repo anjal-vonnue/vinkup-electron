@@ -44,6 +44,7 @@ enum flag_event_type {
   TAB_SWITCH
   PASTE_BLOCKED
   WINDOW_BLUR
+  IDLE // no input for a while on the task page; shown to mentors, never scored
 }
 
 enum review_priority {

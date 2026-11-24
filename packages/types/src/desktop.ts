@@ -225,6 +225,16 @@ export interface DesktopApi {
     ) => () => void;
     /** Returns an unsubscribe function. */
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => () => void;
+    /**
+     * The trainee used our own second-screen window (key, click, scroll or mouse move),
+     * even without focusing it. Sent at most every few seconds. Returns an unsubscribe function.
+     */
+    onOwnWindowActivity?: (listener: () => void) => () => void;
+    /**
+     * The screen was locked or the computer went to sleep (true), or is back (false).
+     * Returns an unsubscribe function.
+     */
+    onScreenLockChange?: (listener: (locked: boolean) => void) => () => void;
   };
 
   certificate: {

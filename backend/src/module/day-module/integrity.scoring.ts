@@ -9,6 +9,17 @@ import type { DayIntegrityResponse } from '@itp/types';
 export type IntegrityEventType = 'FULLSCREEN_EXIT' | 'TAB_SWITCH' | 'PASTE_BLOCKED' | 'WINDOW_BLUR';
 export type IntegrityPriority = 'LOW' | 'NORMAL' | 'HIGH';
 
+/**
+ * True for flag types that count towards the integrity score.
+ * IDLE is shown to mentors but is never scored. It must be dropped before scoring, not given
+ * 0 points: any flag makes its task count as "worked on", which would change the average.
+ */
+export function isScoredFlag<T extends { type: string }>(
+  row: T
+): row is T & { type: IntegrityEventType } {
+  return row.type !== 'IDLE';
+}
+
 export type ScoredFlagEvent = {
   taskId: string;
   type: IntegrityEventType;
