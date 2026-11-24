@@ -4,7 +4,6 @@ import { useNavigate, useParams } from 'react-router';
 import type { TraineeCheckpointAttempt } from '@itp/types';
 import {
   AlertCircle,
-  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -264,7 +263,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
         ? styles.timerWarning
         : '';
 
-  const practicalToolbarTrailing: ReactNode = isSinglePractical ? (
+  const attemptControls: ReactNode = (
     <>
       <div className={`${styles.inlineTimer} ${timerTone}`} aria-live="off">
         <Clock size={16} aria-hidden="true" />
@@ -294,7 +293,9 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
         {submitting ? 'Submitting…' : 'Submit attempt'}
       </button>
     </>
-  ) : null;
+  );
+
+  const practicalToolbarTrailing: ReactNode = isSinglePractical ? attemptControls : null;
 
   return (
     <div className={isSinglePractical ? styles.practicalPage : undefined}>
@@ -312,41 +313,36 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
 
       <main className={`${styles.page} ${isSinglePractical ? styles.pagePractical : ''}`}>
         {!isSinglePractical && (
-          <header className={styles.attemptHeader}>
-            <div className={styles.toolbar}>
-              <div className={`${styles.timer} ${timerTone}`} aria-live="off">
-                <Clock size={18} aria-hidden="true" />
-                <div>
-                  <span className={styles.timerValue}>{countdown.label}</span>
-                  <span className={styles.timerLabel}>
-                    {countdown.expired ? 'Time is up' : 'remaining'}
-                  </span>
-                </div>
-              </div>
-
-              <div className={styles.saveArea}>
-                <SaveSummary summary={autosave.summary} onRetry={autosave.retryAll} />
-                <span className={styles.answeredSummary}>
-                  {answeredCount} of {questions.length} answered
-                </span>
-              </div>
-
+          <div className={styles.attemptBar}>
+            <div className={styles.questionNav}>
               <button
                 type="button"
-                className={styles.submitButton}
-                onClick={() => setConfirmOpen(true)}
-                disabled={disabled || !attempt.allowEarlySubmission}
-                title={
-                  !attempt.allowEarlySubmission
-                    ? 'Early submission is disabled. Your attempt is submitted automatically when time expires.'
-                    : undefined
-                }
+                className={styles.secondaryButton}
+                onClick={() => goToQuestion(currentIndex - 1)}
+                disabled={currentIndex === 0}
               >
-                <Send size={15} />
-                {submitting ? 'Submitting…' : 'Submit attempt'}
+                <ChevronLeft size={15} /> Previous
+              </button>
+              <div className={styles.questionNavLabel}>
+                <span className={styles.questionPosition}>
+                  Question {questions.length > 0 ? currentIndex + 1 : 0} of {questions.length}
+                </span>
+                {currentQuestion && (
+                  <span className={styles.questionNavTitle}>{currentQuestion.title}</span>
+                )}
+              </div>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => goToQuestion(currentIndex + 1)}
+                disabled={currentIndex >= questions.length - 1}
+              >
+                Next <ChevronRight size={15} />
               </button>
             </div>
-          </header>
+
+            <div className={styles.attemptBarActions}>{attemptControls}</div>
+          </div>
         )}
 
         {locked && (
@@ -413,183 +409,75 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
             )}
           </div>
         ) : (
-          <div className={styles.layout}>
-            <aside className={styles.navigator} aria-label="Questions">
-              <div className={styles.navigatorHeader}>
-                <h2>Questions</h2>
-                <span>
-                  {answeredCount}/{questions.length}
-                </span>
-              </div>
-              <ol className={styles.questionList}>
-                {questions.map((question, index) => {
-                  const draft = autosave.answers[question.id];
-                  const answered = isAnswerProvided(question, draft);
-                  const failed = draft?.status === 'error';
-                  const saving = draft?.status === 'saving';
-                  return (
-                    <li key={question.id}>
-                      <button
-                        type="button"
-                        className={`${styles.questionLink} ${
-                          index === currentIndex ? styles.questionLinkActive : ''
-                        } ${answered ? styles.questionLinkAnswered : ''}`}
-                        onClick={() => goToQuestion(index)}
-                        aria-current={index === currentIndex ? 'step' : undefined}
-                      >
-                        <span className={styles.questionNumber}>{index + 1}</span>
-                        <span className={styles.questionLabel}>
-                          <span className={styles.questionTitle}>{question.title}</span>
-                          <span className={styles.questionMeta}>
-                            {questionTypeLabel(question.type)} · {question.marks} marks
-                          </span>
-                        </span>
-                        <span className={styles.questionIndicator} aria-hidden="true">
-                          {failed ? (
-                            <AlertCircle size={14} className={styles.indicatorError} />
-                          ) : saving ? (
-                            <Loader2 size={14} className={styles.spin} />
-                          ) : answered ? (
-                            <Check size={14} className={styles.indicatorAnswered} />
-                          ) : (
-                            <span className={styles.indicatorEmpty} />
-                          )}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-              <div className={styles.legend}>
-                <span>
-                  <Check size={12} className={styles.indicatorAnswered} /> Answered
-                </span>
-                <span>
-                  <span className={styles.indicatorEmpty} /> Unanswered
-                </span>
-              </div>
-            </aside>
-
-            <section className={styles.questionPanel}>
-              <details
-                className={styles.instructions}
-                open={instructionsOpen}
-                onToggle={(event) => setInstructionsOpen(event.currentTarget.open)}
-              >
-                <summary>Instructions</summary>
-                {attempt.instructionsMarkdown.trim() ? (
-                  <MarkdownRenderer markdown={attempt.instructionsMarkdown} />
-                ) : (
-                  <p className={styles.muted}>No extra instructions were provided.</p>
-                )}
-              </details>
-
-              {currentQuestion ? (
-                <article className={styles.questionCard}>
-                  <header className={styles.questionHeader}>
-                    <div>
-                      <p className={styles.questionProgress}>
-                        Question {currentIndex + 1} of {questions.length}
-                      </p>
-                      <h2>{currentQuestion.title}</h2>
-                    </div>
-                    <span className={styles.marksBadge}>{currentQuestion.marks} marks</span>
-                  </header>
-
-                  <div className={styles.prompt}>
-                    <MarkdownRenderer markdown={currentQuestion.promptMarkdown} />
-                  </div>
-
-                  <div className={styles.answerArea}>
-                    <p className={styles.answerType}>
-                      {questionTypeLabel(currentQuestion.type)} answer
-                      {currentQuestion.type === 'FILE' && ' · 2 MB limit'}
-                    </p>
-                    <AnswerEditor
-                      question={currentQuestion}
-                      draft={currentDraft}
-                      disabled={disabled}
-                      workspaceId={checkpointWorkspaceId(attempt.id, currentQuestion.orderIndex)}
-                      onChangeText={(text) => {
-                        setFileError(null);
-                        autosave.updateText(currentQuestion.id, text);
-                      }}
-                      onSelectOption={(option) => autosave.selectOption(currentQuestion.id, option)}
-                      onAttachFile={(file) => {
-                        setFileError(null);
-                        autosave.attachFile(currentQuestion.id, file);
-                      }}
-                      onRemoveFile={() => autosave.removeFile(currentQuestion.id)}
-                      onChangeFiles={(files) => {
-                        setFileError(null);
-                        autosave.updateFiles(currentQuestion.id, files);
-                      }}
-                      onSaveFiles={() => {
-                        void autosave.flushQuestion(currentQuestion.id);
-                      }}
-                      onFileError={setFileError}
-                    />
-                    {fileError && (
-                      <p className={styles.fileError} role="alert">
-                        {fileError}
-                      </p>
-                    )}
-                  </div>
-
-                  <footer className={styles.questionFooter}>
-                    <span className={styles.questionSave}>
-                      {currentDraft?.status === 'error' ? (
-                        <>
-                          <AlertCircle size={14} className={styles.indicatorError} /> Not saved
-                          <button
-                            type="button"
-                            className={styles.retryButton}
-                            onClick={() => autosave.retryQuestion(currentQuestion.id)}
-                          >
-                            Retry
-                          </button>
-                        </>
-                      ) : currentDraft?.status === 'saving' ? (
-                        <>
-                          <Loader2 size={14} className={styles.spin} /> Saving…
-                        </>
-                      ) : currentDraft?.status === 'dirty' ? (
-                        <>
-                          <span className={styles.dirtyDot} /> Unsaved changes
-                        </>
-                      ) : currentDraft?.savedAt ? (
-                        <>
-                          <CheckCircle2 size={14} className={styles.indicatorAnswered} /> Saved
-                        </>
-                      ) : (
-                        <span className={styles.muted}>Autosaves as you type</span>
-                      )}
-                    </span>
-
-                    <div className={styles.questionNavButtons}>
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        onClick={() => goToQuestion(currentIndex - 1)}
-                        disabled={currentIndex === 0}
-                      >
-                        <ChevronLeft size={15} /> Previous
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.primaryButton}
-                        onClick={() => goToQuestion(currentIndex + 1)}
-                        disabled={currentIndex >= questions.length - 1}
-                      >
-                        Next <ChevronRight size={15} />
-                      </button>
-                    </div>
-                  </footer>
-                </article>
+          <div className={styles.questionContent}>
+            <details
+              className={styles.instructions}
+              open={instructionsOpen}
+              onToggle={(event) => setInstructionsOpen(event.currentTarget.open)}
+            >
+              <summary>Instructions</summary>
+              {attempt.instructionsMarkdown.trim() ? (
+                <MarkdownRenderer markdown={attempt.instructionsMarkdown} />
               ) : (
-                <p className={styles.muted}>This attempt has no questions.</p>
+                <p className={styles.muted}>No extra instructions were provided.</p>
               )}
-            </section>
+            </details>
+
+            {currentQuestion ? (
+              <article className={styles.questionCard}>
+                <header className={styles.questionHeader}>
+                  <div>
+                    <p className={styles.questionProgress}>
+                      Question {currentIndex + 1} of {questions.length}
+                    </p>
+                    <h2>{currentQuestion.title}</h2>
+                  </div>
+                  <span className={styles.marksBadge}>{currentQuestion.marks} marks</span>
+                </header>
+
+                <div className={styles.prompt}>
+                  <MarkdownRenderer markdown={currentQuestion.promptMarkdown} />
+                </div>
+
+                <div className={styles.answerArea}>
+                  <p className={styles.answerType}>
+                    {questionTypeLabel(currentQuestion.type)} answer
+                    {currentQuestion.type === 'FILE' && ' · 2 MB limit'}
+                  </p>
+                  <AnswerEditor
+                    question={currentQuestion}
+                    draft={currentDraft}
+                    disabled={disabled}
+                    workspaceId={checkpointWorkspaceId(attempt.id, currentQuestion.orderIndex)}
+                    onChangeText={(text) => {
+                      setFileError(null);
+                      autosave.updateText(currentQuestion.id, text);
+                    }}
+                    onSelectOption={(option) => autosave.selectOption(currentQuestion.id, option)}
+                    onAttachFile={(file) => {
+                      setFileError(null);
+                      autosave.attachFile(currentQuestion.id, file);
+                    }}
+                    onRemoveFile={() => autosave.removeFile(currentQuestion.id)}
+                    onChangeFiles={(files) => {
+                      setFileError(null);
+                      autosave.updateFiles(currentQuestion.id, files);
+                    }}
+                    onSaveFiles={() => {
+                      void autosave.flushQuestion(currentQuestion.id);
+                    }}
+                    onFileError={setFileError}
+                  />
+                  {fileError && (
+                    <p className={styles.fileError} role="alert">
+                      {fileError}
+                    </p>
+                  )}
+                </div>
+              </article>
+            ) : (
+              <p className={styles.muted}>This attempt has no questions.</p>
+            )}
           </div>
         )}
       </main>
