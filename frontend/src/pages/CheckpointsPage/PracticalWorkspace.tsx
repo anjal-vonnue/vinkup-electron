@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type {
   CheckpointQuestion,
   CheckpointWorkspaceFile,
@@ -49,6 +50,8 @@ type PracticalWorkspaceProps = {
   disabled: boolean;
   onFilesChange: (files: CheckpointWorkspaceFile[]) => void;
   onSave: () => void;
+  /** Slot rendered after the Run button (timer, save status, submit). */
+  toolbarTrailing?: ReactNode;
 };
 
 type ResizableKind = 'sidebar' | 'result';
@@ -84,6 +87,7 @@ type PracticalWorkspaceBodyProps = {
   hasStarterFiles: boolean;
   onFilesChange: (files: CheckpointWorkspaceFile[]) => void;
   onSave: () => void;
+  toolbarTrailing?: ReactNode;
 };
 
 function PracticalWorkspaceBody({
@@ -93,6 +97,7 @@ function PracticalWorkspaceBody({
   hasStarterFiles,
   onFilesChange,
   onSave,
+  toolbarTrailing,
 }: PracticalWorkspaceBodyProps) {
   const state = useWorkspaceState();
   const dispatch = useWorkspaceDispatch();
@@ -251,6 +256,8 @@ function PracticalWorkspaceBody({
 
         <ViewToggleGroup visiblePanes={state.visiblePanes} onToggle={handleTogglePane} />
 
+        <div className={styles.divider} aria-hidden="true" />
+
         <button
           type="button"
           className={styles.runButton}
@@ -265,6 +272,8 @@ function PracticalWorkspaceBody({
           )}
           {runner.label}
         </button>
+
+        {toolbarTrailing}
       </header>
 
       <div
@@ -344,6 +353,7 @@ export default function PracticalWorkspace({
   disabled,
   onFilesChange,
   onSave,
+  toolbarTrailing,
 }: PracticalWorkspaceProps) {
   const [initialCode] = useState<TaskCodeResponse>(() => ({
     files: initialFiles.map((file) => ({ path: file.path, content: file.content })),
@@ -371,6 +381,7 @@ export default function PracticalWorkspace({
             hasStarterFiles={initialFiles.length > 0}
             onFilesChange={onFilesChange}
             onSave={onSave}
+            toolbarTrailing={toolbarTrailing}
           />
         </RunnerProvider>
       </EditorProvider>
