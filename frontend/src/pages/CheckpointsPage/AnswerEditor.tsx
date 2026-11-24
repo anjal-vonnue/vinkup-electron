@@ -26,6 +26,8 @@ type Props = {
   draft: DraftAnswer | undefined;
   disabled: boolean;
   workspaceId: string;
+  /** Checkpoint-level instructions shown in the practical workspace sidebar. */
+  instructionsMarkdown?: string;
   onChangeText: (text: string) => void;
   onSelectOption: (option: string) => void;
   onAttachFile: (file: CheckpointFileInput) => void;
@@ -42,6 +44,7 @@ export default function AnswerEditor({
   draft,
   disabled,
   workspaceId,
+  instructionsMarkdown,
   onChangeText,
   onSelectOption,
   onAttachFile,
@@ -78,6 +81,7 @@ export default function AnswerEditor({
         submittedFiles={draft?.files ?? null}
         workspaceId={workspaceId}
         disabled={disabled}
+        instructionsMarkdown={instructionsMarkdown}
         onFilesChange={onChangeFiles}
         onSave={onSaveFiles}
         toolbarTrailing={toolbarTrailing}

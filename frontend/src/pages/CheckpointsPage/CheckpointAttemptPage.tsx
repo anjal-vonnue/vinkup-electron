@@ -393,6 +393,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
               draft={currentDraft}
               disabled={disabled}
               workspaceId={checkpointWorkspaceId(attempt.id, currentQuestion.orderIndex)}
+              instructionsMarkdown={attempt.instructionsMarkdown}
               onChangeText={(text) => {
                 setFileError(null);
                 autosave.updateText(currentQuestion.id, text);
