@@ -42,6 +42,7 @@ import ConfirmDialog from '../ConfirmDialog';
 import EditorPane from '../EditorPane';
 import FilesPanel from '../FilesPanel';
 import InstructionsPanel from '../InstructionsPanel';
+import MentorSuggestion from '../MentorSuggestion/MentorSuggestion';
 import PaneResizer from '../PaneResizer';
 import SaveIndicator from '../SaveIndicator';
 import SubmitTaskButton from '../SubmitTaskButton';
@@ -83,6 +84,10 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(task.reviewStatus ?? null);
+  const [approvedSuggestion, setApprovedSuggestion] = useState<{
+    adminName: string;
+    feedback: string;
+  } | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   // Submitting can be repeated and doesn't lock editing; this only drives the pill and the label.
   const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
@@ -98,6 +103,32 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   useEffect(() => {
     applyRuntimeSettings(task.runtime);
   }, [task.runtime]);
+
+  // Load feedback when opening an already-approved task. The state update runs
+  // in the request callback, outside the synchronous effect body.
+  useEffect(() => {
+    if (task.reviewStatus !== 'approved') return;
+
+    let cancelled = false;
+    getTaskReview(task.id)
+      .then((review) => {
+        if (cancelled) return;
+        setReviewStatus(review.reviewStatus);
+        const latestReview = review.latestReview;
+        setApprovedSuggestion(
+          latestReview?.decision === 'approved' && latestReview.feedback.trim()
+            ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
+            : null
+        );
+      })
+      .catch(() => {
+        // Best effort: the reconnect refresh can catch a temporary failure.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id, task.reviewStatus]);
 
   const stateRef = useRef(state);
   useEffect(() => {
@@ -184,6 +215,7 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     const result = await submitTask(task.id);
     setSubmittedAt(new Date(result.submittedAt));
     setReviewStatus(result.reviewStatus);
+    setApprovedSuggestion(null);
     toast.show({
       message: reviewStatus === 'rework' ? 'Task resubmitted' : 'Task submitted',
       variant: 'success',
@@ -195,6 +227,12 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     try {
       const review = await getTaskReview(task.id);
       setReviewStatus(review.reviewStatus);
+      const latestReview = review.latestReview;
+      setApprovedSuggestion(
+        latestReview?.decision === 'approved' && latestReview.feedback.trim()
+          ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
+          : null
+      );
     } catch {
       // Best effort: the next event or the next page load catches up.
     }
@@ -205,6 +243,11 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     if (event.type !== 'task.reviewed' || event.taskId !== task.id) return;
 
     setReviewStatus(event.reviewStatus);
+    setApprovedSuggestion(
+      event.reviewStatus === 'approved' && event.feedback.trim()
+        ? { adminName: event.mentorName, feedback: event.feedback }
+        : null
+    );
   });
 
   // After a stream reconnect, catch a review that landed while the stream was down.
@@ -385,7 +428,17 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
                 onTabChange={(tab) => dispatch({ type: 'sidebarTabChanged', tab })}
                 fileCount={selectFileCount(state)}
                 onCollapse={() => dispatch({ type: 'paneToggled', pane: 'sidebar' })}
-                instructions={<InstructionsPanel markdown={task.instructionsMarkdown} />}
+                instructions={
+                  <>
+                    {approvedSuggestion && (
+                      <MentorSuggestion
+                        adminName={approvedSuggestion.adminName}
+                        feedback={approvedSuggestion.feedback}
+                      />
+                    )}
+                    <InstructionsPanel markdown={task.instructionsMarkdown} />
+                  </>
+                }
                 files={<FilesPanel onRefresh={refreshFiles} />}
               />
             </div>

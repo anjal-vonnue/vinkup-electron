@@ -207,6 +207,13 @@
   color: var(--color-status-success);
 }
 
+.suggestion {
+  gap: 4px;
+  background: var(--color-accent-tint);
+  color: var(--color-accent-text);
+  border: 1px solid color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
+}
+
 .rework {
   background: rgba(249, 115, 22, 0.15);
   color: #fb923c;

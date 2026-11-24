@@ -154,7 +154,9 @@ export default function TaskFeedbackModal({
               </div>
 
               <div className={styles.feedbackContainer}>
-                <div className={styles.feedbackLabel}>Admin Feedback</div>
+                <div className={styles.feedbackLabel}>
+                  {isApproved ? 'Mentor suggestion' : 'Admin Feedback'}
+                </div>
                 <div className={styles.feedbackContent}>
                   {review.feedback ? (
                     <MarkdownRenderer markdown={review.feedback} />

@@ -17,7 +17,7 @@ import { RunnerProvider } from '../../runtimes/runnerContext';
 import { ToastProvider } from '../../components/Toast';
 
 import { taskFixture, taskCodeFixture } from '../../test/fixtures/task';
-import { saveTaskCode, submitTask } from '../../api/tasks';
+import { getTaskReview, saveTaskCode, submitTask } from '../../api/tasks';
 import { ApiError } from '../../api/errors';
 import { RealtimeProvider } from '../../context/RealtimeProvider';
 import { installFakeEventSource } from '../../test/fakeEventSource';
@@ -129,6 +129,7 @@ describe('TaskWorkspace', () => {
 
     vi.mocked(saveTaskCode).mockReset();
     vi.mocked(submitTask).mockReset();
+    vi.mocked(getTaskReview).mockReset();
 
     window.localStorage.clear();
   });
@@ -390,5 +391,33 @@ describe('TaskWorkspace', () => {
     // RealtimeNotifications.test.tsx.
     // The toolbar button turns into the disabled "Approved" state once the task is approved.
     expect(await screen.findByRole('button', { name: /^approved$/i })).toBeDisabled();
+  });
+
+  it('shows the suggestion when opening an already-approved task', async () => {
+    vi.mocked(getTaskReview).mockResolvedValue({
+      reviewStatus: 'approved',
+      submissionCount: 1,
+      latestReview: {
+        id: 'review-1',
+        taskId: taskFixture.id,
+        adminId: 'mentor-1',
+        adminName: 'Mentor Maya',
+        submissionNo: 1,
+        decision: 'approved',
+        feedback: 'Consider adding a footer for navigation.',
+        reviewedAt: '2026-11-18T10:00:00.000Z',
+      },
+    });
+
+    renderWorkspace({
+      ...taskFixture,
+      status: 'completed',
+      reviewStatus: 'approved',
+      submissionCount: 1,
+    });
+
+    expect(await screen.findByText('Mentor suggestion')).toBeInTheDocument();
+    expect(screen.getByText('Consider adding a footer for navigation.')).toBeInTheDocument();
+    expect(getTaskReview).toHaveBeenCalledWith(taskFixture.id);
   });
 });

@@ -23,6 +23,8 @@ export interface DayTask {
   isStretchGoal: boolean;
   /** Current admin review state of a submitted task. null/absent = no review yet. */
   reviewStatus?: ReviewStatus | null;
+  /** Optional mentor comment from the latest approval. Present only when it is non-empty. */
+  mentorSuggestion?: { adminName: string; feedback: string };
 }
 export interface DayContent {
   dayId: string;
