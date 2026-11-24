@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { CheckpointFileInput, CheckpointQuestion, CheckpointWorkspaceFile } from '@itp/types';
 import Editor from '@monaco-editor/react';
 import { FileText, Paperclip, Trash2, Upload } from 'lucide-react';
@@ -32,6 +33,8 @@ type Props = {
   onChangeFiles: (files: CheckpointWorkspaceFile[]) => void;
   onSaveFiles: () => void;
   onFileError: (message: string) => void;
+  /** Slot rendered after the Run button in the practical workspace toolbar. */
+  toolbarTrailing?: ReactNode;
 };
 
 export default function AnswerEditor({
@@ -46,6 +49,7 @@ export default function AnswerEditor({
   onChangeFiles,
   onSaveFiles,
   onFileError,
+  toolbarTrailing,
 }: Props) {
   const fileInputId = useId();
   const [fileBusy, setFileBusy] = useState(false);
@@ -76,6 +80,7 @@ export default function AnswerEditor({
         disabled={disabled}
         onFilesChange={onChangeFiles}
         onSave={onSaveFiles}
+        toolbarTrailing={toolbarTrailing}
       />
     );
   }
