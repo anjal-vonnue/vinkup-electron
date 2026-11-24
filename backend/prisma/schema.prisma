@@ -11,13 +11,14 @@ datasource db {
 // Existing rows mapped to MENTOR during role migration. Keep table name `admin`
 // for compatibility with existing review foreign keys.
 model admin {
-  id                   String          @id @default(uuid()) @db.Uuid
-  email                String          @unique // stored lower-case
-  name                 String
-  role                 staff_role      @default(MENTOR)
-  is_active            Boolean         @default(true) // false = can no longer log in
-  created_at           DateTime        @default(now()) @db.Timestamptz
-  last_login_at        DateTime?       @db.Timestamptz
+  id                      String          @id @default(uuid()) @db.Uuid
+  email                   String          @unique // stored lower-case
+  name                    String
+  role                    staff_role      @default(MENTOR)
+  is_active               Boolean         @default(true) // false = can no longer log in
+  slack_channel_id String?    @db.VarChar(32) // Mentor-configured Slack channel for task notifications
+  created_at              DateTime        @default(now()) @db.Timestamptz
+  last_login_at           DateTime?       @db.Timestamptz
   reviews              task_review[]
   leave_reviews        leave_request[] @relation("LeaveReviewer")
   leave_review_history leave_review[]  @relation("LeaveReviewHistory")
@@ -81,6 +82,13 @@ enum leave_status {
 enum certificate_status {
   ACTIVE
   REVOKED
+}
+
+enum slack_notification_status {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
 }
 
 model trainee {
@@ -415,6 +423,7 @@ model desktop_session {
   @@index([expires_at])
 }
 
+
 model review_prompt {
   id         String   @id @default(uuid()) @db.Uuid
   admin_id   String   @db.Uuid
@@ -427,4 +436,26 @@ model review_prompt {
 
   @@unique([admin_id, name])
   @@index([admin_id])
+}
+
+// Outbox for mentor Slack task submission and leave request notifications.
+// Task rows are created in the same transaction as submission when possible;
+// all rows are processed asynchronously.
+model slack_notification_outbox {
+  id                    String                    @id @default(uuid()) @db.Uuid
+  event_type            String                    @db.VarChar(64)
+  channel_id            String                    @db.VarChar(32)
+  payload               Json
+  status                slack_notification_status @default(PENDING)
+  attempt_count         Int                       @default(0)
+  max_attempts          Int                       @default(5)
+  next_retry_at         DateTime                  @default(now()) @db.Timestamptz
+  processing_started_at DateTime?                 @db.Timestamptz
+  sent_at               DateTime?                 @db.Timestamptz
+  last_error            String?
+  dedupe_key            String                    @unique @db.VarChar(255)
+  created_at            DateTime                  @default(now()) @db.Timestamptz
+  updated_at            DateTime                  @updatedAt @db.Timestamptz
+
+  @@index([status, next_retry_at])
 }

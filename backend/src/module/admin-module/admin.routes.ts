@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import { validate } from '../../middleware/validate';
 import { adminController } from './admin.controller';
-import { traineeIdParamsSchema, traineeTaskParamsSchema } from './admin.schema';
-import { createTraineeSchema } from './admin.schema';
+import {
+  createTraineeSchema,
+  saveSlackChannelSchema,
+  traineeIdParamsSchema,
+  traineeTaskParamsSchema,
+} from './admin.schema';
 import { adminReviewRoutes } from '../review-module/review.routes';
 import { staffLeaveRequestRoutes } from '../leave-module/leave-request.routes';
 import { requireAssignedTrainee } from '../../middleware/authMiddleware';
@@ -49,3 +53,11 @@ adminRoutes.post(
   validate({ body: createTraineeSchema }),
   adminController.createTrainee
 );
+
+adminRoutes.get('/slack-channel', adminController.getSlackChannel);
+adminRoutes.put(
+  '/slack-channel',
+  validate({ body: saveSlackChannelSchema }),
+  adminController.saveSlackChannel
+);
+adminRoutes.delete('/slack-channel', adminController.deleteSlackChannel);

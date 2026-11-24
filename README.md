@@ -142,6 +142,7 @@ Training-platform/
 | [Roles and assignments](docs/roles-and-assignments.md) | Role hierarchy, mentor assignment, authorization, migration strategy |
 | [Leave workflow](docs/leave-request-workflow.md)       | Leave statuses, Mentor/Manager decisions, append-only review history |
 | [Certificate security](docs/certificate-security.md)   | Certificate issuance, signatures, verification, revocation           |
+| [Slack integration](docs/slack-integration.md)         | Mentor channel setup, shared bot, outbox and retry behavior          |
 | [Release notes v0.2.0](docs/release-notes/v0.2.0.md)   | Mentor dashboard, certificates, integrity score and other changes    |
 | [Release notes v0.1.0](docs/release-notes/v0.1.0.md)   | What's in the first beta, known limitations and future scope         |
 

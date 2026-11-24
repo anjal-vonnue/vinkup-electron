@@ -16,6 +16,7 @@ const TABLES = [
   'task_review',
   'leave_review',
   'leave_request',
+  'slack_notification_outbox',
   'task_progress',
   'self_check_item',
   'learning_objective',
@@ -44,7 +45,7 @@ export async function resetTraineeData(): Promise<void> {
     'leave_review',
     'leave_request',
     'task_progress',
-    'trainee',
+    'slack_notification_outbox', 'trainee',
   ];
   await db.$executeRawUnsafe(
     `TRUNCATE TABLE ${traineeTables.map((t) => `"${t}"`).join(', ')} CASCADE`

@@ -115,11 +115,11 @@
   filter: brightness(1.05);
 }
 
-/* "Dashboard view | Team performance": two equal halves, a purple pill slides to the chosen one. */
+/* "Dashboard view | Team performance | Integrations": equal columns, a purple pill slides to the chosen one. */
 .viewTabs {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   margin-top: 20px;
   padding: 4px;
@@ -129,22 +129,25 @@
   border-radius: 12px;
 }
 
-/* Half the bar wide: (100% - 8px padding - 4px gap) / 2. */
+/* One third of the bar: (100% - 8px padding - 2*4px gaps) / 3. */
 .viewIndicator {
   position: absolute;
   top: 4px;
   bottom: 4px;
   left: 4px;
-  width: calc((100% - 12px) / 2);
+  width: calc((100% - 16px) / 3);
 
   background: var(--color-accent-purple);
   border-radius: 8px;
   transition: transform 250ms ease;
 }
 
-/* Move one pill-width plus the gap to the right. */
 .viewTabs[data-active='performance'] .viewIndicator {
   transform: translateX(calc(100% + 4px));
+}
+
+.viewTabs[data-active='integrations'] .viewIndicator {
+  transform: translateX(calc(200% + 8px));
 }
 
 .viewTab {
@@ -211,5 +214,10 @@
 
   .title {
     font-size: 24px;
+  }
+
+  .viewTab {
+    font-size: 13px;
+    padding: 0 6px;
   }
 }

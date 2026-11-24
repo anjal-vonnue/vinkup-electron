@@ -1,13 +1,16 @@
 import type { SubmitTaskResponse, TaskCodeResponse, TaskFile, TaskResponse } from '@itp/types';
+import { env } from '../../config/env';
 import { ConflictError, NotFoundError } from '../../errors/AppError';
 import { ProgressService } from '../progress-module/progress.service';
 import { toTaskFiles } from './task.files';
 import { TaskRepository } from './task.repository';
 import { realtimeBroker } from '../realtime-module/realtime.broker';
 import { publishToMentor } from '../realtime-module/realtime.notify';
+import { SlackNotificationRepository } from '../slack-module/slack-notification.repository';
 
 const taskRepository = new TaskRepository();
 const progressService = new ProgressService();
+const slackNotificationRepository = new SlackNotificationRepository();
 
 // Every method first checks the task exists (404) and its day is unlocked for this trainee (403).
 
@@ -112,9 +115,78 @@ export class TaskService {
     await progressService.assertTaskUnlocked(traineeId, taskId);
 
     const now = new Date();
+    let submissionContext: Awaited<ReturnType<typeof taskRepository.findSubmissionContext>> | null =
+      null;
 
     // Repository must snapshot the current working files into submitted_files.
-    const row = await taskRepository.markSubmitted(traineeId, taskId, now);
+    const row = await taskRepository.markSubmitted(traineeId, taskId, now, async (tx, progress) => {
+      const [trainee, task] = await Promise.all([
+        tx.trainee.findUnique({
+          where: { id: traineeId },
+          select: {
+            name: true,
+            mentor_id: true,
+            mentor: { select: { slack_channel_id: true } },
+          },
+        }),
+        tx.task.findUnique({
+          where: { id: taskId },
+          select: {
+            title: true,
+            curriculum_day: {
+              select: {
+                day_number: true,
+                course: { select: { title: true } },
+              },
+            },
+          },
+        }),
+      ]);
+
+      submissionContext = {
+        mentorId: trainee?.mentor_id ?? null,
+        mentorSlackChannelId: trainee?.mentor?.slack_channel_id ?? null,
+        traineeName: trainee?.name ?? '',
+        taskTitle: task?.title ?? '',
+        courseTitle: task?.curriculum_day?.course?.title ?? '',
+        dayNumber: task?.curriculum_day?.day_number ?? null,
+      };
+
+      if (!env.SLACK_ENABLED) return;
+      const channelId = submissionContext.mentorSlackChannelId;
+      if (!channelId) return;
+
+      const submittedAt = (progress.last_submitted_at ?? now).toISOString();
+      const dedupeKey = `task_submission:${traineeId}:${taskId}:${progress.submission_count}`;
+
+      try {
+        await slackNotificationRepository.createInTx(tx, {
+          eventType: 'task.submission',
+          channelId,
+          dedupeKey,
+          payload: {
+            traineeName: submissionContext.traineeName,
+            taskTitle: submissionContext.taskTitle,
+            courseTitle: submissionContext.courseTitle,
+            dayNumber: submissionContext.dayNumber,
+            submissionCount: progress.submission_count,
+            submittedAt,
+            reviewStatus: progress.review_status ?? 'pending',
+          },
+        });
+      } catch (error) {
+        // Duplicate submission event - do not fail the submission.
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          (error as { code?: string }).code === 'P2002'
+        ) {
+          return;
+        }
+        throw error;
+      }
+    });
 
     if (!row) {
       throw new ConflictError(
@@ -124,8 +196,7 @@ export class TaskService {
     }
 
     const submittedAt = (row.last_submitted_at ?? now).toISOString();
-
-    const context = await taskRepository.findSubmissionContext(traineeId, taskId);
+    const context = submissionContext ?? (await taskRepository.findSubmissionContext(traineeId, taskId));
 
     // Notify only the assigned mentor.
     if (context.mentorId) {

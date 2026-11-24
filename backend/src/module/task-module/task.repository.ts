@@ -71,24 +71,42 @@ export class TaskRepository {
     taskId: string
   ): Promise<{
     mentorId: string | null;
+    mentorSlackChannelId: string | null;
     traineeName: string;
     taskTitle: string;
+    courseTitle: string;
+    dayNumber: number | null;
   }> => {
     const [trainee, task] = await Promise.all([
       prisma.trainee.findUnique({
         where: { id: traineeId },
-        select: { name: true, mentor_id: true },
+        select: {
+          name: true,
+          mentor_id: true,
+          mentor: { select: { slack_channel_id: true } },
+        },
       }),
       prisma.task.findUnique({
         where: { id: taskId },
-        select: { title: true },
+        select: {
+          title: true,
+          curriculum_day: {
+            select: {
+              day_number: true,
+              course: { select: { title: true } },
+            },
+          },
+        },
       }),
     ]);
 
     return {
       mentorId: trainee?.mentor_id ?? null,
+      mentorSlackChannelId: trainee?.mentor?.slack_channel_id ?? null,
       traineeName: trainee?.name ?? '',
       taskTitle: task?.title ?? '',
+      courseTitle: task?.curriculum_day?.course?.title ?? '',
+      dayNumber: task?.curriculum_day?.day_number ?? null,
     };
   };
 
@@ -142,7 +160,8 @@ export class TaskRepository {
   markSubmitted = async (
     traineeId: string,
     taskId: string,
-    submittedAt: Date
+    submittedAt: Date,
+    onSubmitted?: (tx: Prisma.TransactionClient, progress: task_progress) => Promise<void>
   ): Promise<task_progress | null> => {
     const key = {
       trainee_id: traineeId,
@@ -187,7 +206,7 @@ export class TaskRepository {
 
       // First submission: create the progress row and its snapshot.
       if (!existing) {
-        return tx.task_progress.create({
+        const created = await tx.task_progress.create({
           data: {
             trainee_id: traineeId,
             task_id: taskId,
@@ -200,6 +219,8 @@ export class TaskRepository {
             last_submitted_at: submittedAt,
           },
         });
+        if (onSubmitted) await onSubmitted(tx, created);
+        return created;
       }
 
       // Conditional update protects against an approval happening
@@ -225,9 +246,11 @@ export class TaskRepository {
         return null;
       }
 
-      return tx.task_progress.findUniqueOrThrow({
+      const progress = await tx.task_progress.findUniqueOrThrow({
         where: { id: existing.id },
       });
+      if (onSubmitted) await onSubmitted(tx, progress);
+      return progress;
     });
   };
 }

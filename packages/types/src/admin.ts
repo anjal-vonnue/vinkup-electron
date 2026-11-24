@@ -138,6 +138,16 @@ export type CreateTraineeRequest = {
   email: string;
 };
 
+/** GET /api/admin/slack-channel */
+export type MentorSlackChannelResponse = {
+  channelId: string | null;
+};
+
+/** PUT /api/admin/slack-channel */
+export type SaveMentorSlackChannelRequest = {
+  channelId: string;
+};
+
 // ---------- Team analytics (GET /api/admin/analytics) ----------
 // Every number comes from stored records. Dates are IST calendar days ("YYYY-MM-DD").
 

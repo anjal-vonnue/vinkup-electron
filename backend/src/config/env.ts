@@ -6,14 +6,24 @@ const optionalString = z.preprocess(
   z.string().optional()
 );
 
-const envSchema = z.object({
-  PORT: z.coerce.number().default(3000), // the frontend's Vite proxy sends /api here
-  DATABASE_URL: z.string().min(1),
-  SESSION_SECRET: z.string().min(32),
-  GOOGLE_CLIENT_ID: z.string().min(1),
-  GOOGLE_CLIENT_SECRET: z.string().min(1),
-  GOOGLE_CALLBACK_URL: z.string().min(1),
-  AI_PROVIDER_ORDER: z.string().default('groq,gemini,anthropic'),
+const booleanEnv = z.preprocess((value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === '') return false;
+  return value;
+}, z.boolean());
+
+const envSchema = z
+  .object({
+    PORT: z.coerce.number().default(3000), // the frontend's Vite proxy sends /api here
+    DATABASE_URL: z.string().min(1),
+    SESSION_SECRET: z.string().min(32),
+    GOOGLE_CLIENT_ID: z.string().min(1),
+    GOOGLE_CLIENT_SECRET: z.string().min(1),
+    GOOGLE_CALLBACK_URL: z.string().min(1),
+    AI_PROVIDER_ORDER: z.string().default('groq,gemini,anthropic'),
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().default(60000),
   GROQ_API_KEY: optionalString,
   GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
@@ -22,23 +32,23 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: optionalString,
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
   /**
-   * Google redirect URI for the Electron flow. It is a second redirect URI on
-   * the same Web OAuth client; no desktop client or client secret ships with
-   * the app. Defaults to the web callback with `/desktop/` inserted.
-   */
-  GOOGLE_DESKTOP_CALLBACK_URL: z.preprocess(
-    // `.env` values are strings; treat an empty line as "not set" so leaving the
-    // optional variable blank still derives the URL from GOOGLE_CALLBACK_URL.
-    (value) => (value === '' ? undefined : value),
-    z.string().url().optional()
-  ),
-  /** Lifetime of a desktop access JWT. Refresh tokens are long-lived and revocable. */
-  DESKTOP_ACCESS_TOKEN_TTL: z.string().default('15m'),
-  ALLOWED_EMAIL_DOMAIN: z.string().min(1),
-  FRONTEND_URL: z.string().default('http://localhost:5173'),
-  JWT_SECRET: z.string().min(16),
-  JWT_EXPIRES_IN: z.string().default('1h'),
-  /**
+     * Google redirect URI for the Electron flow. It is a second redirect URI on
+     * the same Web OAuth client; no desktop client or client secret ships with
+     * the app. Defaults to the web callback with `/desktop/` inserted.
+     */
+    GOOGLE_DESKTOP_CALLBACK_URL: z.preprocess(
+      // `.env` values are strings; treat an empty line as "not set" so leaving the
+      // optional variable blank still derives the URL from GOOGLE_CALLBACK_URL.
+      (value) => (value === '' ? undefined : value),
+      z.string().url().optional()
+    ),
+    /** Lifetime of a desktop access JWT. Refresh tokens are long-lived and revocable. */
+    DESKTOP_ACCESS_TOKEN_TTL: z.string().default('15m'),
+    ALLOWED_EMAIL_DOMAIN: z.string().min(1),
+    FRONTEND_URL: z.string().default('http://localhost:5173'),
+    JWT_SECRET: z.string().min(16),
+    JWT_EXPIRES_IN: z.string().default('1h'),
+    /**
    * Ed25519 private key used to sign issued certificates. Accepts a PKCS8 PEM
    * string or a base64-encoded PKCS8 PEM. Required when certificate issuance is
    * enabled; issuance fails safely when missing.
@@ -48,7 +58,21 @@ const envSchema = z.object({
     z.string().min(1).optional()
   ),
   NODE_ENV: z.string().min(1).default('development'),
-});
+    SLACK_ENABLED: booleanEnv.default(false),
+    SLACK_BOT_TOKEN: z.preprocess(
+      (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+      z.string().min(1).optional()
+    ),
+  })
+  .superRefine((value, ctx) => {
+    if (value.SLACK_ENABLED && !value.SLACK_BOT_TOKEN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['SLACK_BOT_TOKEN'],
+        message: 'SLACK_BOT_TOKEN is required when SLACK_ENABLED=true',
+      });
+    }
+  });
 
 // Crashes on startup with a clear message if a variable is missing
 export const env = envSchema.parse(process.env);

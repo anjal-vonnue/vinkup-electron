@@ -21,6 +21,7 @@ import {
 import { csvFilename, downloadCsv } from '../../lib/downloadCsv';
 import { todayKey } from '../../lib/platformDate';
 import PendingReviewPanel from './PendingReviewPanel';
+import SlackIntegrationSection from './SlackIntegrationSection';
 
 function UsersIcon() {
   return (
@@ -42,12 +43,13 @@ function UsersIcon() {
   );
 }
 
-/** The two views of /admin: the trainee list, or the team analytics. */
-type PageView = 'dashboard' | 'performance';
+/** The views of /admin: trainee list, team analytics, and mentor integrations. */
+type PageView = 'dashboard' | 'performance' | 'integrations';
 
 const PAGE_VIEWS: { id: PageView; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard view' },
   { id: 'performance', label: 'Team performance' },
+  { id: 'integrations', label: 'Integrations' },
 ];
 
 /** /admin: read-only overview of the trainees currently assigned to this mentor. */
@@ -190,6 +192,8 @@ export default function AdminTraineesPage() {
         >
           {view === 'performance' ? (
             <TeamAnalytics trainees={trainees} attentionReasons={attentionReasons} />
+          ) : view === 'integrations' ? (
+            <SlackIntegrationSection />
           ) : (
             <>
               {trainees.length > 0 && <CohortSummary trainees={trainees} />}

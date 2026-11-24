@@ -62,7 +62,7 @@ const leaveSelect = {
     select: {
       id: true,
       name: true,
-      mentor: { select: { id: true, name: true } },
+      mentor: { select: { id: true, name: true, slack_channel_id: true } },
     },
   },
 } as const;

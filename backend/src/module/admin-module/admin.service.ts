@@ -4,6 +4,7 @@ import type {
   AdminTaskCode,
   AdminTraineeDetail,
   AdminTraineeSummary,
+  MentorSlackChannelResponse,
   TaskFile,
   TypingStats,
 } from '@itp/types';
@@ -15,7 +16,7 @@ import { ProgressService } from '../progress-module/progress.service';
 import { AdminRepository } from './admin.repository';
 import { env } from '../../config/env';
 import { ConflictError, TraineeDomainError } from '../../errors/AppError';
-import type { AnalyticsQuery, CreateTraineeBody } from './admin.schema';
+import type { AnalyticsQuery, CreateTraineeBody, SaveSlackChannelBody } from './admin.schema';
 import { buildAdminIntegrity } from './integrity.overall';
 import {
   buildIntegrityTrend,
@@ -455,5 +456,27 @@ export class AdminService {
     const row = (await this.listTrainees(adminId)).find((trainee) => trainee.id === created.id);
     if (!row) throw new NotFoundError('Trainee not found.');
     return row;
+  };
+
+  /** GET /api/admin/slack-channel */
+  getSlackChannel = async (mentorId: string): Promise<MentorSlackChannelResponse> => {
+    const row = await repo.findSlackChannel(mentorId);
+    if (!row) throw new NotFoundError('Mentor not found.');
+    return { channelId: row.slack_channel_id };
+  };
+
+  /** PUT /api/admin/slack-channel */
+  saveSlackChannel = async (
+    mentorId: string,
+    input: SaveSlackChannelBody
+  ): Promise<MentorSlackChannelResponse> => {
+    const row = await repo.saveSlackChannel(mentorId, input.channelId);
+    return { channelId: row.slack_channel_id };
+  };
+
+  /** DELETE /api/admin/slack-channel */
+  deleteSlackChannel = async (mentorId: string): Promise<MentorSlackChannelResponse> => {
+    await repo.deleteSlackChannel(mentorId);
+    return { channelId: null };
   };
 }

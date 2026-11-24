@@ -300,4 +300,26 @@ export class AdminRepository {
       select: { trainee_id: true, wpm: true, taken_at: true },
       orderBy: { taken_at: 'asc' },
     });
+
+  // ---------- mentor Slack channel configuration ----------
+
+  findSlackChannel = (mentorId: string) =>
+    prisma.admin.findUnique({
+      where: { id: mentorId },
+      select: { slack_channel_id: true },
+    });
+
+  saveSlackChannel = (mentorId: string, channelId: string) =>
+    prisma.admin.update({
+      where: { id: mentorId },
+      data: { slack_channel_id: channelId },
+      select: { slack_channel_id: true },
+    });
+
+  deleteSlackChannel = (mentorId: string) =>
+    prisma.admin.update({
+      where: { id: mentorId },
+      data: { slack_channel_id: null },
+      select: { slack_channel_id: true },
+    });
 }
