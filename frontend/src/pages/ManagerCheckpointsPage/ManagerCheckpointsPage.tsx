@@ -224,8 +224,8 @@ export default function ManagerCheckpointsPage() {
           <div>
             <h1 className={styles.title}>Checkpoint assessments</h1>
             <p className={styles.subtitle}>
-              Upload a Markdown question paper, schedule it for trainees or groups, and grade the
-              submissions.
+              Create MCQ or practical test checkpoints, schedule them for trainees or groups, and
+              grade the submissions.
             </p>
           </div>
           <div className={styles.titleActions}>
@@ -278,7 +278,7 @@ export default function ManagerCheckpointsPage() {
             <div className={styles.empty}>
               <ClipboardList size={28} aria-hidden="true" />
               <h2>No checkpoints yet</h2>
-              <p>Create your first checkpoint from a Markdown question paper.</p>
+              <p>Create your first checkpoint — choose MCQ or practical test.</p>
               <button
                 type="button"
                 className={styles.primaryButton}
@@ -294,6 +294,7 @@ export default function ManagerCheckpointsPage() {
                 <thead>
                   <tr>
                     <th scope="col">Checkpoint</th>
+                    <th scope="col">Type</th>
                     <th scope="col">Schedule</th>
                     <th scope="col">Duration</th>
                     <th scope="col">Marks</th>
@@ -315,6 +316,9 @@ export default function ManagerCheckpointsPage() {
                             </span>
                           )}
                         </div>
+                      </td>
+                      <td className={styles.muted}>
+                        {checkpoint.mode === 'PRACTICAL' ? '💻 Practical' : '📝 MCQ'}
                       </td>
                       <td className={styles.muted}>
                         {checkpoint.startAt ? formatIstDateTime(checkpoint.startAt) : 'Not set'}
@@ -414,8 +418,8 @@ export default function ManagerCheckpointsPage() {
         </div>
 
         <p className={styles.hint}>
-          <CalendarClock size={14} aria-hidden="true" /> The uploaded Markdown paper is parsed on
-          the server and is the authoritative source of questions, marks and instructions.
+          <CalendarClock size={14} aria-hidden="true" /> MCQ papers are parsed from Markdown.
+          Practical tests provide a full coding workspace with starter files.
         </p>
       </main>
     </>

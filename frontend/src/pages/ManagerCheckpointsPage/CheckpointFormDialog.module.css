@@ -559,3 +559,173 @@
     margin-right: 16px;
   }
 }
+
+/* ---------- Mode selector ---------- */
+
+.modeSelector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.modeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 2px solid var(--color-border-card);
+  border-radius: 10px;
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.modeCard:hover:not(:disabled) {
+  border-color: var(--color-accent-purple);
+  background: var(--color-bg-surface-3);
+}
+
+.modeCardActive {
+  border-color: var(--color-accent-purple);
+  background: var(--color-accent-tint);
+}
+
+.modeCard:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modeCardTitle {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.modeCardDesc {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* ---------- Starter file editor ---------- */
+
+.starterFilesEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.starterFilesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.starterFilesCount {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.starterFilesActions {
+  display: flex;
+  gap: 6px;
+}
+
+.starterFilesList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.starterFileItem {
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.starterFileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.starterFileName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: none;
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.starterFileName:hover {
+  background: var(--color-bg-surface-3);
+}
+
+.starterFileNameActive {
+  background: var(--color-accent-tint);
+}
+
+.starterFileLang {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.starterFileRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.starterFileRemove:hover {
+  color: var(--color-status-error-text);
+  background: var(--color-status-error-bg);
+}
+
+.starterFileContent {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: none;
+  border-top: 1px solid var(--color-border-card);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

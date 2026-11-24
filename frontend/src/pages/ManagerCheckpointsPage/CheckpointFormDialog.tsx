@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CheckpointGroup,
   CheckpointMarkdownPreview,
+  CheckpointMode,
+  CheckpointQuestionRuntime,
+  CheckpointWorkspaceFile,
   CreateCheckpointRequest,
   ManagerTrainee,
 } from '@itp/types';
-import { FileText, Upload, X } from 'lucide-react';
+import { FileText, Plus, Trash2, Upload, X } from 'lucide-react';
 import MarkdownRenderer from '../../components/MarkdownRenderer';
 import {
   createManagerCheckpoint,
@@ -21,6 +24,7 @@ type FormTarget = { mode: 'create' } | { mode: 'edit'; checkpointId: string };
 type FormState = {
   title: string;
   description: string;
+  checkpointMode: CheckpointMode;
   durationMinutes: string;
   totalMarks: string;
   passingMarks: string;
@@ -34,11 +38,17 @@ type FormState = {
   sourceMarkdown: string;
   traineeIds: string[];
   groupIds: string[];
+  // Practical mode fields
+  practicalRuntime: CheckpointQuestionRuntime;
+  practicalRunCommand: string;
+  practicalSetupSql: string;
+  practicalStarterFiles: CheckpointWorkspaceFile[];
 };
 
 const EMPTY_FORM: FormState = {
   title: '',
   description: '',
+  checkpointMode: 'MCQ',
   durationMinutes: '60',
   totalMarks: '100',
   passingMarks: '40',
@@ -52,6 +62,10 @@ const EMPTY_FORM: FormState = {
   sourceMarkdown: '',
   traineeIds: [],
   groupIds: [],
+  practicalRuntime: 'node',
+  practicalRunCommand: '',
+  practicalSetupSql: '',
+  practicalStarterFiles: [],
 };
 
 function pad(value: number): string {
@@ -91,6 +105,149 @@ function questionTypeLabel(type: string): string {
     default:
       return 'Text';
   }
+}
+
+function guessLanguageFromPath(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    js: 'JavaScript',
+    ts: 'TypeScript',
+    jsx: 'JSX',
+    tsx: 'TSX',
+    html: 'HTML',
+    css: 'CSS',
+    json: 'JSON',
+    sql: 'SQL',
+    md: 'Markdown',
+    py: 'Python',
+  };
+  return map[ext] ?? ext.toUpperCase();
+}
+
+type StarterFileEditorProps = {
+  files: CheckpointWorkspaceFile[];
+  onChange: (files: CheckpointWorkspaceFile[]) => void;
+  disabled: boolean;
+};
+
+function StarterFileEditor({ files, onChange, disabled }: StarterFileEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  function addFile() {
+    const name = window.prompt('File path (e.g. index.js, src/app.ts):');
+    if (!name?.trim()) return;
+    onChange([...files, { path: name.trim(), content: '' }]);
+    setEditingIndex(files.length);
+  }
+
+  async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const uploadedFiles = event.target.files;
+    if (!uploadedFiles) return;
+    const newFiles = [...files];
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const file = uploadedFiles[i];
+      const content = await file.text();
+      const existing = newFiles.findIndex((f) => f.path === file.name);
+      if (existing >= 0) {
+        newFiles[existing] = { path: file.name, content };
+      } else {
+        newFiles.push({ path: file.name, content });
+      }
+    }
+    onChange(newFiles);
+    event.target.value = '';
+  }
+
+  function removeFile(index: number) {
+    onChange(files.filter((_, i) => i !== index));
+    if (editingIndex === index) setEditingIndex(null);
+    else if (editingIndex !== null && editingIndex > index) setEditingIndex(editingIndex - 1);
+  }
+
+  function updateContent(index: number, content: string) {
+    onChange(files.map((f, i) => (i === index ? { ...f, content } : f)));
+  }
+
+  return (
+    <div className={styles.starterFilesEditor}>
+      <div className={styles.starterFilesHeader}>
+        <span className={styles.starterFilesCount}>
+          {files.length} file{files.length !== 1 ? 's' : ''}
+        </span>
+        <div className={styles.starterFilesActions}>
+          <button
+            type="button"
+            className={styles.uploadButton}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled}
+          >
+            <Upload size={14} aria-hidden="true" />
+            Upload files
+          </button>
+          <button
+            type="button"
+            className={styles.uploadButton}
+            onClick={addFile}
+            disabled={disabled}
+          >
+            <Plus size={14} aria-hidden="true" />
+            New file
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(event) => void handleUpload(event)}
+          />
+        </div>
+      </div>
+
+      {files.length === 0 ? (
+        <p className={styles.muted}>No starter files yet. Add files the trainee will start with.</p>
+      ) : (
+        <div className={styles.starterFilesList}>
+          {files.map((file, index) => (
+            <div key={`${file.path}-${index}`} className={styles.starterFileItem}>
+              <div className={styles.starterFileHeader}>
+                <button
+                  type="button"
+                  className={`${styles.starterFileName} ${editingIndex === index ? styles.starterFileNameActive : ''}`}
+                  onClick={() => setEditingIndex(editingIndex === index ? null : index)}
+                >
+                  <FileText size={14} aria-hidden="true" />
+                  <span>{file.path}</span>
+                  <span className={styles.starterFileLang}>{guessLanguageFromPath(file.path)}</span>
+                </button>
+                {!disabled && (
+                  <button
+                    type="button"
+                    className={styles.starterFileRemove}
+                    onClick={() => removeFile(index)}
+                    aria-label={`Remove ${file.path}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+              {editingIndex === index && (
+                <textarea
+                  className={styles.starterFileContent}
+                  value={file.content}
+                  onChange={(event) => updateContent(index, event.target.value)}
+                  disabled={disabled}
+                  rows={12}
+                  spellCheck={false}
+                  placeholder={`// Content of ${file.path}`}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Props = {
@@ -136,9 +293,13 @@ export default function CheckpointFormDialog({
       .then((checkpoint) => {
         if (cancelled) return;
         const start = splitIso(checkpoint.startAt);
+        // Extract practical fields from the first question if mode is PRACTICAL
+        const firstQuestion = checkpoint.questions[0];
+        const isPractical = checkpoint.mode === 'PRACTICAL';
         setForm({
           title: checkpoint.title,
           description: checkpoint.description,
+          checkpointMode: checkpoint.mode ?? 'MCQ',
           durationMinutes: String(checkpoint.durationMinutes),
           totalMarks: String(checkpoint.totalMarks),
           passingMarks: String(checkpoint.passingMarks),
@@ -152,6 +313,12 @@ export default function CheckpointFormDialog({
           sourceMarkdown: checkpoint.sourceMarkdown,
           traineeIds: checkpoint.assignment.traineeIds,
           groupIds: checkpoint.assignment.groupIds,
+          practicalRuntime: isPractical && firstQuestion?.runtime ? firstQuestion.runtime : 'node',
+          practicalRunCommand:
+            isPractical && firstQuestion?.runCommand ? firstQuestion.runCommand : '',
+          practicalSetupSql: isPractical && firstQuestion?.setupSql ? firstQuestion.setupSql : '',
+          practicalStarterFiles:
+            isPractical && firstQuestion?.starterFiles ? firstQuestion.starterFiles : [],
         });
         setLoading(false);
       })
@@ -165,9 +332,9 @@ export default function CheckpointFormDialog({
     };
   }, [target]);
 
-  // Parse the Markdown on the server for the preview panel. Debounced so typing
-  // in the textarea doesn't flood the API.
+  // Parse the Markdown on the server for the preview panel (MCQ mode only).
   useEffect(() => {
+    if (form.checkpointMode !== 'MCQ') return;
     if (!form.sourceMarkdown.trim()) return;
     const sequence = ++previewRequestRef.current;
     const timer = setTimeout(() => {
@@ -189,7 +356,7 @@ export default function CheckpointFormDialog({
         });
     }, 500);
     return () => clearTimeout(timer);
-  }, [form.sourceMarkdown]);
+  }, [form.sourceMarkdown, form.checkpointMode]);
 
   const filteredTrainees = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -212,8 +379,8 @@ export default function CheckpointFormDialog({
   // The preview belongs to the current Markdown. Clearing the textarea must not
   // leave an old parsed paper on screen while the request state is cleaned up.
   const hasMarkdown = form.sourceMarkdown.trim().length > 0;
-  const visiblePreview = hasMarkdown ? preview : null;
-  const visiblePreviewError = hasMarkdown ? previewError : null;
+  const visiblePreview = hasMarkdown && form.checkpointMode === 'MCQ' ? preview : null;
+  const visiblePreviewError = hasMarkdown && form.checkpointMode === 'MCQ' ? previewError : null;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -259,10 +426,16 @@ export default function CheckpointFormDialog({
 
   function validate(publish: boolean): string | null {
     if (form.title.trim().length < 3) return 'Enter a checkpoint title.';
-    if (!form.sourceMarkdown.trim()) return 'Upload or paste the Markdown question paper.';
-    if (!preview || preview.questions.length === 0) {
-      return 'The Markdown file needs at least one question heading, for example "## Question 1".';
+
+    if (form.checkpointMode === 'MCQ') {
+      if (!form.sourceMarkdown.trim()) return 'Upload or paste the Markdown question paper.';
+      if (!preview || preview.questions.length === 0) {
+        return 'The Markdown file needs at least one question heading, for example "## Question 1".';
+      }
+    } else {
+      if (!form.sourceMarkdown.trim()) return 'Enter instructions for the practical test.';
     }
+
     const duration = Number(form.durationMinutes);
     if (!Number.isFinite(duration) || duration < 1) return 'Enter a duration in minutes.';
     const total = Number(form.totalMarks);
@@ -271,7 +444,7 @@ export default function CheckpointFormDialog({
     if (!Number.isFinite(passing) || passing < 1 || passing > total) {
       return 'Passing marks must be between 1 and the total marks.';
     }
-    if (preview.totalQuestionMarks > total) {
+    if (form.checkpointMode === 'MCQ' && preview && preview.totalQuestionMarks > total) {
       return `The questions total ${preview.totalQuestionMarks} marks, which is more than the total marks.`;
     }
     if (publish && !buildStartAt(form.startDate, form.startTime)) {
@@ -293,6 +466,7 @@ export default function CheckpointFormDialog({
     const body: CreateCheckpointRequest = {
       title: form.title.trim(),
       description: form.description.trim(),
+      mode: form.checkpointMode,
       durationMinutes: Number(form.durationMinutes),
       totalMarks: Number(form.totalMarks),
       passingMarks: Number(form.passingMarks),
@@ -306,6 +480,13 @@ export default function CheckpointFormDialog({
       traineeIds: form.traineeIds,
       groupIds: form.groupIds,
     };
+
+    if (form.checkpointMode === 'PRACTICAL') {
+      body.practicalRuntime = form.practicalRuntime;
+      body.practicalRunCommand = form.practicalRunCommand.trim() || null;
+      body.practicalSetupSql = form.practicalSetupSql.trim() || null;
+      body.practicalStarterFiles = form.practicalStarterFiles;
+    }
 
     setSaving(true);
     setFormError(null);
@@ -328,6 +509,9 @@ export default function CheckpointFormDialog({
     }
   }
 
+  const isMcq = form.checkpointMode === 'MCQ';
+  const isPractical = form.checkpointMode === 'PRACTICAL';
+
   return (
     <dialog
       ref={dialogRef}
@@ -345,8 +529,9 @@ export default function CheckpointFormDialog({
               {target.mode === 'create' ? 'New checkpoint' : 'Edit checkpoint'}
             </h2>
             <p className={styles.subtitle}>
-              The Markdown paper is parsed on the server. Each question starts with a heading such
-              as <code>## Question 1: Title</code>.
+              {isMcq
+                ? 'Upload a Markdown question paper with MCQ questions. Each question starts with a heading such as ## Question 1: Title.'
+                : 'Set up a practical coding test. Provide instructions and starter files — trainees get a full workspace.'}
             </p>
           </div>
           <button
@@ -365,6 +550,35 @@ export default function CheckpointFormDialog({
         ) : (
           <div className={styles.body}>
             <div className={styles.column}>
+              {/* Mode selector */}
+              <section className={styles.section}>
+                <h3>Checkpoint type</h3>
+                <div className={styles.modeSelector}>
+                  <button
+                    type="button"
+                    className={`${styles.modeCard} ${isMcq ? styles.modeCardActive : ''}`}
+                    onClick={() => update('checkpointMode', 'MCQ')}
+                    disabled={target.mode === 'edit'}
+                  >
+                    <span className={styles.modeCardTitle}>📝 MCQ</span>
+                    <span className={styles.modeCardDesc}>
+                      Multiple choice questions from a Markdown paper
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.modeCard} ${isPractical ? styles.modeCardActive : ''}`}
+                    onClick={() => update('checkpointMode', 'PRACTICAL')}
+                    disabled={target.mode === 'edit'}
+                  >
+                    <span className={styles.modeCardTitle}>💻 Practical Test</span>
+                    <span className={styles.modeCardDesc}>
+                      Coding workspace with instructions and starter files
+                    </span>
+                  </button>
+                </div>
+              </section>
+
               <section className={styles.section}>
                 <h3>Details</h3>
                 <label className={styles.field}>
@@ -489,57 +703,138 @@ export default function CheckpointFormDialog({
                 </div>
               </section>
 
-              <section className={styles.section}>
-                <div className={styles.sectionHeader}>
-                  <h3>Question paper</h3>
-                  <button
-                    type="button"
-                    className={styles.uploadButton}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload size={15} aria-hidden="true" />
-                    Upload .md
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".md,.markdown,text/markdown"
-                    hidden
-                    onChange={(event) => {
-                      void handleFile(event.target.files?.[0] ?? null);
-                      event.target.value = '';
-                    }}
+              {/* MCQ: Markdown question paper */}
+              {isMcq && (
+                <section className={styles.section}>
+                  <div className={styles.sectionHeader}>
+                    <h3>Question paper</h3>
+                    <button
+                      type="button"
+                      className={styles.uploadButton}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload size={15} aria-hidden="true" />
+                      Upload .md
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".md,.markdown,text/markdown"
+                      hidden
+                      onChange={(event) => {
+                        void handleFile(event.target.files?.[0] ?? null);
+                        event.target.value = '';
+                      }}
+                    />
+                  </div>
+                  {form.sourceFileName && (
+                    <p className={styles.fileName}>
+                      <FileText size={14} aria-hidden="true" />
+                      {form.sourceFileName}
+                    </p>
+                  )}
+                  <textarea
+                    className={styles.markdownInput}
+                    value={form.sourceMarkdown}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        sourceMarkdown: event.target.value,
+                        sourceFileName: current.sourceFileName,
+                      }))
+                    }
+                    rows={14}
+                    spellCheck={false}
+                    placeholder={`# Checkpoint title\n\nInstructions for trainees.\n\n## Question 1: First question\nMarks: 10\n\nYour question here.\n\n## Question 2: SQL task\nType: sql\nMarks: 5\n\nWrite a query…`}
                   />
-                </div>
-                {form.sourceFileName && (
-                  <p className={styles.fileName}>
-                    <FileText size={14} aria-hidden="true" />
-                    {form.sourceFileName}
+                  <p className={styles.helpText}>
+                    Supported metadata: <code>Type</code>, <code>Marks</code>, <code>Language</code>
+                    , <code>Choices</code>, <code>Correct</code>. For practical tasks also{' '}
+                    <code>Runtime</code> (node, browser or sql), <code>Run</code> and{' '}
+                    <code>Setup-sql</code>. Add starter files as fenced blocks tagged{' '}
+                    <code>file=path</code>, and setup SQL with <code>setup</code>. Write metadata as
+                    plain lines, a bracketed line, or an HTML comment under the heading.
                   </p>
-                )}
-                <textarea
-                  className={styles.markdownInput}
-                  value={form.sourceMarkdown}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      sourceMarkdown: event.target.value,
-                      sourceFileName: current.sourceFileName,
-                    }))
-                  }
-                  rows={14}
-                  spellCheck={false}
-                  placeholder={`# Checkpoint title\n\nInstructions for trainees.\n\n## Question 1: First question\nMarks: 10\n\nYour question here.\n\n## Question 2: SQL task\nType: sql\nMarks: 5\n\nWrite a query…`}
-                />
-                <p className={styles.helpText}>
-                  Supported metadata: <code>Type</code>, <code>Marks</code>, <code>Language</code>,{' '}
-                  <code>Choices</code>, <code>Correct</code>. For practical tasks also{' '}
-                  <code>Runtime</code> (node, browser or sql), <code>Run</code> and{' '}
-                  <code>Setup-sql</code>. Add starter files as fenced blocks tagged{' '}
-                  <code>file=path</code>, and setup SQL with <code>setup</code>. Write metadata as
-                  plain lines, a bracketed line, or an HTML comment under the heading.
-                </p>
-              </section>
+                </section>
+              )}
+
+              {/* Practical: Instructions + workspace config + starter files */}
+              {isPractical && (
+                <>
+                  <section className={styles.section}>
+                    <h3>Instructions</h3>
+                    <p className={styles.helpText}>
+                      Write the instructions for the practical test in Markdown. This is what
+                      trainees will see alongside the workspace.
+                    </p>
+                    <textarea
+                      className={styles.markdownInput}
+                      value={form.sourceMarkdown}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          sourceMarkdown: event.target.value,
+                        }))
+                      }
+                      rows={10}
+                      spellCheck={false}
+                      placeholder={`# Build a REST API\n\nCreate an Express server that:\n- Has a GET /users endpoint\n- Returns a JSON array of users\n- Listens on port 3000\n\nRun \`npm test\` to validate your solution.`}
+                    />
+                  </section>
+
+                  <section className={styles.section}>
+                    <h3>Workspace settings</h3>
+                    <div className={styles.grid3}>
+                      <label className={styles.field}>
+                        <span>Runtime</span>
+                        <select
+                          value={form.practicalRuntime}
+                          onChange={(event) =>
+                            update(
+                              'practicalRuntime',
+                              event.target.value as CheckpointQuestionRuntime
+                            )
+                          }
+                        >
+                          <option value="node">Node.js</option>
+                          <option value="browser">Browser (HTML/CSS/JS)</option>
+                          <option value="sql">SQL (PostgreSQL)</option>
+                        </select>
+                      </label>
+                      <label className={styles.field}>
+                        <span>Run command</span>
+                        <input
+                          value={form.practicalRunCommand}
+                          onChange={(event) => update('practicalRunCommand', event.target.value)}
+                          placeholder="npm test"
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Setup SQL</span>
+                        <input
+                          value={form.practicalSetupSql}
+                          onChange={(event) => update('practicalSetupSql', event.target.value)}
+                          placeholder="Optional schema SQL"
+                          disabled={form.practicalRuntime !== 'sql'}
+                        />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className={styles.section}>
+                    <h3>Starter files</h3>
+                    <p className={styles.helpText}>
+                      Add the files trainees start with. These will appear in their workspace
+                      exactly like daily tasks.
+                    </p>
+                    <StarterFileEditor
+                      files={form.practicalStarterFiles}
+                      onChange={(files) => update('practicalStarterFiles', files)}
+                      disabled={saving}
+                    />
+                  </section>
+                </>
+              )}
 
               <section className={styles.section}>
                 <div className={styles.sectionHeader}>
@@ -597,81 +892,121 @@ export default function CheckpointFormDialog({
               </section>
             </div>
 
-            <aside className={styles.previewColumn} aria-label="Markdown preview">
-              <div className={styles.previewHeader}>
-                <h3>Parsed preview</h3>
-                {previewBusy && <span className={styles.previewBusy}>Parsing…</span>}
-              </div>
+            <aside className={styles.previewColumn} aria-label="Preview">
+              {isMcq ? (
+                <>
+                  <div className={styles.previewHeader}>
+                    <h3>Parsed preview</h3>
+                    {previewBusy && <span className={styles.previewBusy}>Parsing…</span>}
+                  </div>
 
-              {visiblePreviewError && <p className={styles.error}>{visiblePreviewError}</p>}
+                  {visiblePreviewError && <p className={styles.error}>{visiblePreviewError}</p>}
 
-              {!visiblePreview && !visiblePreviewError ? (
-                <p className={styles.muted}>
-                  Upload a Markdown file or paste the paper to see the parsed instructions and
-                  questions.
-                </p>
+                  {!visiblePreview && !visiblePreviewError ? (
+                    <p className={styles.muted}>
+                      Upload a Markdown file or paste the paper to see the parsed instructions and
+                      questions.
+                    </p>
+                  ) : (
+                    visiblePreview && (
+                      <>
+                        <div className={styles.previewSummary}>
+                          <span>{visiblePreview.questions.length} question(s)</span>
+                          <span>{visiblePreview.totalQuestionMarks} question marks</span>
+                        </div>
+                        {visiblePreview.suggestedTitle && (
+                          <p className={styles.suggestedTitle}>
+                            Paper title: <strong>{visiblePreview.suggestedTitle}</strong>
+                          </p>
+                        )}
+                        {visiblePreview.warnings.length > 0 && (
+                          <ul className={styles.warnings}>
+                            {visiblePreview.warnings.map((warning, index) => (
+                              <li key={`${warning}-${index}`}>{warning}</li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className={styles.previewScroll}>
+                          <section className={styles.previewSection}>
+                            <h4>Instructions</h4>
+                            {visiblePreview.instructionsMarkdown ? (
+                              <MarkdownRenderer markdown={visiblePreview.instructionsMarkdown} />
+                            ) : (
+                              <p className={styles.muted}>
+                                No instructions before the first question.
+                              </p>
+                            )}
+                          </section>
+                          {visiblePreview.questions.map((question) => (
+                            <article key={question.orderIndex} className={styles.previewQuestion}>
+                              <div className={styles.previewQuestionHeader}>
+                                <span>Question {question.orderIndex}</span>
+                                <span className={styles.questionType}>
+                                  {questionTypeLabel(question.type)}
+                                </span>
+                                <span className={styles.questionMarks}>{question.marks} marks</span>
+                              </div>
+                              <h5>{question.title}</h5>
+                              <MarkdownRenderer markdown={question.promptMarkdown} />
+                              {question.type === 'PRACTICAL' && (
+                                <p className={styles.muted}>
+                                  Runtime: {question.runtime ?? 'node'}
+                                  {question.runCommand ? ` · Run: ${question.runCommand}` : ''}
+                                  {question.starterFiles
+                                    ? ` · ${question.starterFiles.length} starter file(s)`
+                                    : ''}
+                                </p>
+                              )}
+                              {question.options && (
+                                <ul className={styles.options}>
+                                  {question.options.map((option, index) => (
+                                    <li key={option}>
+                                      {String.fromCharCode(65 + index)}. {option}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      </>
+                    )
+                  )}
+                </>
               ) : (
-                visiblePreview && (
-                  <>
-                    <div className={styles.previewSummary}>
-                      <span>{visiblePreview.questions.length} question(s)</span>
-                      <span>{visiblePreview.totalQuestionMarks} question marks</span>
-                    </div>
-                    {visiblePreview.suggestedTitle && (
-                      <p className={styles.suggestedTitle}>
-                        Paper title: <strong>{visiblePreview.suggestedTitle}</strong>
-                      </p>
-                    )}
-                    {visiblePreview.warnings.length > 0 && (
-                      <ul className={styles.warnings}>
-                        {visiblePreview.warnings.map((warning, index) => (
-                          <li key={`${warning}-${index}`}>{warning}</li>
-                        ))}
-                      </ul>
-                    )}
+                <>
+                  <div className={styles.previewHeader}>
+                    <h3>Instructions preview</h3>
+                  </div>
+                  {form.sourceMarkdown.trim() ? (
                     <div className={styles.previewScroll}>
                       <section className={styles.previewSection}>
-                        <h4>Instructions</h4>
-                        {visiblePreview.instructionsMarkdown ? (
-                          <MarkdownRenderer markdown={visiblePreview.instructionsMarkdown} />
-                        ) : (
-                          <p className={styles.muted}>No instructions before the first question.</p>
-                        )}
+                        <MarkdownRenderer markdown={form.sourceMarkdown} />
                       </section>
-                      {visiblePreview.questions.map((question) => (
-                        <article key={question.orderIndex} className={styles.previewQuestion}>
-                          <div className={styles.previewQuestionHeader}>
-                            <span>Question {question.orderIndex}</span>
-                            <span className={styles.questionType}>
-                              {questionTypeLabel(question.type)}
-                            </span>
-                            <span className={styles.questionMarks}>{question.marks} marks</span>
-                          </div>
-                          <h5>{question.title}</h5>
-                          <MarkdownRenderer markdown={question.promptMarkdown} />
-                          {question.type === 'PRACTICAL' && (
-                            <p className={styles.muted}>
-                              Runtime: {question.runtime ?? 'node'}
-                              {question.runCommand ? ` · Run: ${question.runCommand}` : ''}
-                              {question.starterFiles
-                                ? ` · ${question.starterFiles.length} starter file(s)`
-                                : ''}
-                            </p>
-                          )}
-                          {question.options && (
-                            <ul className={styles.options}>
-                              {question.options.map((option, index) => (
-                                <li key={option}>
-                                  {String.fromCharCode(65 + index)}. {option}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </article>
-                      ))}
+                      <div className={styles.previewSummary}>
+                        <span>Runtime: {form.practicalRuntime}</span>
+                        {form.practicalRunCommand && <span>Run: {form.practicalRunCommand}</span>}
+                        <span>{form.practicalStarterFiles.length} starter file(s)</span>
+                      </div>
+                      {form.practicalStarterFiles.length > 0 && (
+                        <section className={styles.previewSection}>
+                          <h4>Starter files</h4>
+                          <ul className={styles.options}>
+                            {form.practicalStarterFiles.map((file) => (
+                              <li key={file.path}>
+                                <code>{file.path}</code>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      )}
                     </div>
-                  </>
-                )
+                  ) : (
+                    <p className={styles.muted}>
+                      Write instructions to see a preview of what trainees will see.
+                    </p>
+                  )}
+                </>
               )}
             </aside>
           </div>
