@@ -8,7 +8,15 @@ const repository = vi.hoisted(() => ({
   findForReviewer: vi.fn(),
   decide: vi.fn(),
 }));
+const envMock = vi.hoisted(() => ({ SLACK_ENABLED: false }));
+const slackRepository = vi.hoisted(() => ({ create: vi.fn() }));
 
+vi.mock('../../config/env', () => ({ env: envMock }));
+vi.mock('../slack-module/slack-notification.repository', () => ({
+  SlackNotificationRepository: class {
+    create = slackRepository.create;
+  },
+}));
 vi.mock('./leave-request.repository', () => ({
   LeaveRequestRepository: class {
     create = repository.create;
@@ -49,7 +57,7 @@ const row = {
   trainee: {
     id: TRAINEE_ID,
     name: 'Test Trainee',
-    mentor: { id: reviewer.id, name: reviewer.name },
+    mentor: { id: reviewer.id, name: reviewer.name, slack_channel_id: 'C0123ABCDEF' },
   },
 };
 
@@ -57,6 +65,8 @@ let service: LeaveRequestService;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  envMock.SLACK_ENABLED = false;
+  slackRepository.create.mockResolvedValue({});
   service = new LeaveRequestService();
 });
 
@@ -80,6 +90,74 @@ describe('LeaveRequestService trainee actions', () => {
       subject: 'Family event',
       reason: 'A family celebration needs travel.',
     });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('queues only the trainee name and subject for the assigned mentor channel', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue(row);
+
+    await service.create(TRAINEE_ID, {
+      subject: 'Family event',
+      reason: 'A family celebration needs travel.',
+    });
+
+    expect(slackRepository.create).toHaveBeenCalledWith({
+      eventType: 'leave.request',
+      channelId: 'C0123ABCDEF',
+      payload: { traineeName: 'Test Trainee', subject: 'Family event' },
+      dedupeKey: `leave_request:${REQUEST_ID}`,
+    });
+  });
+
+  it('does not queue when Slack is disabled, the mentor is missing, or the channel is missing', async () => {
+    repository.create.mockResolvedValue(row);
+    await service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue({
+      ...row,
+      trainee: { ...row.trainee, mentor: null },
+    });
+    await service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+
+    repository.create.mockResolvedValue({
+      ...row,
+      trainee: {
+        ...row.trainee,
+        mentor: { id: reviewer.id, name: reviewer.name, slack_channel_id: null },
+      },
+    });
+    await service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('still returns the created request when Slack queueing fails', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue(row);
+    slackRepository.create.mockRejectedValueOnce(new Error('outbox unavailable'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' })
+    ).resolves.toMatchObject({ id: REQUEST_ID });
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('treats a duplicate outbox key as a successful no-op', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue(row);
+    slackRepository.create.mockRejectedValueOnce({ code: 'P2002' });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' })
+    ).resolves.toMatchObject({ id: REQUEST_ID });
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it('lists and reads only the authenticated trainee requests', async () => {
@@ -194,6 +272,19 @@ describe('LeaveRequestService review mapping', () => {
       feedback: 'Please choose another date.',
       reviewedAt: submittedAt.toISOString(),
     });
+  });
+
+  it('does not queue a Slack notification when a request is reviewed', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.decide.mockResolvedValue({ ok: true, request: row });
+
+    await service.review(reviewer, REQUEST_ID, { decision: 'APPROVED' });
+    await service.review(reviewer, REQUEST_ID, {
+      decision: 'REJECTED',
+      feedback: 'Please choose another date.',
+    });
+
+    expect(slackRepository.create).not.toHaveBeenCalled();
   });
 });
 

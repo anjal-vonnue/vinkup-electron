@@ -73,6 +73,15 @@ function row(overrides: Partial<SlackOutboxRow> = {}): SlackOutboxRow {
   };
 }
 
+function leaveRow(overrides: Partial<SlackOutboxRow> = {}): SlackOutboxRow {
+  return row({
+    event_type: 'leave.request',
+    payload: { traineeName: 'John Doe', subject: 'Personal Leave' },
+    dedupe_key: 'leave_request:request-1',
+    ...overrides,
+  });
+}
+
 describe('SlackNotificationWorker', () => {
   let worker: SlackNotificationWorker;
 
@@ -104,6 +113,53 @@ describe('SlackNotificationWorker', () => {
     expect(repoMock.markSent).toHaveBeenCalledWith('notification-1');
     expect(repoMock.markRetry).not.toHaveBeenCalled();
     expect(repoMock.markFailed).not.toHaveBeenCalled();
+  });
+
+  it('sends only the trainee name and subject for a leave request', async () => {
+    await worker.processRow(leaveRow());
+
+    expect(slackMock.postSlackMessage).toHaveBeenCalledTimes(1);
+    expect(slackMock.postSlackMessage).toHaveBeenCalledWith({
+      channel: 'C0123ABCDEF',
+      text:
+        ':calendar: *Leave Request*\n\n*John Doe* has requested a leave.\n\n' +
+        '*Subject:* Personal Leave',
+    });
+    expect(repoMock.markSent).toHaveBeenCalledWith('notification-1');
+    expect(repoMock.markRetry).not.toHaveBeenCalled();
+    expect(repoMock.markFailed).not.toHaveBeenCalled();
+  });
+
+  it('uses the shared retry path for rate-limited leave notifications', async () => {
+    slackMock.postSlackMessage.mockRejectedValue(
+      new slackMock.SlackApiError('ratelimited', {
+        status: 429,
+        slackError: 'ratelimited',
+        retryAfterSeconds: 30,
+      })
+    );
+
+    await worker.processRow(leaveRow({ attempt_count: 2 }));
+
+    expect(repoMock.markRetry).toHaveBeenCalledWith(
+      'notification-1',
+      expect.any(Date),
+      'ratelimited'
+    );
+    const nextRetryAt = repoMock.markRetry.mock.calls[0][1] as Date;
+    expect(nextRetryAt.getTime()).toBeGreaterThan(Date.now() + 25_000);
+    expect(repoMock.markFailed).not.toHaveBeenCalled();
+  });
+
+  it('permanently fails an invalid-auth leave notification without retry', async () => {
+    slackMock.postSlackMessage.mockRejectedValue(
+      new slackMock.SlackApiError('invalid_auth', { status: 200, slackError: 'invalid_auth' })
+    );
+
+    await worker.processRow(leaveRow());
+
+    expect(repoMock.markFailed).toHaveBeenCalledWith('notification-1', 'invalid_auth');
+    expect(repoMock.markRetry).not.toHaveBeenCalled();
   });
 
   it('schedules a retry for rate-limited delivery using Retry-After', async () => {
