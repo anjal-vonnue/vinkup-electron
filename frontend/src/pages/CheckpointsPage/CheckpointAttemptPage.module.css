@@ -75,36 +75,6 @@
   margin-bottom: 14px;
 }
 
-.titleBlock {
-  min-width: 0;
-}
-
-.eyebrow {
-  margin: 0 0 3px;
-  color: var(--color-accent-text);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.title {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--color-text-primary);
-}
-
-.deadline {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 5px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-
 .toolbar {
   display: flex;
   align-items: stretch;

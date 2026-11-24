@@ -300,32 +300,19 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
     <div className={isSinglePractical ? styles.practicalPage : undefined}>
       <Header
         leading={
-          isSinglePractical ? (
-            <div className={styles.headerLeading}>
-              <h1 className={styles.headerTitle}>{attempt.checkpointTitle}</h1>
-              <p className={styles.headerMeta}>
-                <Timer size={13} aria-hidden="true" />
-                Deadline {formatIstDateTime(attempt.deadlineAt)}
-              </p>
-            </div>
-          ) : undefined
+          <div className={styles.headerLeading}>
+            <h1 className={styles.headerTitle}>{attempt.checkpointTitle}</h1>
+            <p className={styles.headerMeta}>
+              <Timer size={13} aria-hidden="true" />
+              Deadline {formatIstDateTime(attempt.deadlineAt)}
+            </p>
+          </div>
         }
       />
 
       <main className={`${styles.page} ${isSinglePractical ? styles.pagePractical : ''}`}>
         {!isSinglePractical && (
           <header className={styles.attemptHeader}>
-            <div className={styles.titleBlock}>
-              <p className={styles.eyebrow}>
-                Checkpoint assessment · Attempt {attempt.attemptNumber}
-              </p>
-              <h1 className={styles.title}>{attempt.checkpointTitle}</h1>
-              <p className={styles.deadline}>
-                <Timer size={14} aria-hidden="true" /> Deadline{' '}
-                {formatIstDateTime(attempt.deadlineAt)}
-              </p>
-            </div>
-
             <div className={styles.toolbar}>
               <div className={`${styles.timer} ${timerTone}`} aria-live="off">
                 <Clock size={18} aria-hidden="true" />
