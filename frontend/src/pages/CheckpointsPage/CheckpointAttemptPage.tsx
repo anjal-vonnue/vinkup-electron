@@ -302,13 +302,10 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
         leading={
           isSinglePractical ? (
             <div className={styles.headerLeading}>
-              <p className={styles.eyebrow}>
-                Checkpoint assessment · Attempt {attempt.attemptNumber}
-              </p>
               <h1 className={styles.headerTitle}>{attempt.checkpointTitle}</h1>
-              <p className={styles.deadline}>
-                <Timer size={14} aria-hidden="true" /> Deadline{' '}
-                {formatIstDateTime(attempt.deadlineAt)}
+              <p className={styles.headerMeta}>
+                <Timer size={13} aria-hidden="true" />
+                Deadline {formatIstDateTime(attempt.deadlineAt)}
               </p>
             </div>
           ) : undefined
