@@ -2,8 +2,9 @@ import { env } from '../../config/env';
 import { postSlackMessage, SlackApiError } from '../../lib/slack';
 import {
   SlackNotificationRepository,
-  type SlackNotificationPayload,
+  type LeaveRequestSlackPayload,
   type SlackOutboxRow,
+  type TaskSubmissionSlackPayload,
 } from './slack-notification.repository';
 
 const POLL_INTERVAL_MS = 5000;
@@ -20,7 +21,12 @@ function escapeSlackText(value: string): string {
     .replace(/@(here|channel|everyone)\b/gi, '@\u200b$1');
 }
 
-function asPayload(payload: unknown): SlackNotificationPayload | null {
+type FormattedSlackMessage = {
+  text: string;
+  blocks?: unknown[];
+};
+
+function asTaskSubmissionPayload(payload: unknown): TaskSubmissionSlackPayload | null {
   if (!payload || typeof payload !== 'object') return null;
   const p = payload as Record<string, unknown>;
   if (
@@ -45,7 +51,16 @@ function asPayload(payload: unknown): SlackNotificationPayload | null {
   };
 }
 
-function formatSubmissionMessage(payload: SlackNotificationPayload) {
+function asLeaveRequestPayload(payload: unknown): LeaveRequestSlackPayload | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.traineeName !== 'string' || typeof p.subject !== 'string') {
+    return null;
+  }
+  return { traineeName: p.traineeName, subject: p.subject };
+}
+
+function formatSubmissionMessage(payload: TaskSubmissionSlackPayload): FormattedSlackMessage {
   const trainee = escapeSlackText(payload.traineeName || 'Unknown trainee');
   const task = escapeSlackText(payload.taskTitle || 'Unknown task');
   const course = escapeSlackText(payload.courseTitle || 'Unknown course');
@@ -82,6 +97,32 @@ function formatSubmissionMessage(payload: SlackNotificationPayload) {
   };
 }
 
+function formatLeaveRequestMessage(payload: LeaveRequestSlackPayload): FormattedSlackMessage {
+  const trainee = escapeSlackText(payload.traineeName);
+  const subject = escapeSlackText(payload.subject);
+
+  return {
+    text:
+      `:calendar: *Leave Request*\n\n*${trainee}* has requested a leave.\n\n` +
+      `*Subject:* ${subject}`,
+  };
+}
+
+function formatMessageForRow(row: SlackOutboxRow): FormattedSlackMessage | null {
+  switch (row.event_type) {
+    case 'task.submission': {
+      const payload = asTaskSubmissionPayload(row.payload);
+      return payload ? formatSubmissionMessage(payload) : null;
+    }
+    case 'leave.request': {
+      const payload = asLeaveRequestPayload(row.payload);
+      return payload ? formatLeaveRequestMessage(payload) : null;
+    }
+    default:
+      return null;
+  }
+}
+
 function computeRetryDelayMs(attemptCount: number, retryAfterSeconds?: number): number {
   if (typeof retryAfterSeconds === 'number' && retryAfterSeconds >= 0) {
     return Math.max(retryAfterSeconds * 1000, BASE_RETRY_MS);
@@ -91,7 +132,11 @@ function computeRetryDelayMs(attemptCount: number, retryAfterSeconds?: number): 
   return exp + jitter;
 }
 
-function isRetryable(error: unknown): { retryable: boolean; retryAfterSeconds?: number; message: string } {
+function isRetryable(error: unknown): {
+  retryable: boolean;
+  retryAfterSeconds?: number;
+  message: string;
+} {
   if (error instanceof SlackApiError) {
     const permanent = new Set([
       'invalid_auth',
@@ -105,10 +150,18 @@ function isRetryable(error: unknown): { retryable: boolean; retryAfterSeconds?: 
       'parameter_validation_failed',
     ]);
     if (error.slackError && permanent.has(error.slackError)) {
-      return { retryable: false, retryAfterSeconds: error.retryAfterSeconds, message: error.message };
+      return {
+        retryable: false,
+        retryAfterSeconds: error.retryAfterSeconds,
+        message: error.message,
+      };
     }
     if (error.status === 429 || error.status >= 500 || error.slackError === 'ratelimited') {
-      return { retryable: true, retryAfterSeconds: error.retryAfterSeconds, message: error.message };
+      return {
+        retryable: true,
+        retryAfterSeconds: error.retryAfterSeconds,
+        message: error.message,
+      };
     }
     // Other Slack errors: retry up to max attempts; they may be transient or fixable.
     return { retryable: true, retryAfterSeconds: error.retryAfterSeconds, message: error.message };
@@ -154,7 +207,8 @@ export class SlackNotificationWorker {
   private async recoverAndTick(): Promise<void> {
     try {
       const recovered = await this.repo.recoverExpiredProcessing(LEASE_MS);
-      if (recovered > 0) console.info(`[slack-worker] recovered ${recovered} expired notifications`);
+      if (recovered > 0)
+        console.info(`[slack-worker] recovered ${recovered} expired notifications`);
     } catch (error) {
       console.error('[slack-worker] recovery failed', error);
     }
@@ -182,18 +236,17 @@ export class SlackNotificationWorker {
   }
 
   async processRow(row: SlackOutboxRow): Promise<void> {
-    const payload = asPayload(row.payload);
-    if (!payload) {
+    const message = formatMessageForRow(row);
+    if (!message) {
       await this.repo.markFailed(row.id, 'Invalid notification payload');
       return;
     }
 
     try {
-      const message = formatSubmissionMessage(payload);
       await postSlackMessage({
         channel: row.channel_id,
         text: message.text,
-        blocks: message.blocks,
+        ...(message.blocks ? { blocks: message.blocks } : {}),
       });
       await this.repo.markSent(row.id);
     } catch (error) {

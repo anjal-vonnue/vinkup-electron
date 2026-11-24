@@ -1,7 +1,9 @@
 import { Prisma, slack_notification_status } from '../../generated/prisma/client';
 import { prisma } from '../../lib/prisma';
 
-export type SlackNotificationPayload = {
+export type SlackEventType = 'task.submission' | 'leave.request';
+
+export type TaskSubmissionSlackPayload = {
   traineeName: string;
   taskTitle: string;
   courseTitle: string;
@@ -11,8 +13,15 @@ export type SlackNotificationPayload = {
   reviewStatus: string;
 };
 
+export type LeaveRequestSlackPayload = {
+  traineeName: string;
+  subject: string;
+};
+
+export type SlackNotificationPayload = TaskSubmissionSlackPayload | LeaveRequestSlackPayload;
+
 export type CreateSlackNotificationInput = {
-  eventType: string;
+  eventType: SlackEventType;
   channelId: string;
   payload: SlackNotificationPayload;
   dedupeKey: string;
