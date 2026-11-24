@@ -4,7 +4,6 @@ import { useNavigate, useParams } from 'react-router';
 import type { TraineeCheckpointAttempt } from '@itp/types';
 import {
   AlertCircle,
-  AlertTriangle,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -19,6 +18,7 @@ import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import MarkdownRenderer from '../../components/MarkdownRenderer';
+import { useToast } from '../../components/Toast';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import { getCheckpointAttempt, submitCheckpointAttempt } from '../../api/checkpoints';
 import { ApiError } from '../../api/errors';
@@ -93,6 +93,7 @@ function SaveSummary({ summary, onRetry }: { summary: AnswerSaveSummary; onRetry
 
 function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const summaryPath = `/checkpoints/attempts/${attempt.id}/summary`;
 
   const [locked, setLocked] = useState(false);
@@ -177,6 +178,26 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
     onAlreadySubmitted: goToSummary,
   });
 
+  // Time-left reminders surface as toasts so they don't push the workspace down.
+  const warningsShownRef = useRef({ five: false, one: false });
+  useEffect(() => {
+    if (countdown.warning === 'five-minutes' && !warningsShownRef.current.five) {
+      warningsShownRef.current.five = true;
+      toast.show({
+        message: 'Five minutes remaining. Start wrapping up.',
+        variant: 'warning',
+        durationMs: 6000,
+      });
+    } else if (countdown.warning === 'one-minute' && !warningsShownRef.current.one) {
+      warningsShownRef.current.one = true;
+      toast.show({
+        message: 'One minute remaining. Save your final changes now.',
+        variant: 'warning',
+        durationMs: 8000,
+      });
+    }
+  }, [countdown.warning, toast]);
+
   // Warn before the browser closes or a link is followed. In-app navigation
   // would leave the attempt running, so the confirmation is intentionally
   // explicit. The backend still blocks every other trainee module.
@@ -242,13 +263,6 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
       : countdown.remainingSeconds <= 300
         ? styles.timerWarning
         : '';
-
-  const warningText =
-    countdown.warning === 'one-minute'
-      ? 'One minute remaining. Save your final changes now.'
-      : countdown.warning === 'five-minutes'
-        ? 'Five minutes remaining.'
-        : null;
 
   const practicalToolbarTrailing: ReactNode = isSinglePractical ? (
     <>
@@ -349,18 +363,6 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
               </button>
             </div>
           </header>
-        )}
-
-        {warningText && !locked && (
-          <div
-            className={`${styles.warning} ${
-              countdown.warning === 'one-minute' ? styles.warningUrgent : ''
-            }`}
-            role="alert"
-          >
-            <AlertTriangle size={16} aria-hidden="true" />
-            {warningText}
-          </div>
         )}
 
         {locked && (

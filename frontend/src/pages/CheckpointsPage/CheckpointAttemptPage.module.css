@@ -287,7 +287,6 @@
   cursor: not-allowed;
 }
 
-.warning,
 .lockedBanner,
 .submitError {
   display: flex;
@@ -298,18 +297,6 @@
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
-}
-
-.warning {
-  border: 1px solid var(--color-status-warning-border, var(--color-border-default));
-  background: var(--color-status-warning-bg);
-  color: var(--color-status-warning-text);
-}
-
-.warningUrgent {
-  border-color: var(--color-status-error-text);
-  background: var(--color-status-error-bg);
-  color: var(--color-status-error-text);
 }
 
 .lockedBanner {
