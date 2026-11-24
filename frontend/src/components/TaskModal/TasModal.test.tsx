@@ -168,6 +168,41 @@ describe('TaskModal: task list', () => {
     expect(onSelectTask).not.toHaveBeenCalled();
   });
 
+  it('opens the mentor suggestion from its own action on an approved task', async () => {
+    const approvedWithSuggestion = makeTask({
+      id: 'approved-suggestion',
+      title: 'Approved task',
+      status: 'completed',
+      reviewStatus: 'approved',
+      mentorSuggestion: { adminName: 'Mentor Jane', feedback: 'Consider adding a footer.' },
+    });
+    vi.mocked(getTaskReview).mockResolvedValue({
+      reviewStatus: 'approved',
+      submissionCount: 1,
+      latestReview: {
+        id: 'rev-approved',
+        taskId: approvedWithSuggestion.id,
+        adminId: 'admin-1',
+        adminName: 'Mentor Jane',
+        submissionNo: 1,
+        decision: 'approved',
+        feedback: 'Consider adding a footer.',
+        reviewedAt: '2026-11-12T10:00:00.000Z',
+      },
+    });
+    const { onSelectTask } = renderModal({ tasks: [approvedWithSuggestion] });
+
+    expect(screen.getByText('Approved').closest('[role="button"]')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View mentor suggestion for Approved task' })
+    );
+
+    expect(await screen.findByRole('dialog', { name: /Approved task/ })).toBeInTheDocument();
+    expect(await screen.findByText('Consider adding a footer.')).toBeInTheDocument();
+    expect(screen.getByText('Mentor suggestion')).toBeInTheDocument();
+    expect(onSelectTask).not.toHaveBeenCalled();
+  });
+
   it('shows the stretch badge only on stretch goals', () => {
     renderModal();
 

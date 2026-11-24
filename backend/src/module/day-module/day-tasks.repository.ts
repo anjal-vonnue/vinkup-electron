@@ -22,4 +22,22 @@ export const dayTasksRepository = {
       select: { task_id: true, status: true, review_status: true },
     });
   },
+
+  /** Latest approval comments for this trainee's tasks in the day, newest review first. */
+  findApprovedSuggestionsByDay(traineeId: string, dayId: string) {
+    return prisma.task_review.findMany({
+      where: {
+        trainee_id: traineeId,
+        decision: 'approved',
+        feedback: { not: '' },
+        task: { curriculum_day_id: dayId },
+      },
+      orderBy: { reviewed_at: 'desc' },
+      select: {
+        task_id: true,
+        feedback: true,
+        admin: { select: { name: true } },
+      },
+    });
+  },
 };

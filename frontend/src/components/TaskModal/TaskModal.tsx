@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MessageSquareText } from 'lucide-react';
 import type { DayTask } from '@itp/types';
 import TaskFeedbackModal from '../TaskFeedbackModal';
 import styles from './TaskModal.module.css';
@@ -56,17 +57,33 @@ export default function TaskModal({
   function getTaskStatusTag(task: DayTask) {
     if (task.status === 'completed') {
       if (task.reviewStatus === 'approved') {
-        return { label: 'Approved', className: styles.approved, isRework: false };
+        return {
+          label: 'Approved',
+          className: styles.approved,
+          isRework: false,
+        };
       }
       if (task.reviewStatus === 'rework') {
         return { label: 'Rework', className: styles.rework, isRework: true };
       }
-      return { label: 'Completed', className: styles.completed, isRework: false };
+      return {
+        label: 'Completed',
+        className: styles.completed,
+        isRework: false,
+      };
     }
     if (task.status === 'in_progress') {
-      return { label: 'In progress', className: styles.in_progress, isRework: false };
+      return {
+        label: 'In progress',
+        className: styles.in_progress,
+        isRework: false,
+      };
     }
-    return { label: 'Not started', className: styles.not_started, isRework: false };
+    return {
+      label: 'Not started',
+      className: styles.not_started,
+      isRework: false,
+    };
   }
 
   return (
@@ -135,6 +152,7 @@ export default function TaskModal({
                           role="button"
                           tabIndex={0}
                           className={`${styles.status} ${tag.className} ${styles.clickableStatus}`}
+                          aria-label={`Rework requested for ${task.title}. View feedback.`}
                           title="Modifications requested. Click to view feedback."
                           onClick={(e) => {
                             e.stopPropagation();
@@ -152,6 +170,30 @@ export default function TaskModal({
                         </span>
                       ) : (
                         <span className={`${styles.status} ${tag.className}`}>{tag.label}</span>
+                      )}
+
+                      {task.mentorSuggestion?.feedback.trim() && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className={`${styles.status} ${styles.suggestion} ${styles.clickableStatus}`}
+                          aria-label={`View mentor suggestion for ${task.title}`}
+                          title="View the mentor suggestion."
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setFeedbackTask(task);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.stopPropagation();
+                              event.preventDefault();
+                              setFeedbackTask(task);
+                            }
+                          }}
+                        >
+                          <MessageSquareText size={12} aria-hidden="true" />
+                          Suggestion
+                        </span>
                       )}
 
                       {task.isStretchGoal && (
