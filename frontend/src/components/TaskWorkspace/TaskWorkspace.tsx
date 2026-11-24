@@ -101,6 +101,32 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     applyRuntimeSettings(task.runtime);
   }, [task.runtime]);
 
+  // Load feedback when opening an already-approved task. The state update runs
+  // in the request callback, outside the synchronous effect body.
+  useEffect(() => {
+    if (task.reviewStatus !== 'approved') return;
+
+    let cancelled = false;
+    getTaskReview(task.id)
+      .then((review) => {
+        if (cancelled) return;
+        setReviewStatus(review.reviewStatus);
+        const latestReview = review.latestReview;
+        setApprovedSuggestion(
+          latestReview?.decision === 'approved' && latestReview.feedback.trim()
+            ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
+            : null
+        );
+      })
+      .catch(() => {
+        // Best effort: the reconnect refresh can catch a temporary failure.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id, task.reviewStatus]);
+
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
