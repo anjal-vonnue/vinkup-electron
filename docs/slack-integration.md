@@ -1,21 +1,25 @@
 # Slack Integration
 
-Vinkup can send task submission notifications to a Slack channel configured by each mentor.
-One shared Slack bot is used by the whole application; mentors do not create bots or enter tokens.
+Vinkup can send task submission and leave request notifications to a Slack channel configured by
+each mentor. One shared Slack bot is used by the whole application; mentors do not create bots or
+enter tokens.
 
 ## How it works
 
 1. A mentor saves a Slack **channel ID** in the **Integrations** tab of the mentor dashboard.
-2. When a trainee submits or resubmits a task, the backend resolves the trainee's assigned mentor
-   at submission time.
+2. When a trainee submits or resubmits a task, or creates a leave request, the backend resolves the
+   trainee's assigned mentor at that time.
 3. If that mentor has a channel configured and `SLACK_ENABLED=true`, a notification record is
-   written to the `slack_notification_outbox` table in the same database transaction as the
-   submission. No Slack API call is made from the request.
+   written to the `slack_notification_outbox` table. Task submissions are queued in the same
+   database transaction as the submission. No Slack API call is made from the request.
 4. A background worker claims pending records, posts the message with `chat.postMessage`, and
    records `SENT`, `FAILED`, or a future retry time.
 
-If Slack is disabled, the mentor has no channel, or a submission fails, the task workflow continues
-normally with no Slack notification. Existing in-app/SSE notifications are unchanged.
+Leave notifications are queued only after a new leave request is successfully created. Approving or
+rejecting a leave request never queues a Slack notification. If Slack is disabled, the trainee has
+no mentor, the mentor has no channel, or queueing fails, the leave request is still created and the
+rest of the workflow continues normally with no Slack notification. Existing in-app/SSE
+notifications and mentor/manager review permissions are unchanged.
 
 ## Slack app setup
 
@@ -44,15 +48,15 @@ Sign in as a mentor and open the mentor dashboard (`/admin`), then select the **
 - **Update:** choose **Edit**, replace the ID, then choose **Save Channel**. **Cancel** restores the
   old value.
 - **Delete:** choose **Disconnect**, then confirm in the dialog. Notifications stop for future
-  submissions; already queued notifications keep their original destination.
+  submissions and leave requests; already queued notifications keep their original destination.
 
 The backend derives the mentor ID from the authenticated session. A mentor cannot view or change
 another mentor's channel, and trainees/managers cannot access these endpoints.
 
 ### API endpoints
 
-| Method | Path                      | Description                                                  |
-| ------ | ------------------------- | ------------------------------------------------------------ |
+| Method | Path                       | Description                                                  |
+| ------ | -------------------------- | ------------------------------------------------------------ |
 | GET    | `/api/admin/slack-channel` | Returns `{ "channelId": string \| null }`                    |
 | PUT    | `/api/admin/slack-channel` | Saves/replaces the channel: `{ "channelId": "C0123ABCDEF" }` |
 | DELETE | `/api/admin/slack-channel` | Clears the channel; returns `{ "channelId": null }`          |
@@ -77,8 +81,10 @@ SLACK_BOT_TOKEN=
 
 ## Outbox and retries
 
-The outbox row stores the channel ID resolved at submission time. Changing or deleting the mentor's
-configuration later affects only future notifications.
+The outbox row stores the channel ID resolved when the task was submitted or the leave request was
+created. Changing or deleting the mentor's configuration later affects only future notifications.
+Each row also has a dedupe key: `task_submission:<trainee>:<task>:<submission>` for task submissions
+and `leave_request:<request-id>` for leave requests, so the same event cannot be queued twice.
 
 - **Statuses:** `PENDING`, `PROCESSING`, `SENT`, `FAILED`.
 - **Claiming:** the worker uses `FOR UPDATE SKIP LOCKED` so multiple workers cannot process the
@@ -93,10 +99,29 @@ configuration later affects only future notifications.
 
 ## Message contents
 
-Messages include trainee name, task title, course title, day number (when available), submission
-count, submission timestamp, and review status. User-provided text is escaped and Slack mention
-triggers are neutralized so a submission cannot accidentally mention `@channel`, `@here`, or
-`@everyone`. Internal IDs and tokens are not included.
+### Task submissions
+
+Task submission messages include trainee name, task title, course title, day number (when
+available), submission count, submission timestamp, and review status.
+
+### Leave requests
+
+Leave request messages contain only the trainee's name and the leave subject:
+
+```text
+:calendar: *Leave Request*
+
+*John Doe* has requested a leave.
+
+*Subject:* Personal Leave
+```
+
+They never include the description/reason, start or end dates, duration, notes, review feedback,
+status, or any other leave details. No approval/rejection buttons or other interactive Slack actions
+are sent.
+
+User-provided text is escaped and Slack mention triggers are neutralized so a message cannot
+accidentally mention `@channel`, `@here`, or `@everyone`. Internal IDs and tokens are not included.
 
 ## Known limitations
 

@@ -423,6 +423,7 @@ model desktop_session {
   @@index([expires_at])
 }
 
+
 model review_prompt {
   id         String   @id @default(uuid()) @db.Uuid
   admin_id   String   @db.Uuid
@@ -437,8 +438,9 @@ model review_prompt {
   @@index([admin_id])
 }
 
-// Outbox for mentor Slack task submission notifications. Created in the same
-// transaction as task submission when possible; processed asynchronously.
+// Outbox for mentor Slack task submission and leave request notifications.
+// Task rows are created in the same transaction as submission when possible;
+// all rows are processed asynchronously.
 model slack_notification_outbox {
   id                    String                    @id @default(uuid()) @db.Uuid
   event_type            String                    @db.VarChar(64)
