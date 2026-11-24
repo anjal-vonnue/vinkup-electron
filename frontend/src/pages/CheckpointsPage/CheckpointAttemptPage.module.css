@@ -8,10 +8,30 @@
   max-width: 100%;
   margin: 0;
   padding: 0 20px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Practical attempts mirror the curriculum task workspace: the header pins to the
+   top and the workspace takes every remaining pixel instead of scrolling. */
+.practicalPage {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background-color: var(--color-bg-page);
+}
+
+.practicalPage > header {
+  margin-bottom: 0;
 }
 
 .practicalContainer {
+  flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ---------- Header leading (practical mode) ---------- */

@@ -297,7 +297,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   ) : null;
 
   return (
-    <>
+    <div className={isSinglePractical ? styles.practicalPage : undefined}>
       <Header
         leading={
           isSinglePractical ? (
@@ -639,7 +639,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
         </p>
         <p>Submitting ends the attempt immediately. You will not be able to change your answers.</p>
       </ConfirmDialog>
-    </>
+    </div>
   );
 }
 
