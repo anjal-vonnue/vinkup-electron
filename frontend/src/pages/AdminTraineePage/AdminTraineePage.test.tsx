@@ -641,7 +641,7 @@ describe('AdminTraineePage', () => {
 
     expect(within(report).getByRole('heading', { name: 'Focus events' })).toBeInTheDocument();
 
-    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+    expect(document.title).toBe(reportDocumentTitle('Rahul Sharma'));
 
     act(() => {
       window.dispatchEvent(new Event('afterprint'));

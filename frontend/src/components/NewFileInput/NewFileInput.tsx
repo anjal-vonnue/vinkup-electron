@@ -6,10 +6,16 @@ type NewFileInputProps = {
   existingPaths: string[];
   onCreate: (path: string) => void;
   onCancel: () => void;
+  initialValue?: string;
 };
 
-export default function NewFileInput({ existingPaths, onCreate, onCancel }: NewFileInputProps) {
-  const [value, setValue] = useState('');
+export default function NewFileInput({
+  existingPaths,
+  onCreate,
+  onCancel,
+  initialValue,
+}: NewFileInputProps) {
+  const [value, setValue] = useState(initialValue ?? '');
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 

@@ -49,20 +49,6 @@ describe('validateFileName', () => {
     });
   });
 
-  it('rejects a hidden file that is not on the allowlist', () => {
-    expect(validateFileName('.secret', [])).toEqual({
-      ok: false,
-      message: 'Hidden files aren’t allowed.',
-    });
-  });
-
-  it('rejects an extension outside the allowed list', () => {
-    expect(validateFileName('archive.zip', [])).toEqual({
-      ok: false,
-      message: 'Use one of: .html .css .js .ts .tsx .json .sql .md .txt .svg',
-    });
-  });
-
   it('rejects a name that already exists (case-insensitive)', () => {
     expect(validateFileName('About.HTML', ['about.html'])).toEqual({
       ok: false,
@@ -97,11 +83,30 @@ describe('validateFileName', () => {
     });
   });
 
-  it('accepts an allowed dotfile', () => {
-    expect(validateFileName('.env', [])).toEqual({ ok: true, path: '.env' });
-  });
-
   it('strips one leading ./', () => {
     expect(validateFileName('./about.html', [])).toEqual({ ok: true, path: 'about.html' });
+  });
+});
+
+it('accepts any extension, and files with no extension', () => {
+  for (const name of ['main.py', 'data.csv', 'archive.tar.gz', 'Makefile', 'LICENSE']) {
+    expect(validateFileName(name, [])).toEqual({ ok: true, path: name });
+  }
+});
+
+it('accepts hidden files and folders', () => {
+  for (const name of ['.env', '.gitignore', '.python-version', '.config/app.json']) {
+    expect(validateFileName(name, [])).toEqual({ ok: true, path: name });
+  }
+});
+
+it('rejects a name ending with a dot, and "." path segments', () => {
+  expect(validateFileName('notes.', [])).toEqual({
+    ok: false,
+    message: 'Names cannot end with a dot.',
+  });
+  expect(validateFileName('a/./b.txt', [])).toEqual({
+    ok: false,
+    message: "That path isn't valid.",
   });
 });
