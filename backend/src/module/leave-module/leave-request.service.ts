@@ -4,7 +4,9 @@ import type {
   LeaveRequest,
   ReviewLeaveRequestInput,
 } from '@itp/types';
+import { env } from '../../config/env';
 import { ConflictError, NotFoundError } from '../../errors/AppError';
+import { SlackNotificationRepository } from '../slack-module/slack-notification.repository';
 import {
   LeaveRequestRepository,
   type CreateLeaveRequestRecord,
@@ -13,6 +15,7 @@ import {
 } from './leave-request.repository';
 
 const leaveRequestRepository = new LeaveRequestRepository();
+const slackNotificationRepository = new SlackNotificationRepository();
 
 function toLeaveRequest(row: LeaveRow): LeaveRequest {
   return {
@@ -46,6 +49,37 @@ function toLeaveRequest(row: LeaveRow): LeaveRequest {
   };
 }
 
+function isDuplicateNotification(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
+}
+
+async function queueSlackNotification(row: LeaveRow): Promise<void> {
+  if (!env.SLACK_ENABLED) return;
+  const channelId = row.trainee.mentor?.slack_channel_id;
+  if (!channelId) return;
+
+  try {
+    await slackNotificationRepository.create({
+      eventType: 'leave.request',
+      channelId,
+      payload: { traineeName: row.trainee.name, subject: row.subject },
+      dedupeKey: `leave_request:${row.id}`,
+    });
+  } catch (error) {
+    if (!isDuplicateNotification(error)) {
+      console.error('[leave] failed to queue Slack notification', {
+        leaveRequestId: row.id,
+        error,
+      });
+    }
+  }
+}
+
 export class LeaveRequestService {
   // ---------- Trainee actions ----------
 
@@ -55,7 +89,9 @@ export class LeaveRequestService {
       subject: input.subject.trim(),
       reason: input.reason.trim(),
     };
-    return toLeaveRequest(await leaveRequestRepository.create(record));
+    const row = await leaveRequestRepository.create(record);
+    await queueSlackNotification(row);
+    return toLeaveRequest(row);
   };
 
   listMine = async (traineeId: string): Promise<LeaveRequest[]> => {

@@ -45,19 +45,25 @@ export type SlackOutboxRow = {
   updated_at: Date;
 };
 
+function toCreateData(input: CreateSlackNotificationInput) {
+  return {
+    event_type: input.eventType,
+    channel_id: input.channelId,
+    payload: input.payload,
+    dedupe_key: input.dedupeKey,
+    max_attempts: input.maxAttempts ?? 5,
+    status: slack_notification_status.PENDING,
+    next_retry_at: new Date(),
+  };
+}
+
 export class SlackNotificationRepository {
+  create = async (input: CreateSlackNotificationInput) => {
+    return prisma.slack_notification_outbox.create({ data: toCreateData(input) });
+  };
+
   createInTx = async (tx: Prisma.TransactionClient, input: CreateSlackNotificationInput) => {
-    return tx.slack_notification_outbox.create({
-      data: {
-        event_type: input.eventType,
-        channel_id: input.channelId,
-        payload: input.payload,
-        dedupe_key: input.dedupeKey,
-        max_attempts: input.maxAttempts ?? 5,
-        status: slack_notification_status.PENDING,
-        next_retry_at: new Date(),
-      },
-    });
+    return tx.slack_notification_outbox.create({ data: toCreateData(input) });
   };
 
   claimPendingBatch = async (limit: number, leaseMs: number): Promise<SlackOutboxRow[]> => {
