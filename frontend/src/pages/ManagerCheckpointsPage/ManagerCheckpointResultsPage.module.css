@@ -27,6 +27,39 @@
   margin-bottom: 14px;
 }
 
+.titleActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Mirrors the mentor-side "Download tasks" button: tinted, purple outline. */
+.downloadAllButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-accent-purple);
+  border-radius: 8px;
+  background: var(--color-accent-tint);
+  color: var(--color-accent-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.downloadAllButton:hover:not(:disabled) {
+  background: var(--color-accent-purple);
+  color: var(--color-text-on-accent);
+}
+
+.downloadAllButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .title {
   margin: 0;
   font-family: var(--font-sans);

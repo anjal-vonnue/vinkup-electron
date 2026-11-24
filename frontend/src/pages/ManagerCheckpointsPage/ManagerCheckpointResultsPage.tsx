@@ -13,6 +13,8 @@ import MarkdownRenderer from '../../components/MarkdownRenderer';
 import { useToast } from '../../components/Toast';
 import { MANAGER_NAV } from '../../constants/managerNav';
 import { formatIstDateTime } from '../../lib/formatDateTime';
+import { createTasksZip, downloadBlob, safeZipName } from '../../lib/adminTaskZip';
+import { buildCheckpointFilesZipTasks } from '../../lib/checkpointFilesZip';
 import WorkspaceFilesViewer from '../CheckpointsPage/WorkspaceFilesViewer';
 import {
   downloadCheckpointAnswerFile,
@@ -67,6 +69,7 @@ export default function ManagerCheckpointResultsPage() {
   const [feedback, setFeedback] = useState('');
   const [grading, setGrading] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [downloadingFiles, setDownloadingFiles] = useState(false);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
 
@@ -192,6 +195,39 @@ export default function ManagerCheckpointResultsPage() {
     }
   }
 
+  async function handleDownloadAllFiles() {
+    if (!checkpoint || !attempts || downloadingFiles) return;
+    const submitted = attempts.filter((attempt) => attempt.status === 'SUBMITTED');
+    if (submitted.length === 0) {
+      toast.show({ message: 'No submitted attempts to download yet.', variant: 'info' });
+      return;
+    }
+
+    setDownloadingFiles(true);
+    try {
+      const details = await Promise.all(
+        submitted.map((attempt) => getManagerCheckpointAttempt(attempt.id))
+      );
+      const tasks = buildCheckpointFilesZipTasks(
+        checkpoint.title,
+        checkpoint.instructionsMarkdown,
+        details
+      );
+      if (tasks.length === 0) {
+        toast.show({ message: 'No submitted practical files yet.', variant: 'info' });
+        return;
+      }
+      downloadBlob(createTasksZip(tasks), `${safeZipName(checkpoint.title)} - files.zip`);
+    } catch (caught) {
+      toast.show({
+        message: caught instanceof Error ? caught.message : 'Could not download the files.',
+        variant: 'error',
+      });
+    } finally {
+      setDownloadingFiles(false);
+    }
+  }
+
   async function handleDownload(questionId: string) {
     if (!attemptDetail) return;
     try {
@@ -249,6 +285,10 @@ export default function ManagerCheckpointResultsPage() {
     );
   }
 
+  const hasPracticalQuestions = checkpoint.questions.some(
+    (question) => question.type === 'PRACTICAL'
+  );
+
   return (
     <>
       <AdminHeader
@@ -272,19 +312,37 @@ export default function ManagerCheckpointResultsPage() {
               {checkpoint.passingMarks} to pass
             </p>
           </div>
-          <button
-            type="button"
-            className={styles.primaryButton}
-            onClick={() => void handlePublishResults()}
-            disabled={publishing || stats.graded === 0}
-            title={
-              stats.graded === 0
-                ? 'Grade at least one submission before publishing results.'
-                : 'Make results visible according to the checkpoint setting.'
-            }
-          >
-            <Send size={16} /> {publishing ? 'Publishing…' : 'Publish results'}
-          </button>
+          <div className={styles.titleActions}>
+            {hasPracticalQuestions && (
+              <button
+                type="button"
+                className={styles.downloadAllButton}
+                onClick={() => void handleDownloadAllFiles()}
+                disabled={downloadingFiles || stats.submitted === 0}
+                title={
+                  stats.submitted === 0
+                    ? 'No submitted attempts to download yet.'
+                    : "Download every submitted trainee's files as a ZIP."
+                }
+              >
+                <Download size={16} />
+                {downloadingFiles ? 'Preparing…' : 'Download files'}
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={() => void handlePublishResults()}
+              disabled={publishing || stats.graded === 0}
+              title={
+                stats.graded === 0
+                  ? 'Grade at least one submission before publishing results.'
+                  : 'Make results visible according to the checkpoint setting.'
+              }
+            >
+              <Send size={16} /> {publishing ? 'Publishing…' : 'Publish results'}
+            </button>
+          </div>
         </div>
 
         {checkpoint.resultsPublishedAt && (
