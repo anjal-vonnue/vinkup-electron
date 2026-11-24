@@ -456,8 +456,9 @@ describe('AdminTraineePage', () => {
 
     await user.click(await screen.findByRole('button', { name: `View code for ${task.title}` }));
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve task' }));
 
-    expect(approveTask).toHaveBeenCalledWith(traineeId, task.taskId);
+    expect(approveTask).toHaveBeenCalledWith(traineeId, task.taskId, '');
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Close code viewer' })).not.toBeInTheDocument()
     );
@@ -475,6 +476,7 @@ describe('AdminTraineePage', () => {
     // The reload after the approval never finishes, so a loader would stay on screen.
     vi.mocked(getAdminTrainee).mockReturnValue(new Promise(() => {}));
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve task' }));
 
     await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 800 }));
     expect(screen.queryByText('Loading trainee…')).not.toBeInTheDocument();
@@ -490,6 +492,7 @@ describe('AdminTraineePage', () => {
     await user.click(await screen.findByRole('button', { name: /^Pending review \(/ }));
     await user.click(await screen.findByRole('button', { name: `View code for ${task.title}` }));
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve task' }));
 
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Close code viewer' })).not.toBeInTheDocument()
