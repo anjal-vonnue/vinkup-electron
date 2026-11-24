@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import type { TraineeCheckpointAttempt } from '@itp/types';
 import {
@@ -249,57 +250,106 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
         ? 'Five minutes remaining.'
         : null;
 
+  const practicalToolbarTrailing: ReactNode = isSinglePractical ? (
+    <>
+      <div className={`${styles.inlineTimer} ${timerTone}`} aria-live="off">
+        <Clock size={16} aria-hidden="true" />
+        <span className={styles.timerValue}>{countdown.label}</span>
+        <span className={styles.timerLabel}>{countdown.expired ? 'Time is up' : 'remaining'}</span>
+      </div>
+
+      <div className={styles.inlineSave}>
+        <SaveSummary summary={autosave.summary} onRetry={autosave.retryAll} />
+        <span className={styles.answeredSummary}>
+          {answeredCount} of {questions.length} answered
+        </span>
+      </div>
+
+      <button
+        type="button"
+        className={styles.submitButton}
+        onClick={() => setConfirmOpen(true)}
+        disabled={disabled || !attempt.allowEarlySubmission}
+        title={
+          !attempt.allowEarlySubmission
+            ? 'Early submission is disabled. Your attempt is submitted automatically when time expires.'
+            : undefined
+        }
+      >
+        <Send size={15} />
+        {submitting ? 'Submitting…' : 'Submit attempt'}
+      </button>
+    </>
+  ) : null;
+
   return (
     <>
-      <Header />
+      <Header
+        leading={
+          isSinglePractical ? (
+            <div className={styles.headerLeading}>
+              <p className={styles.eyebrow}>
+                Checkpoint assessment · Attempt {attempt.attemptNumber}
+              </p>
+              <h1 className={styles.headerTitle}>{attempt.checkpointTitle}</h1>
+              <p className={styles.deadline}>
+                <Timer size={14} aria-hidden="true" /> Deadline{' '}
+                {formatIstDateTime(attempt.deadlineAt)}
+              </p>
+            </div>
+          ) : undefined
+        }
+      />
 
       <main className={`${styles.page} ${isSinglePractical ? styles.pagePractical : ''}`}>
-        <header className={styles.attemptHeader}>
-          <div className={styles.titleBlock}>
-            <p className={styles.eyebrow}>
-              Checkpoint assessment · Attempt {attempt.attemptNumber}
-            </p>
-            <h1 className={styles.title}>{attempt.checkpointTitle}</h1>
-            <p className={styles.deadline}>
-              <Timer size={14} aria-hidden="true" /> Deadline{' '}
-              {formatIstDateTime(attempt.deadlineAt)}
-            </p>
-          </div>
+        {!isSinglePractical && (
+          <header className={styles.attemptHeader}>
+            <div className={styles.titleBlock}>
+              <p className={styles.eyebrow}>
+                Checkpoint assessment · Attempt {attempt.attemptNumber}
+              </p>
+              <h1 className={styles.title}>{attempt.checkpointTitle}</h1>
+              <p className={styles.deadline}>
+                <Timer size={14} aria-hidden="true" /> Deadline{' '}
+                {formatIstDateTime(attempt.deadlineAt)}
+              </p>
+            </div>
 
-          <div className={styles.toolbar}>
-            <div className={`${styles.timer} ${timerTone}`} aria-live="off">
-              <Clock size={18} aria-hidden="true" />
-              <div>
-                <span className={styles.timerValue}>{countdown.label}</span>
-                <span className={styles.timerLabel}>
-                  {countdown.expired ? 'Time is up' : 'remaining'}
+            <div className={styles.toolbar}>
+              <div className={`${styles.timer} ${timerTone}`} aria-live="off">
+                <Clock size={18} aria-hidden="true" />
+                <div>
+                  <span className={styles.timerValue}>{countdown.label}</span>
+                  <span className={styles.timerLabel}>
+                    {countdown.expired ? 'Time is up' : 'remaining'}
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.saveArea}>
+                <SaveSummary summary={autosave.summary} onRetry={autosave.retryAll} />
+                <span className={styles.answeredSummary}>
+                  {answeredCount} of {questions.length} answered
                 </span>
               </div>
-            </div>
 
-            <div className={styles.saveArea}>
-              <SaveSummary summary={autosave.summary} onRetry={autosave.retryAll} />
-              <span className={styles.answeredSummary}>
-                {answeredCount} of {questions.length} answered
-              </span>
+              <button
+                type="button"
+                className={styles.submitButton}
+                onClick={() => setConfirmOpen(true)}
+                disabled={disabled || !attempt.allowEarlySubmission}
+                title={
+                  !attempt.allowEarlySubmission
+                    ? 'Early submission is disabled. Your attempt is submitted automatically when time expires.'
+                    : undefined
+                }
+              >
+                <Send size={15} />
+                {submitting ? 'Submitting…' : 'Submit attempt'}
+              </button>
             </div>
-
-            <button
-              type="button"
-              className={styles.submitButton}
-              onClick={() => setConfirmOpen(true)}
-              disabled={disabled || !attempt.allowEarlySubmission}
-              title={
-                !attempt.allowEarlySubmission
-                  ? 'Early submission is disabled. Your attempt is submitted automatically when time expires.'
-                  : undefined
-              }
-            >
-              <Send size={15} />
-              {submitting ? 'Submitting…' : 'Submit attempt'}
-            </button>
-          </div>
-        </header>
+          </header>
+        )}
 
         {warningText && !locked && (
           <div
@@ -368,6 +418,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
                 void autosave.flushQuestion(currentQuestion.id);
               }}
               onFileError={setFileError}
+              toolbarTrailing={practicalToolbarTrailing}
             />
             {fileError && (
               <p className={styles.fileError} role="alert">
