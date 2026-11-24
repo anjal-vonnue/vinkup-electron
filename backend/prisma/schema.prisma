@@ -365,10 +365,16 @@ enum checkpoint_submission_reason {
   CANCELLED
 }
 
+enum checkpoint_mode {
+  MCQ
+  PRACTICAL
+}
+
 model checkpoint {
   id                  String    @id @default(uuid()) @db.Uuid
   title               String
   description         String    @default("")
+  mode                checkpoint_mode @default(MCQ)
   source_file_name    String?
   source_markdown     String    @db.Text
   instructions_markdown String  @db.Text
