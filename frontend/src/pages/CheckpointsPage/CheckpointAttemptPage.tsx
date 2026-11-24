@@ -238,6 +238,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   const questions = attempt.questions;
   const currentQuestion = questions[currentIndex];
   const isSinglePractical = questions.length === 1 && currentQuestion?.type === 'PRACTICAL';
+  const isPracticalQuestion = currentQuestion?.type === 'PRACTICAL';
 
   const answeredCount = useMemo(
     () =>
@@ -298,7 +299,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   const practicalToolbarTrailing: ReactNode = isSinglePractical ? attemptControls : null;
 
   return (
-    <div className={isSinglePractical ? styles.practicalPage : undefined}>
+    <div className={`${styles.attemptPage} ${isPracticalQuestion ? styles.attemptPageFill : ''}`}>
       <Header
         leading={
           <div className={styles.headerLeading}>
@@ -311,9 +312,41 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
         }
       />
 
-      <main className={`${styles.page} ${isSinglePractical ? styles.pagePractical : ''}`}>
+      <main className={isPracticalQuestion ? styles.pagePractical : styles.page}>
+        {locked && (
+          <div className={styles.lockedBanner} role="alert">
+            <Clock size={16} aria-hidden="true" />
+            {submitError
+              ? 'Time is up. The attempt is locked; submission did not complete.'
+              : 'Time is up. Your attempt is being submitted and can no longer be edited.'}
+          </div>
+        )}
+
+        {!attempt.allowEarlySubmission && !locked && (
+          <p className={styles.autoSubmitNote}>
+            Early submission is disabled for this checkpoint. Answers save automatically and the
+            attempt is submitted when the timer reaches zero.
+          </p>
+        )}
+
+        {submitError && (
+          <div className={styles.submitError} role="alert">
+            <AlertCircle size={16} aria-hidden="true" />
+            <span>{submitError}</span>
+            <button
+              type="button"
+              className={styles.retrySubmit}
+              onClick={() => void performSubmit(countdown.expired ? 'expired' : 'manual')}
+            >
+              Retry submission
+            </button>
+          </div>
+        )}
+
         {!isSinglePractical && (
-          <div className={styles.attemptBar}>
+          <div
+            className={`${styles.attemptBar} ${isPracticalQuestion ? styles.attemptBarFill : ''}`}
+          >
             <div className={styles.questionNav}>
               <button
                 type="button"
@@ -345,38 +378,16 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
           </div>
         )}
 
-        {locked && (
-          <div className={styles.lockedBanner} role="alert">
-            <Clock size={16} aria-hidden="true" />
-            {submitError
-              ? 'Time is up. The attempt is locked; submission did not complete.'
-              : 'Time is up. Your attempt is being submitted and can no longer be edited.'}
-          </div>
-        )}
-
-        {!attempt.allowEarlySubmission && !locked && (
-          <p className={styles.autoSubmitNote}>
-            Early submission is disabled for this checkpoint. Answers save automatically and the
-            attempt is submitted when the timer reaches zero.
-          </p>
-        )}
-
-        {submitError && (
-          <div className={styles.submitError} role="alert">
-            <AlertCircle size={16} aria-hidden="true" />
-            <span>{submitError}</span>
-            <button
-              type="button"
-              className={styles.retrySubmit}
-              onClick={() => void performSubmit(countdown.expired ? 'expired' : 'manual')}
-            >
-              Retry submission
-            </button>
-          </div>
-        )}
-
-        {isSinglePractical ? (
+        {isPracticalQuestion ? (
           <div className={styles.practicalContainer}>
+            {!isSinglePractical && currentQuestion && (
+              <div className={styles.practicalPrompt}>
+                <p className={styles.practicalPromptMeta}>
+                  {questionTypeLabel(currentQuestion.type)} · {currentQuestion.marks} marks
+                </p>
+                <MarkdownRenderer markdown={currentQuestion.promptMarkdown} />
+              </div>
+            )}
             <AnswerEditor
               question={currentQuestion}
               draft={currentDraft}
