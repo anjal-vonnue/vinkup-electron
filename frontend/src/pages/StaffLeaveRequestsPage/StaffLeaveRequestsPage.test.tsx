@@ -13,7 +13,17 @@ vi.mock('../../api/leave', () => ({
 }));
 
 vi.mock('../../components/AdminHeader', () => ({
-  default: () => <header>Staff header</header>,
+  default: ({ navItems }: { navItems: { to: string; label: string }[] }) => (
+    <header>
+      <nav aria-label="Staff navigation">
+        {navItems.map((item) => (
+          <a key={item.to} href={item.to}>
+            {item.label}
+          </a>
+        ))}
+      </nav>
+    </header>
+  ),
 }));
 
 const submittedAt = '2026-11-21T10:00:00.000Z';
@@ -79,6 +89,18 @@ describe('StaffLeaveRequestsPage', () => {
       feedback: 'Please choose another date.',
       reviewedAt: '2026-11-21T13:00:00.000Z',
     });
+  });
+
+  it.each([
+    ['admin', '/admin/verify-certificate'],
+    ['manager', '/manager/verify-certificate'],
+  ] as const)('shows the certificate verification link for %s reviewers', async (area, path) => {
+    renderPage(area);
+
+    expect(await screen.findByRole('link', { name: 'Verify certificate' })).toHaveAttribute(
+      'href',
+      path
+    );
   });
 
   it('lists scoped requests with status filters', async () => {
