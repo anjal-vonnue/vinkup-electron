@@ -29,11 +29,12 @@ export function folderPathError(path: string, others: string[]): string | null {
     path.startsWith('/') ||
     path.endsWith('/') ||
     path.includes('//') ||
-    segments.includes('..')
+    segments.includes('..') ||
+    segments.includes('.')
   ) {
     return "That path isn't valid.";
   }
-  if (segments.some((segment) => segment.startsWith('.'))) return 'Hidden folders aren’t allowed.';
+  if (segments.some((segment) => segment.endsWith('.'))) return 'Names cannot end with a dot.';
   if (isIgnoredPath(path)) return "Files in that folder aren't saved.";
 
   const lower = path.toLowerCase();

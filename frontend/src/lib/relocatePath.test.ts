@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planRelocation, rewritePath } from './relocatePath';
+import { planRelocation, rewritePath, folderPathError } from './relocatePath';
 
 const paths = ['index.html', 'src/app.js', 'src/ui/nav.js', 'src2/other.js', 'README.md'];
 
@@ -26,7 +26,12 @@ describe('planRelocation', () => {
   });
 
   it('rejects bad file names', () => {
-    expect(planRelocation(paths, 'index.html', 'index.exe').ok).toBe(false);
+    expect(planRelocation(paths, 'index.html', 'bad name.html').ok).toBe(false); // space not allowed
+    expect(planRelocation(paths, 'index.html', 'index.').ok).toBe(false); // trailing dot
+  });
+
+  it('accepts any extension', () => {
+    expect(planRelocation(paths, 'index.html', 'index.exe').ok).toBe(true);
   });
 
   it('moves a file into a folder', () => {
@@ -53,5 +58,12 @@ describe('planRelocation', () => {
   it('treats the same name as unchanged and a missing source as an error', () => {
     expect(planRelocation(paths, 'src', 'src')).toMatchObject({ ok: true, unchanged: true });
     expect(planRelocation(paths, 'nope.js', 'x.js').ok).toBe(false);
+  });
+
+  it('allows hidden folders but still rejects ignored ones, "." segments and trailing dots', () => {
+    expect(folderPathError('.config', [])).toBeNull();
+    expect(folderPathError('.git', [])).toBe("Files in that folder aren't saved.");
+    expect(folderPathError('a/./b', [])).toBe("That path isn't valid.");
+    expect(folderPathError('assets.', [])).toBe('Names cannot end with a dot.');
   });
 });

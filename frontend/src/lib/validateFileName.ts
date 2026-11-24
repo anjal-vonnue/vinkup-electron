@@ -2,31 +2,6 @@ import { isIgnoredPath } from './workspaceIgnore';
 
 export type ValidateFileNameResult = { ok: true; path: string } | { ok: false; message: string };
 
-const ALLOWED_DOTFILES = [
-  '.env',
-  '.env.example',
-  '.gitignore',
-  '.prettierrc',
-  '.nvmrc',
-  '.eslintrc.json',
-];
-const ALLOWED_EXTENSIONS = [
-  'html',
-  'htm',
-  'css',
-  'js',
-  'mjs',
-  'cjs',
-  'jsx',
-  'ts',
-  'tsx',
-  'json',
-  'md',
-  'txt',
-  'svg',
-  'sql',
-];
-
 function ancestorFolders(path: string): string[] {
   const parts = path.split('/').slice(0, -1);
   return parts.map((_, index) => parts.slice(0, index + 1).join('/'));
@@ -50,7 +25,11 @@ export function validateFileName(input: string, existingPaths: string[]): Valida
 
   const segments = path.split('/');
   const isMalformedPath =
-    path.startsWith('/') || path.endsWith('/') || path.includes('//') || segments.includes('..');
+    path.startsWith('/') ||
+    path.endsWith('/') ||
+    path.includes('//') ||
+    segments.includes('..') ||
+    segments.includes('.');
   if (isMalformedPath) {
     return { ok: false, message: "That path isn't valid." };
   }
@@ -59,18 +38,9 @@ export function validateFileName(input: string, existingPaths: string[]): Valida
     return { ok: false, message: "Files in that folder aren't saved." };
   }
 
-  const fileName = segments[segments.length - 1];
-
-  const hasHiddenSegment = segments.some((segment) => segment.startsWith('.'));
-  if (hasHiddenSegment && !ALLOWED_DOTFILES.includes(fileName)) {
-    return { ok: false, message: 'Hidden files aren’t allowed.' };
-  }
-
-  const dotIndex = fileName.lastIndexOf('.');
-  const extension = dotIndex > 0 ? fileName.slice(dotIndex + 1).toLowerCase() : '';
-  const hasAllowedExtension = ALLOWED_EXTENSIONS.includes(extension);
-  if (!hasAllowedExtension && !ALLOWED_DOTFILES.includes(fileName)) {
-    return { ok: false, message: 'Use one of: .html .css .js .ts .tsx .json .sql .md .txt .svg' };
+  // Windows silently drops trailing dots, so "notes." would end up as "notes" on disk.
+  if (segments.some((segment) => segment.endsWith('.'))) {
+    return { ok: false, message: 'Names cannot end with a dot.' };
   }
 
   const lowerPath = path.toLowerCase();
