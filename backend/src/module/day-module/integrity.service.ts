@@ -2,7 +2,7 @@ import type { DayIntegrityResponse } from '@itp/types';
 import { integrityRepository } from './integrity.repository';
 import { DayLockedError } from '../../errors/AppError';
 import { dayService } from './day.services';
-import { buildDayIntegrity } from './integrity.scoring';
+import { buildDayIntegrity, isScoredFlag } from './integrity.scoring';
 
 export const integrityService = {
   async getDayIntegrity(traineeId: string, dayId: string): Promise<DayIntegrityResponse> {
@@ -11,10 +11,12 @@ export const integrityService = {
     const status = await dayService.getDayStatus(traineeId, dayId);
     if (status.isLocked) throw new DayLockedError();
 
-    const [progressRows, flagRows] = await Promise.all([
+    const [progressRows, allFlagRows] = await Promise.all([
       integrityRepository.findStartedTasks(traineeId, dayId),
       integrityRepository.findFlagEventsForDay(traineeId, dayId),
     ]);
+    // Idle flags are never scored (see isScoredFlag).
+    const flagRows = allFlagRows.filter(isScoredFlag);
 
     // A task counts as "worked on" if it has a progress row OR it has recorded flag events.
     // Submission is not required: flags on an unsubmitted task must still count.

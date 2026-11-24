@@ -46,6 +46,11 @@ function getReviewPriority(type: flag_event_type, durationMs = 0) {
       }
 
       return review_priority.HIGH;
+
+    // Idle is an indicator for review, not misconduct: always NORMAL, never HIGH.
+    // NORMAL keeps it in the mentor's default "Important" view of the Flags tab.
+    case 'IDLE':
+      return review_priority.NORMAL;
   }
 }
 
@@ -70,6 +75,9 @@ export class FlagService {
       priority,
       trainee_id
     );
+
+    // Idle flags stay quiet: the mentor sees them in the Flags tab, without a live notification.
+    if (input.type === 'IDLE') return;
 
     // The mentor's flag table refreshes without a reload. Only the assigned mentor is told.
     await publishToMentor(trainee_id, {

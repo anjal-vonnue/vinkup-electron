@@ -496,6 +496,29 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('reports input in the second-screen window, even when it is not focused', async () => {
+    const mainWindow = new FakeWindow();
+    const onOverlayInput = vi.fn();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL,
+      vi.fn(),
+      onOverlayInput
+    );
+
+    await manager.start();
+    const overlay = createdWindows.find(({ options }) => isOverlayWindow(options));
+    expect(overlay?.window.isFocused()).toBe(false);
+
+    overlay?.webContents.emit('input-event', {}, { type: 'mouseWheel' });
+
+    expect(onOverlayInput).toHaveBeenCalledTimes(1);
+    manager.dispose();
+  });
+
   it('keeps main and secondary Resources activity mutually exclusive', async () => {
     const mainWindow = new FakeWindow();
     const manager = new DisplayWindowManager(

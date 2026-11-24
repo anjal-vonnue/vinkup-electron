@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AdminFlagEvent } from '@itp/types';
-import { FLAG_PRIORITY_LABELS, FLAG_TYPE_LABELS, formatFlagDuration } from '../../lib/adminLabels';
+import { FLAG_PRIORITY_LABELS, describeFlag, formatFlagDuration } from '../../lib/adminLabels';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import styles from './AdminFlagTable.module.css';
 
@@ -37,7 +37,8 @@ export default function AdminFlagTable({ flags, dayLabels }: AdminFlagTableProps
     <div>
       <p className={styles.note}>
         Focus events are a guide for review, not proof. Opening DevTools, for example, also counts
-        as leaving the window.
+        as leaving the window. Idle means no keyboard or mouse input; it can also mean reading or
+        thinking.
       </p>
 
       <div className={styles.filters} role="group" aria-label="Which events to show">
@@ -82,7 +83,7 @@ export default function AdminFlagTable({ flags, dayLabels }: AdminFlagTableProps
               {sorted.map((flag) => (
                 <tr key={flag.id}>
                   <td className={styles.mono}>{formatIstDateTime(flag.timestamp)}</td>
-                  <td>{FLAG_TYPE_LABELS[flag.type]}</td>
+                  <td>{describeFlag(flag)}</td>
                   <td>{flag.taskTitle}</td>
                   <td>{dayLabels.get(flag.dayId) ?? flag.dayId}</td>
                   <td className={styles.mono}>{formatFlagDuration(flag.durationMs)}</td>

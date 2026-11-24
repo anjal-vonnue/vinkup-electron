@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useToast } from '../Toast';
 import { useFlagTracking } from '../../hooks/Useflagtracking';
+import { useIdleTracking } from '../../hooks/useIdleTracking';
 import type { ReviewStatus, TaskResponse } from '@itp/types';
 import { getTaskCode, getTaskReview, saveTaskCode, submitTask } from '../../api/tasks';
 import { applyRuntimeSettings } from '../../lib/monacoSetup';
@@ -74,6 +75,8 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   );
   // Logs TAB_SWITCH / FULLSCREEN_EXIT and shows the toast. This is the only place exits are logged.
   useFlagTracking({ taskId: task.id, onWarning: showLeaveWarning });
+  // Records long stretches without input as an IDLE flag for the mentor. Silent for the trainee.
+  useIdleTracking({ taskId: task.id });
 
   const [isRefreshConfirmOpen, setIsRefreshConfirmOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
