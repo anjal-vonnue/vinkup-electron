@@ -9,6 +9,7 @@ import { ApiError } from '../../api/errors';
 import AdminHeader, { type AdminNavItem } from '../../components/AdminHeader';
 import { ErrorState } from '../../components/Common/ErrorState';
 import LoaderOverlay from '../../components/Common/LoadingState';
+import LeaveReviewHistory from '../../components/LeaveReviewHistory';
 import LeaveStatusBadge from '../../components/LeaveStatusBadge/LeaveStatusBadge';
 import { useToast } from '../../components/Toast';
 import { formatIstDateTime } from '../../lib/formatDateTime';
@@ -85,6 +86,14 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
   }, [requests]);
 
   const selected = requests?.find((request) => request.id === selectedId) ?? null;
+
+  /**
+   * A Manager may reject a Mentor approval or override a Mentor rejection
+   * (approve or re-reject). Nobody else may change a decided request.
+   */
+  const canReview = (request: LeaveRequest) =>
+    request.status === 'PENDING' ||
+    (isManager && (request.status === 'APPROVED' || request.status === 'REJECTED'));
 
   const openRequest = (request: LeaveRequest) => {
     setSelectedId(request.id);
@@ -199,7 +208,7 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
   }
 
   const subtitle = isManager
-    ? 'Every leave request submitted by a Trainee. You can review any pending request.'
+    ? 'Every leave request submitted by a Trainee. Review pending requests, reject a Mentor approval, or override a Mentor rejection.'
     : 'Requests from Trainees assigned to you. You can review pending requests.';
 
   return (
@@ -266,7 +275,7 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
                         className={styles.viewButton}
                         onClick={() => openRequest(request)}
                       >
-                        {request.status === 'PENDING' ? 'Review' : 'View'}
+                        {canReview(request) ? 'Review' : 'View'}
                       </button>
                     </td>
                   </tr>
@@ -309,23 +318,9 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
                 <dt>Reason</dt>
                 <dd>{selected.reason}</dd>
               </div>
-              {selected.reviewerName && (
-                <div>
-                  <dt>Reviewed by</dt>
-                  <dd>
-                    {selected.reviewerName}
-                    {selected.reviewerRole ? ` (${selected.reviewerRole.toLowerCase()})` : ''}
-                    {selected.reviewedAt ? ` on ${formatIstDateTime(selected.reviewedAt)}` : ''}
-                  </dd>
-                </div>
-              )}
-              {selected.feedback && (
-                <div className={styles.reasonBlock}>
-                  <dt>Feedback</dt>
-                  <dd>{selected.feedback}</dd>
-                </div>
-              )}
             </dl>
+
+            <LeaveReviewHistory reviews={selected.reviews} />
 
             {reviewError && (
               <p className={styles.reviewError} role="alert">
@@ -333,8 +328,18 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
               </p>
             )}
 
-            {selected.status === 'PENDING' ? (
+            {canReview(selected) ? (
               <div className={styles.reviewForm}>
+                {isManager && selected.status === 'APPROVED' && (
+                  <p className={styles.subtitle}>
+                    A Mentor approved this request. Add feedback to reject it.
+                  </p>
+                )}
+                {isManager && selected.status === 'REJECTED' && (
+                  <p className={styles.subtitle}>
+                    A Mentor rejected this request. You can approve it or record your own rejection.
+                  </p>
+                )}
                 <label htmlFor={feedbackId} className={styles.label}>
                   Feedback / note
                 </label>
@@ -346,7 +351,7 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
                   disabled={isReviewing}
                   aria-invalid={Boolean(feedbackError)}
                   aria-describedby={feedbackError ? `${feedbackId}-error` : undefined}
-                  placeholder="Add a note (required when rejecting), or leave blank when approving."
+                  placeholder="Add feedback (required when rejecting)."
                   onChange={(event) => {
                     setFeedback(event.target.value);
                     setFeedbackError(null);
@@ -374,14 +379,17 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
                   >
                     Reject
                   </button>
-                  <button
-                    type="button"
-                    className={styles.primaryButton}
-                    disabled={isReviewing}
-                    onClick={() => void submitReview('APPROVED')}
-                  >
-                    {isReviewing ? 'Saving…' : 'Approve'}
-                  </button>
+                  {(selected.status === 'PENDING' ||
+                    (isManager && selected.status === 'REJECTED')) && (
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      disabled={isReviewing}
+                      onClick={() => void submitReview('APPROVED')}
+                    >
+                      {isReviewing ? 'Saving…' : 'Approve'}
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (

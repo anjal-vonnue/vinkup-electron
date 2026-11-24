@@ -1,4 +1,9 @@
-import type { CreateLeaveRequestInput, LeaveRequest, ReviewLeaveRequestInput } from '@itp/types';
+import type {
+  CreateLeaveRequestInput,
+  LeaveDecision,
+  LeaveRequest,
+  ReviewLeaveRequestInput,
+} from '@itp/types';
 import { ConflictError, NotFoundError } from '../../errors/AppError';
 import {
   LeaveRequestRepository,
@@ -26,6 +31,16 @@ function toLeaveRequest(row: LeaveRow): LeaveRequest {
     reviewerRole: row.reviewer_role,
     feedback: row.feedback,
     reviewedAt: row.reviewed_at?.toISOString() ?? null,
+    reviews: row.reviews.map((review) => ({
+      id: review.id,
+      reviewerId: review.reviewer_id,
+      reviewerName: review.reviewer_name,
+      reviewerRole: review.reviewer_role,
+      // The leave_review decision_is_final CHECK excludes PENDING.
+      decision: review.decision as LeaveDecision,
+      feedback: review.feedback,
+      reviewedAt: review.reviewed_at.toISOString(),
+    })),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -69,8 +84,9 @@ export class LeaveRequestService {
 
   /**
    * Both roles call this exact method. Its repository transaction re-checks
-   * scope and PENDING status before writing, so two simultaneous decisions
-   * cannot both succeed.
+   * scope and status before writing, so two simultaneous decisions cannot both
+   * succeed. A Manager may reject a Mentor-approved request or override a
+   * Mentor rejection (approve or re-reject); every other decided request is final.
    */
   review = async (
     reviewer: LeaveReviewer,

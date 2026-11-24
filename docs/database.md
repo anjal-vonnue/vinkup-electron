@@ -1,6 +1,6 @@
 # Vinkup database
 
-The PostgreSQL database behind the Vinkup API: 16 tables in four groups. **Curriculum tables** (`course`, `curriculum_day`, `learning_objective`, `self_check_item`, `task`) are the same for every trainee and are loaded by the seed script. **Trainee tables** hold each trainee's work, progress and activity, and are written by the API (`leave_request` records submitted leave and its final decision). **Accounts:** `trainee` (also a trainee table) and `admin` (mentors and managers, added in v0.2.0). **Desktop auth:** `desktop_auth_transaction` (short-lived sign-in attempts) and `desktop_session` (rotating refresh sessions). The source of truth is `backend/prisma/schema.prisma`; update this document in the same PR as any schema change.
+The PostgreSQL database behind the Vinkup API: 19 tables in four groups. **Curriculum tables** (`course`, `curriculum_day`, `learning_objective`, `self_check_item`, `task`) are the same for every trainee and are loaded by the seed script. **Trainee tables** hold each trainee's work, progress and activity, and are written by the API (`leave_request` records submitted leave and its current/final decision; `leave_review` keeps every decision as append-only history). **Accounts:** `trainee` (also a trainee table) and `admin` (mentors and managers, added in v0.2.0). **Desktop auth:** `desktop_auth_transaction` (short-lived sign-in attempts) and `desktop_session` (rotating refresh sessions). The source of truth is `backend/prisma/schema.prisma`; update this document in the same PR as any schema change.
 
 ## 1. Entity relationship diagram
 
@@ -10,9 +10,10 @@ Every table in the database and how they relate. A crow's foot marks the many si
 
 _Figure 1: Entity relationship diagram of the training platform database._
 
-The diagram predates the desktop auth and `leave_request` tables. `desktop_auth_transaction` and
-`desktop_session` are standalone (they store user snapshots rather than foreign keys). `leave_request`
-links a `trainee` to its optional reviewer in `admin` and is described in §2.
+The diagram predates the desktop auth, `leave_request` and `leave_review` tables.
+`desktop_auth_transaction` and `desktop_session` are standalone (they store user snapshots rather than
+foreign keys). `leave_request` links a `trainee` to its current reviewer in `admin`; `leave_review`
+links each decision to both the request and its reviewer. Both are described in §2.
 
 ## 2. Data dictionary
 
@@ -220,37 +221,67 @@ _Time a trainee spent on the platform each day._
 
 ### leave_request
 
-_A Trainee's leave request and its final decision. A Trainee submits the subject and reason; a Mentor
-or Manager records the decision once. Rows are kept as history: reviewed requests are never deleted or
-overwritten. Full permissions are in [roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow)._
+_A Trainee's leave request and its current/final decision. A Trainee submits the subject and reason;
+reviewers decide through the [leave workflow](./leave-request-workflow.md). The review columns mirror
+the latest decision; the full decision history lives in `leave_review`, so a Manager's decision does
+not erase the preceding Mentor approval or rejection. Rows are kept as history and never deleted._
 
-| Column        | Type         | Key | Null? | Description                                                                 |
-| :------------ | :----------- | :-- | :---- | :-------------------------------------------------------------------------- |
-| id            | UUID         | PK  | No    | Unique identifier of the request (generated automatically).                 |
-| trainee_id    | UUID         | FK  | No    | References trainee(id) — the requester. `ON DELETE RESTRICT` keeps history. |
-| subject       | VARCHAR(200) | -   | No    | Short subject, 1–200 chars after trimming.                                  |
-| reason        | TEXT         | -   | No    | Why leave is needed, 1–2,000 chars after trimming.                          |
-| status        | leave_status | -   | No    | `PENDING`, `APPROVED` or `REJECTED`. Default: PENDING.                      |
-| reviewer_id   | UUID         | FK  | Yes   | Admin row that decided; null while pending. `ON DELETE RESTRICT`.           |
-| reviewer_role | staff_role   | -   | Yes   | `MENTOR` or `MANAGER` at decision time; null while pending.                 |
-| reviewer_name | TEXT         | -   | Yes   | Snapshot of the reviewer's name at decision time; null while pending.       |
-| feedback      | TEXT         | -   | Yes   | Optional approval note; required (non-blank) when status is REJECTED.       |
-| submitted_at  | TIMESTAMPTZ  | -   | No    | When the Trainee submitted the request. Default: now.                       |
-| reviewed_at   | TIMESTAMPTZ  | -   | Yes   | When the decision was recorded; null while pending.                         |
-| created_at    | TIMESTAMPTZ  | -   | No    | When the row was created. Default: now.                                     |
-| updated_at    | TIMESTAMPTZ  | -   | No    | When the row was last edited (automatic).                                   |
+| Column        | Type         | Key | Null? | Description                                                                               |
+| :------------ | :----------- | :-- | :---- | :---------------------------------------------------------------------------------------- |
+| id            | UUID         | PK  | No    | Unique identifier of the request (generated automatically).                               |
+| trainee_id    | UUID         | FK  | No    | References trainee(id) — the requester. `ON DELETE RESTRICT` keeps history.               |
+| subject       | VARCHAR(200) | -   | No    | Short subject, 1–200 chars after trimming.                                                |
+| reason        | TEXT         | -   | No    | Why leave is needed, 1–2,000 chars after trimming.                                        |
+| status        | leave_status | -   | No    | `PENDING`, `APPROVED` or `REJECTED`. Default: PENDING.                                    |
+| reviewer_id   | UUID         | FK  | Yes   | Admin row that made the current/final decision; null while pending. `ON DELETE RESTRICT`. |
+| reviewer_role | staff_role   | -   | Yes   | `MENTOR` or `MANAGER` at decision time; null while pending.                               |
+| reviewer_name | TEXT         | -   | Yes   | Snapshot of the reviewer's name at decision time; null while pending.                     |
+| feedback      | TEXT         | -   | Yes   | Optional approval note; required (non-blank) when status is REJECTED.                     |
+| submitted_at  | TIMESTAMPTZ  | -   | No    | When the Trainee submitted the request. Default: now.                                     |
+| reviewed_at   | TIMESTAMPTZ  | -   | Yes   | When the decision was recorded; null while pending.                                       |
+| created_at    | TIMESTAMPTZ  | -   | No    | When the row was created. Default: now.                                                   |
+| updated_at    | TIMESTAMPTZ  | -   | No    | When the row was last edited (automatic).                                                 |
 
 **Constraints:** INDEX (trainee_id, submitted_at) for an individual Trainee's history, INDEX
 (status, submitted_at) for reviewer lists. `ON DELETE RESTRICT` on both foreign keys preserves
 historical requests when an account is removed.
 
-**Decision integrity (in migration `20261121120000_add_leave_request`):** CHECK constraints require
-non-blank `subject` and `reason`, forbid any reviewer/feedback/reviewed_at fields while `PENDING`,
-require `reviewer_id`, `reviewer_role` and `reviewed_at` once decided, and require non-blank feedback
-for `REJECTED`. A `BEFORE UPDATE OF status` trigger raises an error if a request that is no longer
-`PENDING` changes status, so a decision is final even outside the API. The API additionally uses a
-conditional `UPDATE ... WHERE status = 'PENDING'` inside a transaction so concurrent Mentor/Manager
-reviews cannot both succeed; the loser gets `409 ALREADY_REVIEWED`.
+**Decision integrity (migrations `20261121120000_add_leave_request`,
+`20261123150000_add_leave_review_history` and
+`20261123160000_allow_manager_review_of_mentor_rejection`):** CHECK constraints require non-blank
+`subject` and `reason`, forbid any reviewer/feedback/reviewed_at fields while `PENDING`, require
+`reviewer_id`, `reviewer_role` and `reviewed_at` once decided, and require non-blank feedback for
+`REJECTED`. The `leave_request_status_guard` trigger allows only `PENDING → APPROVED/REJECTED` and
+Mentor-decision → Manager-decision transitions (`APPROVED → REJECTED` and
+`REJECTED → APPROVED/REJECTED`); it also blocks changes to review fields without a valid transition.
+The API uses a conditional `UPDATE` inside a transaction so concurrent reviews cannot both succeed;
+the loser gets `409 ALREADY_REVIEWED`.
+
+### leave_review
+
+_Append-only history of decisions on a leave request. One row per reviewer role preserves a Mentor
+decision when a Manager later reviews the same request (approve or re-reject). Backfilled from
+`leave_request` by migration `20261123150000_add_leave_review_history`; no existing records are
+deleted._
+
+| Column           | Type         | Key | Null? | Description                                                                     |
+| :--------------- | :----------- | :-- | :---- | :------------------------------------------------------------------------------ |
+| id               | UUID         | PK  | No    | Unique identifier of the review record.                                         |
+| leave_request_id | UUID         | FK  | No    | References leave_request(id). `ON DELETE CASCADE` only if a request is removed. |
+| reviewer_id      | UUID         | FK  | No    | Admin who decided; `ON DELETE RESTRICT` keeps the reviewer name in history.     |
+| reviewer_role    | staff_role   | -   | No    | `MENTOR` or `MANAGER` at decision time.                                         |
+| reviewer_name    | TEXT         | -   | No    | Snapshot of the reviewer's name; non-blank.                                     |
+| decision         | leave_status | -   | No    | `APPROVED` or `REJECTED` — never `PENDING`.                                     |
+| feedback         | TEXT         | -   | Yes   | Optional for approvals; required (non-blank) for rejections.                    |
+| reviewed_at      | TIMESTAMPTZ  | -   | No    | When the decision was recorded. Default: now.                                   |
+| created_at       | TIMESTAMPTZ  | -   | No    | When the history row was created. Default: now.                                 |
+
+**Constraints:** UNIQUE (leave_request_id, reviewer_role) — at most one review per role per request,
+which blocks duplicate or concurrent decisions from the same role. INDEX (leave_request_id,
+reviewed_at) supports the ordered history in `LeaveRequest.reviews`. CHECK constraints require a
+non-blank `reviewer_name`, allow only `APPROVED`/`REJECTED` decisions and require feedback for
+rejections. See [leave-request-workflow.md](./leave-request-workflow.md) for the display and API
+behaviour.
 
 ### desktop_auth_transaction
 
