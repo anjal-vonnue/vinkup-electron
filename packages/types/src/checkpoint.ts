@@ -9,6 +9,8 @@
 
 export type CheckpointStatus = 'DRAFT' | 'SCHEDULED' | 'CANCELLED';
 
+export type CheckpointMode = 'MCQ' | 'PRACTICAL';
+
 export type CheckpointQuestionType =
   'TEXT' | 'LONG_TEXT' | 'CODE' | 'SQL' | 'MULTIPLE_CHOICE' | 'FILE' | 'PRACTICAL';
 
@@ -75,6 +77,7 @@ export type ManagerCheckpointSummary = {
   id: string;
   title: string;
   description: string;
+  mode: CheckpointMode;
   status: CheckpointStatus;
   startAt: string | null;
   durationMinutes: number;
@@ -104,6 +107,7 @@ export type ManagerCheckpointDetail = ManagerCheckpointSummary & {
 export type CreateCheckpointRequest = {
   title: string;
   description: string;
+  mode?: CheckpointMode;
   durationMinutes: number;
   totalMarks: number;
   passingMarks: number;
@@ -116,6 +120,14 @@ export type CreateCheckpointRequest = {
   sourceMarkdown: string;
   traineeIds?: string[];
   groupIds?: string[];
+  /** Practical mode only: runtime for the workspace. */
+  practicalRuntime?: CheckpointQuestionRuntime;
+  /** Practical mode only: command to run the trainee's code. */
+  practicalRunCommand?: string | null;
+  /** Practical mode only: SQL to seed the workspace database. */
+  practicalSetupSql?: string | null;
+  /** Practical mode only: starter files the trainee begins with. */
+  practicalStarterFiles?: CheckpointWorkspaceFile[];
 };
 
 export type UpdateCheckpointRequest = Partial<CreateCheckpointRequest> & {
