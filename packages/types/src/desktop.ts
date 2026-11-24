@@ -276,6 +276,8 @@ export interface DesktopApi {
     onFindResult: (listener: (result: ResourcesFindResult) => void) => () => void;
     /** Returns an unsubscribe function. Esc from inside the page. */
     onEscape: (listener: () => void) => () => void;
+
+    onActivity: (listener: () => void) => () => void;
   };
   /** Saves the printable trainee report as an A4 portrait PDF. */
   report: {

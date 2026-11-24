@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { useEffect, useState } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -34,9 +34,6 @@ function Harness({ path = 'a.ts', onChange = noop }: HarnessProps) {
   );
 }
 
-/**
- * Sets the application's active theme.
- */
 function setAppTheme(theme: 'light' | 'dark') {
   document.documentElement.dataset.theme = theme;
 }
@@ -48,40 +45,71 @@ function setModel(text: string | null, uriPath = '/notes.md') {
   );
 }
 
-/** The callback the component registered with one of the editor's `onDid...` methods. */
-function listenerOf(register: unknown): () => void {
-  const calls = (register as { mock: { calls: Array<[() => void]> } }).mock.calls;
-  const callback = calls.at(-1)?.[0];
+/**
+ * Get the last callback registered with one of the editor's `onDid...` methods.
+ * Works whether the fake exposes the method as a `vi.fn()` or a plain function
+ * that pushes into an array.
+ */
+function lastListener(register: unknown): () => void {
+  const mock = register as { mock?: { calls: Array<[() => void]> }; listeners?: Array<() => void> };
 
-  if (!callback) throw new Error('The editor never registered that listener.');
+  if (mock.mock) {
+    const callback = mock.mock.calls.at(-1)?.[0];
+    if (!callback) throw new Error('The editor never registered that listener.');
+    return callback;
+  }
 
-  return callback;
+  if (mock.listeners && mock.listeners.length > 0) {
+    return mock.listeners[mock.listeners.length - 1];
+  }
+
+  throw new Error('The editor never registered that listener.');
 }
 
-/**
- * The editor is hidden with a CSS-module class (jsdom does not apply the stylesheet, so
- * `toBeVisible` cannot be used). The class name is matched loosely because CSS modules may
- * hash it.
- */
+function editorLabel(path = 'a.ts'): string {
+  return `${path} code editor`;
+}
+
 function isEditorHidden(label: string): boolean {
-  return screen.getByLabelText(label).closest('[class*="editorHidden"]') !== null;
+  const node = screen.getByLabelText(label);
+  return node.closest('[class*="editorHidden"]') !== null;
 }
 
 const NOTES_PATH = 'notes.md';
-const NOTES_LABEL = 'notes.md code editor';
+const NOTES_LABEL = editorLabel(NOTES_PATH);
 
 const scrollIntoView = vi.fn();
+
+/**
+ * jsdom does not implement ResizeObserver. CodeEditor's layout effect creates
+ * one as soon as the editor mounts, so without this every test throws before
+ * it can assert anything.
+ */
+class ResizeObserverStub {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
 
 describe('CodeEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setAppTheme('light');
-
-    // clearAllMocks keeps implementations, so put the model back to a known state.
     setModel(null);
 
-    // jsdom does not implement scrollIntoView.
     window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    globalThis.ResizeObserver = ResizeObserverStub;
+  });
+
+  afterEach(() => {
+    // @ts-expect-error restore jsdom default (undefined)
+    delete globalThis.ResizeObserver;
+  });
+
+  it('renders an editor labelled with the file path', () => {
+    render(<Harness />);
+
+    expect(screen.getByLabelText(editorLabel())).toBeInTheDocument();
   });
 
   it('calls onChange with the path and new value when typing in the stub', async () => {
@@ -90,7 +118,7 @@ describe('CodeEditor', () => {
 
     render(<Harness onChange={onChange} />);
 
-    await user.type(screen.getByLabelText('a.ts code editor'), 'x');
+    await user.type(screen.getByLabelText(editorLabel()), 'x');
 
     expect(onChange).toHaveBeenCalledWith('a.ts', expect.any(String));
   });
@@ -157,18 +185,18 @@ describe('CodeEditor', () => {
 
     expect(captured!.current).toBe(fakeEditor);
 
-    act(() => listenerOf(fakeEditor.onDidDispose)());
+    act(() => lastListener(fakeEditor.onDidDispose)());
 
     expect(captured!.current).toBeNull();
   });
 
-  it('adds two commands: save and run', () => {
+  it('registers exactly two commands (save and run)', () => {
     render(<Harness />);
 
     expect(fakeEditor.addCommand).toHaveBeenCalledTimes(2);
   });
 
-  it('binds Run to Ctrl/Cmd+Enter, not plain Enter', () => {
+  it('binds Ctrl/Cmd+Enter to Run and Ctrl/Cmd+S to Save', () => {
     render(<Harness />);
 
     const keybindings = fakeEditor.addCommand.mock.calls.map(
@@ -176,29 +204,28 @@ describe('CodeEditor', () => {
     );
 
     expect(keybindings).toContain(fakeMonaco.KeyMod.CtrlCmd | fakeMonaco.KeyCode.Enter);
-
+    expect(keybindings).toContain(fakeMonaco.KeyMod.CtrlCmd | fakeMonaco.KeyCode.KeyS);
     expect(keybindings).not.toContain(fakeMonaco.KeyCode.Enter);
   });
 
-  it('initializes Monaco with the light theme', () => {
+  it('initializes the editor with the light theme', () => {
     render(<Harness />);
 
-    expect(screen.getByLabelText('a.ts code editor')).toHaveAttribute('data-theme', 'itp-light');
+    expect(screen.getByLabelText(editorLabel())).toHaveAttribute('data-theme', 'itp-light');
   });
 
-  it('initializes Monaco with the dark theme when the application is dark', () => {
+  it('initializes the editor with the dark theme when the app is dark', () => {
     setAppTheme('dark');
 
     render(<Harness />);
 
-    expect(screen.getByLabelText('a.ts code editor')).toHaveAttribute('data-theme', 'itp-dark');
+    expect(screen.getByLabelText(editorLabel())).toHaveAttribute('data-theme', 'itp-dark');
   });
 
-  it('switches Monaco to the dark theme when the application theme changes', async () => {
+  it('switches to the dark theme when the app theme changes', async () => {
     render(<Harness />);
 
-    const editor = screen.getByLabelText('a.ts code editor');
-
+    const editor = screen.getByLabelText(editorLabel());
     expect(editor).toHaveAttribute('data-theme', 'itp-light');
 
     setAppTheme('dark');
@@ -208,13 +235,11 @@ describe('CodeEditor', () => {
     });
   });
 
-  it('switches Monaco back to the light theme when the application theme changes', async () => {
+  it('switches back to light when the app theme changes back', async () => {
     setAppTheme('dark');
-
     render(<Harness />);
 
-    const editor = screen.getByLabelText('a.ts code editor');
-
+    const editor = screen.getByLabelText(editorLabel());
     expect(editor).toHaveAttribute('data-theme', 'itp-dark');
 
     setAppTheme('light');
@@ -224,7 +249,7 @@ describe('CodeEditor', () => {
     });
   });
 
-  it('does not show the Markdown toolbar for other file types', () => {
+  it('does not show the Markdown toolbar for non-Markdown files', () => {
     render(<Harness />);
 
     expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
@@ -238,6 +263,12 @@ describe('CodeEditor Markdown view', () => {
     setAppTheme('light');
     setModel(null);
     window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    globalThis.ResizeObserver = ResizeObserverStub;
+  });
+
+  afterEach(() => {
+    // @ts-expect-error restore jsdom default
+    delete globalThis.ResizeObserver;
   });
 
   it('shows Edit, Preview and Split for a Markdown file, starting on Edit', () => {
@@ -260,7 +291,6 @@ describe('CodeEditor Markdown view', () => {
 
     await user.click(screen.getByRole('button', { name: 'Preview' }));
 
-    // The heading's accessible name also contains the permalink's label.
     expect(screen.getByRole('heading', { level: 1, name: /Title/ })).toBeInTheDocument();
     expect(screen.getByText('bold').tagName).toBe('STRONG');
     expect(screen.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'true');
@@ -276,7 +306,6 @@ describe('CodeEditor Markdown view', () => {
 
     await user.click(screen.getByRole('button', { name: 'Preview' }));
 
-    // Unmounting Monaco disposes the file's model, which is what emptied the editor before.
     expect(isEditorHidden(NOTES_LABEL)).toBe(true);
     expect(screen.getByLabelText(NOTES_LABEL)).toBe(editor);
 
@@ -285,7 +314,7 @@ describe('CodeEditor Markdown view', () => {
     expect(isEditorHidden(NOTES_LABEL)).toBe(false);
     expect(screen.getByLabelText(NOTES_LABEL)).toBe(editor);
 
-    // Mounted once: the commands were registered once, not again on every switch.
+    // Commands were registered once at mount, not again on every switch.
     expect(fakeEditor.addCommand).toHaveBeenCalledTimes(2);
   });
 
@@ -297,9 +326,8 @@ describe('CodeEditor Markdown view', () => {
 
     await user.click(screen.getByRole('button', { name: 'Preview' }));
 
-    // This is what Monaco does while it is torn down; it used to blank the preview.
     setModel(null);
-    act(() => listenerOf(fakeEditor.onDidChangeModel)());
+    act(() => lastListener(fakeEditor.onDidChangeModel)());
 
     expect(screen.getByRole('heading', { level: 1, name: /Title/ })).toBeInTheDocument();
     expect(screen.queryByText('Nothing to preview.')).not.toBeInTheDocument();
@@ -329,7 +357,7 @@ describe('CodeEditor Markdown view', () => {
     expect(screen.getByRole('heading', { level: 1, name: /First/ })).toBeInTheDocument();
 
     setModel('# Second');
-    act(() => listenerOf(fakeEditor.onDidChangeModelContent)());
+    act(() => lastListener(fakeEditor.onDidChangeModelContent)());
 
     expect(await screen.findByRole('heading', { level: 1, name: /Second/ })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /First/ })).not.toBeInTheDocument();
@@ -357,7 +385,7 @@ describe('CodeEditor Markdown view', () => {
     rerender(<Harness path="a.ts" />);
 
     expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
-    expect(isEditorHidden('a.ts code editor')).toBe(false);
+    expect(isEditorHidden(editorLabel('a.ts'))).toBe(false);
 
     rerender(<Harness path={NOTES_PATH} />);
 
@@ -372,6 +400,12 @@ describe('CodeEditor Markdown preview', () => {
     setAppTheme('light');
     setModel(null);
     window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    globalThis.ResizeObserver = ResizeObserverStub;
+  });
+
+  afterEach(() => {
+    // @ts-expect-error restore jsdom default
+    delete globalThis.ResizeObserver;
   });
 
   async function previewOf(markdown: string) {
@@ -410,7 +444,6 @@ describe('CodeEditor Markdown preview', () => {
     expect(done).toBeDisabled();
     expect(todo).not.toBeChecked();
 
-    // rehype-highlight wraps the keyword in a token span.
     expect(screen.getByText('const')).toHaveClass('hljs-keyword');
   });
 
@@ -420,7 +453,6 @@ describe('CodeEditor Markdown preview', () => {
     expect(screen.getByText('hello')).toBeInTheDocument();
     expect(screen.queryByText(/alert\(1\)/)).not.toBeInTheDocument();
 
-    // With an empty alt the image has the "presentation" role.
     const image = screen.getByRole('presentation');
 
     expect(image).not.toHaveAttribute('onerror');
@@ -441,7 +473,6 @@ describe('CodeEditor Markdown preview', () => {
 
     const link = screen.getByRole('link', { name: 'other file' });
 
-    // fireEvent returns false when the click's default action was prevented.
     expect(fireEvent.click(link)).toBe(false);
   });
 

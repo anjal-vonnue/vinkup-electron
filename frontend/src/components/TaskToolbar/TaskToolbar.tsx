@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, Timer, Play, AlertCircle } from 'lucide-react'
 import type { ReviewStatus } from '@itp/types';
 import type { PaneId } from '../../types/workspaceTypes';
 import type { Runner } from '../../runtimes/runnerContext';
+import TaskTimerPill from '../TaskTimerPill';
 import ViewToggleGroup from '../ViewToggleGroup';
 import { formatMinutes } from '../../lib/formatMinutes';
 import styles from './TaskToolbar.module.css';
@@ -24,6 +25,10 @@ export type TaskToolbarProps = {
   reviewStatus?: ReviewStatus | null;
   /** Triggered when the rework indicator is clicked to view feedback */
   onViewFeedback?: () => void;
+  taskId: string;
+  timeSpentSeconds: number;
+  timerActivitySignal?: EventTarget;
+  timerEnabled?: boolean;
 };
 
 /** 14:32 */
@@ -44,6 +49,10 @@ export default function TaskToolbar({
   submittedAt = null,
   reviewStatus = null,
   onViewFeedback,
+  taskId,
+  timeSpentSeconds,
+  timerActivitySignal,
+  timerEnabled = true,
 }: TaskToolbarProps) {
   return (
     <div className={styles.toolbar}>
@@ -58,6 +67,14 @@ export default function TaskToolbar({
           Est: {formatMinutes(estimatedMinutes)}
         </span>
       )}
+
+      {/* Real, server-persisted time-on-task. */}
+      <TaskTimerPill
+        taskId={taskId}
+        initialSeconds={timeSpentSeconds}
+        activitySignal={timerActivitySignal}
+        enabled={timerEnabled}
+      />
 
       {reviewStatus === 'rework' && (
         <button

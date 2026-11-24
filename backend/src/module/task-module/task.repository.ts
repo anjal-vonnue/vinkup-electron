@@ -142,6 +142,62 @@ export class TaskRepository {
   };
 
   /**
+   * Adds `deltaSeconds` to the trainee's accumulated time on the task.
+   *
+   * Uses a create-if-missing/otherwise-increment pattern so the very first
+   * heartbeat (which arrives before any file save) creates the progress row
+   * and lets the mentor see "started" at the same moment the client does.
+   *
+   * `deltaSeconds` is capped server-side so a stalled/sleeping client or a
+   * tampered payload cannot inject unbounded time.
+   *
+   * `onCreated` runs only when the row was first created, so the service can
+   * publish `task.started` without duplicating `saveCode`'s notification.
+   */
+  recordTimeHeartbeat = async (
+    traineeId: string,
+    taskId: string,
+    deltaSeconds: number,
+    now: Date,
+    onCreated?: (progress: task_progress) => Promise<void>
+  ): Promise<{ created: boolean; timeSpentSeconds: number }> => {
+    const MAX_DELTA_SECONDS = 300;
+    const safeDelta = Math.max(0, Math.min(Math.floor(deltaSeconds), MAX_DELTA_SECONDS));
+
+    try {
+      const created = await prisma.task_progress.create({
+        data: {
+          trainee_id: traineeId,
+          task_id: taskId,
+          status: 'in_progress',
+          time_spent_seconds: safeDelta,
+          last_heartbeat_at: now,
+        },
+      });
+      if (onCreated) await onCreated(created);
+      return { created: true, timeSpentSeconds: created.time_spent_seconds };
+    } catch (error) {
+      // P2002 = unique constraint on (trainee_id, task_id) — a save or another
+      // heartbeat created the row first. Fall through to the increment path.
+      const code = (error as { code?: string } | null)?.code;
+      if (code !== 'P2002') throw error;
+    }
+
+    const updated = await prisma.task_progress.update({
+      where: {
+        trainee_id_task_id: { trainee_id: traineeId, task_id: taskId },
+      },
+      data: {
+        time_spent_seconds: { increment: safeDelta },
+        last_heartbeat_at: now,
+      },
+      select: { time_spent_seconds: true },
+    });
+
+    return { created: false, timeSpentSeconds: updated.time_spent_seconds };
+  };
+
+  /**
    * Marks the task completed as a new submission attempt.
    *
    * Creates an immutable-in-practice snapshot of the current working files

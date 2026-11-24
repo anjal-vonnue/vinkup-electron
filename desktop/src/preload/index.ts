@@ -211,6 +211,13 @@ const api: DesktopApi = {
         ipcRenderer.removeListener('resources:escape', handler);
       };
     },
+    onActivity: (listener: () => void) => {
+      const handler = (): void => listener();
+      ipcRenderer.on('resources:activity', handler);
+      return () => {
+        ipcRenderer.removeListener('resources:activity', handler);
+      };
+    },
   },
   report: {
     savePdf: (fileName: string) =>

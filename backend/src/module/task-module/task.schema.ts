@@ -52,3 +52,7 @@ export const saveCodeBodySchema = z.object({
       'Two files have the same path.'
     ),
 });
+
+export const recordTimeBodySchema = z.object({
+  deltaSeconds: z.number().int().min(0).max(3600),
+});

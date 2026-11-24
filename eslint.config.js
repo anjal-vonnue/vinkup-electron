@@ -11,13 +11,7 @@ const rootDir = import.meta.dirname;
 
 export default tseslint.config(
   {
-    ignores: [
-      '**/dist/**',
-      '**/node_modules/**',
-      '**/build/**',
-      '**/release/**',
-      '**/*.prisma',
-    ],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/build/**', '**/release/**', '**/*.prisma'],
   },
 
   // Base, non-type-aware rules for everything
@@ -109,6 +103,28 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
+    },
+  },
+
+  // TEMPORARY — same workaround as gnomeShortcutProtection.ts above.
+  // `@itp/types` publishes raw TS (`"main": "./src/index.ts"`), which the
+  // tsconfig that governs `desktop/src/main/*` cannot resolve without a
+  // `paths` mapping. Every `@itp/types` import therefore resolves to `error`
+  // and cascades into `no-unsafe-*` on every access. Once the following is
+  // added to `desktop/tsconfig.node.json`, delete this block:
+  //
+  //   "compilerOptions": {
+  //     "paths": { "@itp/types": ["../../packages/types/src/index.ts"] }
+  //   }
+  {
+    files: ['desktop/src/main/index.ts', 'desktop/src/main/resources/browser.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-redundant-type-constituents': 'off',
     },
   },
 

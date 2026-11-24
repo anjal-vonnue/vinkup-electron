@@ -52,12 +52,11 @@ import styles from './TaskWorkspace.module.css';
 type TaskWorkspaceProps = {
   task: TaskResponse;
   /** Tells the page whether the header timer should be stopped (task submitted, not in rework). */
-  onTimerStoppedChange?: (taskId: string, isStopped: boolean) => void;
 };
 
 type ResizableKind = 'sidebar' | 'result';
 
-export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorkspaceProps) {
+export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   const state = useWorkspaceState();
   const { mode, markWork } = useTaskActivityMode();
   useReportActivityMode(mode);
@@ -86,11 +85,6 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   const hasSubmitted = submittedAt !== null || task.status === 'completed';
   // Submitted and waiting for review (or approved): the timer stops. Rework runs it again.
   const isTimerStopped = hasSubmitted && reviewStatus !== 'rework';
-
-  // The timer lives in the page header, outside this component, so report the value up.
-  useEffect(() => {
-    onTimerStoppedChange?.(task.id, isTimerStopped);
-  }, [onTimerStoppedChange, task.id, isTimerStopped]);
 
   useEffect(() => {
     applyRuntimeSettings(task.runtime);
@@ -369,6 +363,9 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
               reviewStatus={reviewStatus}
             />
           }
+          taskId={task.id}
+          timeSpentSeconds={task.timeSpentSeconds}
+          timerEnabled={!isTimerStopped}
         />
         <div
           ref={rowRef}

@@ -159,6 +159,10 @@ function createResourcesBrowser(
     onOpenFind: () => sendEvent('resources:open-find'),
     onFindResult: (result) => sendEvent('resources:find-result', result),
     onEscape: () => sendEvent('resources:escape'),
+    onActivity: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:activity');
+    },
   });
   browser.setLocalPorts(localServicePorts?.snapshot() ?? new Set());
   return browser;
@@ -568,6 +572,11 @@ function registerIpcHandlers(): void {
       secondaryResourcesBrowsers.get(overlayWindow)?.close();
     }
     displayWindowManager?.setOverlayResourcesActive(event.sender, active);
+  });
+
+  ipcMain.on('resources:activity', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('resources:activity');
   });
 
   ipcMain.handle('browser:get-availability', (event) => {
