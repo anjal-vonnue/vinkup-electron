@@ -154,9 +154,8 @@ export type LighthouseAuditResult = {
 };
 
 export interface AuditApi {
-  run: (taskId: string) => Promise<LighthouseAuditResult>;
+  run: (taskId: string, pagePath?: string) => Promise<LighthouseAuditResult>;
 }
-
 export interface WorkspaceApi {
   open: (input: WorkspaceOpenInput) => Promise<WorkspaceOpenResult>;
   sync: (input: WorkspaceSyncInput) => Promise<void>;
