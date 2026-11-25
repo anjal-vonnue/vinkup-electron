@@ -294,6 +294,8 @@ describe('DashboardService', () => {
         {
           id: 'review-1',
           task_id: 'html-day-01-t-1',
+          admin_id: 'mentor-1',
+          submission_no: 1,
           feedback: 'Add a footer.',
           reviewed_at: new Date('2026-11-24T10:00:00.000Z'),
           admin: { name: 'Mentor Jane' },
@@ -317,7 +319,9 @@ describe('DashboardService', () => {
           dayId: 'html-day-01',
           dayNumber: 1,
           courseTitle: 'HTML',
+          adminId: 'mentor-1',
           adminName: 'Mentor Jane',
+          submissionNo: 1,
           feedback: 'Add a footer.',
           reviewedAt: '2026-11-24T10:00:00.000Z',
         },

@@ -23,6 +23,8 @@ export class DashboardRepository {
       select: {
         id: true,
         task_id: true,
+        admin_id: true,
+        submission_no: true,
         feedback: true,
         reviewed_at: true,
         admin: { select: { name: true } },

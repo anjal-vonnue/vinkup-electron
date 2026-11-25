@@ -2,7 +2,13 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
-import type { DashboardResponse, DaySummary, DayStatus, UnreadTaskComment } from '@itp/types';
+import type {
+  DashboardResponse,
+  DaySummary,
+  DayStatus,
+  ReworkTaskSummary,
+  UnreadTaskComment,
+} from '@itp/types';
 
 import DashboardPage from './DashboardPage';
 import { getDashboard, getReworkTasks, getUnreadTaskComments } from '../../api/dashboard';
@@ -253,7 +259,7 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Header')).toBeInTheDocument();
   });
 
-  it('shows unread mentor comments and opens the matching task and comment', async () => {
+  it('combines rework and new comments in one time-sorted notifications banner', async () => {
     const comment: UnreadTaskComment = {
       id: 'review-1',
       taskId: 'html-day-01-t-1',
@@ -261,41 +267,60 @@ describe('DashboardPage', () => {
       dayId: 'html-day-01',
       dayNumber: 1,
       courseTitle: 'HTML',
+      adminId: 'mentor-1',
       adminName: 'Mentor Maya',
+      submissionNo: 1,
       feedback: 'Consider adding an accessible footer.',
       reviewedAt: '2026-11-24T10:00:00.000Z',
     };
+    const rework: ReworkTaskSummary = {
+      taskId: 'html-day-01-t-2',
+      taskTitle: 'Semantic article',
+      sequenceOrder: 2,
+      dayId: 'html-day-01',
+      dayNumber: 1,
+      courseId: 'html',
+      courseTitle: 'HTML',
+      submissionCount: 2,
+      latestReview: {
+        id: 'review-rework',
+        adminId: 'mentor-2',
+        adminName: 'Mentor Lee',
+        decision: 'rework',
+        feedback: 'Fix the heading hierarchy.',
+        reviewedAt: '2026-11-23T10:00:00.000Z',
+      },
+    };
     vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
     vi.mocked(getUnreadTaskComments).mockResolvedValue([comment]);
+    const reworkTasks: ReworkTaskSummary[] = [rework];
+    vi.mocked(getReworkTasks).mockResolvedValue(reworkTasks);
     const user = userEvent.setup();
 
     renderPage();
 
-    const unread = await screen.findByRole('region', { name: 'New comments' });
-    const toggle = within(unread).getByRole('button', {
-      name: 'Show 1 new mentor comments',
-    });
+    const notifications = await screen.findByRole('region', { name: 'Notifications' });
+    const toggle = within(notifications).getByRole('button', { name: /notifications/i });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(within(unread).queryByText('Profile page')).not.toBeInTheDocument();
+    expect(within(notifications).getByText('2 items')).toBeInTheDocument();
+    expect(within(notifications).getByText('Profile page')).toBeInTheDocument();
+    expect(
+      within(notifications).getByText('Profile page').closest('[aria-hidden="true"]')
+    ).toBeTruthy();
     await user.click(toggle);
 
-    const expandedToggle = within(unread).getByRole('button', {
-      name: 'Hide 1 new mentor comments',
-    });
-    expect(expandedToggle).toHaveAttribute('aria-expanded', 'true');
-    expect(within(unread).getByText('Profile page')).toBeInTheDocument();
-    expect(within(unread).getByText(/HTML · Day 1 · Mentor Maya/)).toBeInTheDocument();
-    expect(within(unread).getByText('Consider adding an accessible footer.')).toBeInTheDocument();
-    await user.click(expandedToggle);
-    expect(within(unread).queryByText('Profile page')).not.toBeInTheDocument();
-    await user.click(within(unread).getByRole('button', { name: 'Show 1 new mentor comments' }));
-    await user.click(
-      within(unread).getByRole('button', {
-        name: 'Open new comment on Profile page, HTML day 1',
-      })
-    );
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const items = within(notifications).getAllByRole('article');
+    expect(within(items[0]).getByRole('heading', { name: 'Profile page' })).toBeInTheDocument();
+    expect(within(items[1]).getByRole('heading', { name: 'Semantic article' })).toBeInTheDocument();
+    expect(within(items[0]).getByText('Consider adding an accessible footer.')).toBeInTheDocument();
+    expect(within(items[1]).getByText('Fix the heading hierarchy.')).toBeInTheDocument();
 
-    expect(navigate).toHaveBeenCalledWith('/tasks/html-day-01-t-1?commentId=review-1');
+    await user.click(within(items[0]).getByRole('button', { name: /go to task/i }));
+
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith('/tasks/html-day-01-t-1?commentId=review-1')
+    );
   });
 
   it('shows the welcome banner with the trainee first name and curriculum progress', async () => {
@@ -642,18 +667,18 @@ describe('DashboardPage', () => {
     });
   });
 
-  describe('rework section', () => {
-    it('does not display rework banner when no tasks need rework', async () => {
+  describe('notifications section', () => {
+    it('does not display notifications when there are no rework tasks or new comments', async () => {
       vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
       vi.mocked(getReworkTasks).mockResolvedValue([]);
 
       renderPage();
 
       await screen.findByRole('heading', { name: 'Closures and Higher-Order Functions' });
-      expect(screen.queryByText('Rework Requested')).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Notifications' })).not.toBeInTheDocument();
     });
 
-    it('shows the rework banner when a rework decision arrives over the realtime stream', async () => {
+    it('shows the notifications banner when a rework decision arrives over realtime', async () => {
       const fake = installFakeEventSource();
       vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
       vi.mocked(getReworkTasks)
@@ -682,7 +707,7 @@ describe('DashboardPage', () => {
       renderPage();
 
       await screen.findByRole('heading', { name: 'Closures and Higher-Order Functions' });
-      expect(screen.queryByText('Rework Requested')).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Notifications' })).not.toBeInTheDocument();
 
       act(() => {
         fake.source?.emit({
@@ -698,10 +723,10 @@ describe('DashboardPage', () => {
         });
       });
 
-      expect(await screen.findByRole('button', { name: /rework requested/i })).toBeInTheDocument();
+      expect(await screen.findByRole('region', { name: 'Notifications' })).toBeInTheDocument();
     });
 
-    it('displays rework banner when mentor requested rework and expands when clicked', async () => {
+    it('displays rework feedback in the shared notification item template', async () => {
       vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
       vi.mocked(getReworkTasks).mockResolvedValue([
         {
@@ -726,9 +751,11 @@ describe('DashboardPage', () => {
 
       renderPage();
 
-      const bannerButton = await screen.findByRole('button', { name: /rework requested/i });
+      const bannerButton = await screen.findByRole('button', { name: /notifications/i });
       expect(bannerButton).toBeInTheDocument();
-      expect(screen.queryByText('Structure a Personal Portfolio')).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Structure a Personal Portfolio').closest('[aria-hidden="true"]')
+      ).toBeTruthy();
 
       // Click to expand
       await userEvent.click(bannerButton);
@@ -737,7 +764,7 @@ describe('DashboardPage', () => {
       expect(screen.getByText(/Fix heading hierarchy/)).toBeInTheDocument();
     });
 
-    it('navigates to task when Go to Task is clicked', async () => {
+    it('navigates to a rework task when Go to Task is clicked', async () => {
       vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
       vi.mocked(getReworkTasks).mockResolvedValue([
         {
@@ -749,13 +776,20 @@ describe('DashboardPage', () => {
           courseId: 'html',
           courseTitle: 'HTML & Semantic Web',
           submissionCount: 2,
-          latestReview: null,
+          latestReview: {
+            id: 'rev-2',
+            adminId: 'admin-1',
+            adminName: 'Mentor Hawas',
+            decision: 'rework',
+            feedback: 'Fix the heading hierarchy.',
+            reviewedAt: '2026-10-01T10:00:00.000Z',
+          },
         },
       ]);
 
       renderPage();
 
-      const bannerButton = await screen.findByRole('button', { name: /rework requested/i });
+      const bannerButton = await screen.findByRole('button', { name: /notifications/i });
       await userEvent.click(bannerButton);
 
       const taskButton = await screen.findByRole('button', { name: /go to task/i });

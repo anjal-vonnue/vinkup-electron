@@ -225,7 +225,9 @@ describe('dashboard unread task comments', () => {
       dayId: DAY.html1,
       dayNumber: 1,
       courseTitle: 'HTML',
+      adminId: mentor.id,
       adminName: 'Comment Mentor',
+      submissionNo: 2,
       feedback: 'Another optional suggestion.',
     });
 

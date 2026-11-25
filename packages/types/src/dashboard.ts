@@ -88,7 +88,9 @@ export type UnreadTaskComment = {
   dayId: string;
   dayNumber: number;
   courseTitle: string;
+  adminId: string;
   adminName: string;
+  submissionNo: number;
   feedback: string;
   reviewedAt: string;
 };

@@ -47,7 +47,9 @@ export class DashboardService {
       dayId: row.task.curriculum_day.id,
       dayNumber: row.task.curriculum_day.day_number,
       courseTitle: row.task.curriculum_day.course.title,
+      adminId: row.admin_id,
       adminName: row.admin.name,
+      submissionNo: row.submission_no,
       feedback: row.feedback,
       reviewedAt: row.reviewed_at.toISOString(),
     }));
