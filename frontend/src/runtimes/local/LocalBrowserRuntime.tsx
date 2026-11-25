@@ -569,23 +569,33 @@ export default function LocalBrowserRuntime({ task, isVisible }: LocalBrowserRun
   const runLighthouse = useCallback(async () => {
     if (!canAudit) return;
 
+    setActiveTab('lighthouse');
+    if (entryPath === null) {
+      setAuditResult(null);
+      setAuditError('Add an .html file to run a Lighthouse audit.');
+      return;
+    }
+
     setIsAuditing(true);
     setAuditError(null);
-    setActiveTab('lighthouse');
 
     try {
       // Ensure the audit uses the latest editor contents.
       await flush();
 
-      const result = await window.desktop!.audit.run(task.id);
+      const result = await window.desktop!.audit.run(task.id, entryPath);
       setAuditResult(result);
     } catch (error) {
       setAuditResult(null);
-      setAuditError(error instanceof Error ? error.message : 'Unable to run the Lighthouse audit.');
+      setAuditError(
+        error instanceof Error
+          ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+          : 'Unable to run the Lighthouse audit.'
+      );
     } finally {
       setIsAuditing(false);
     }
-  }, [canAudit, flush, task.id]);
+  }, [canAudit, entryPath, flush, task.id]);
 
   useRegisterRunner({
     canRun,

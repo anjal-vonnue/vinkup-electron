@@ -81,6 +81,7 @@ export class ConflictError extends AppError {
       | 'ALREADY_REVIEWED'
       | 'ALREADY_APPROVED'
       | 'ALREADY_ASSIGNED'
+      | 'PROMPT_NAME_TAKEN'
     >,
     message: string
   ) {

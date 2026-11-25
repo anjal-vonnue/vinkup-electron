@@ -8,7 +8,15 @@ const repository = vi.hoisted(() => ({
   findForReviewer: vi.fn(),
   decide: vi.fn(),
 }));
+const envMock = vi.hoisted(() => ({ SLACK_ENABLED: false }));
+const slackRepository = vi.hoisted(() => ({ create: vi.fn() }));
 
+vi.mock('../../config/env', () => ({ env: envMock }));
+vi.mock('../slack-module/slack-notification.repository', () => ({
+  SlackNotificationRepository: class {
+    create = slackRepository.create;
+  },
+}));
 vi.mock('./leave-request.repository', () => ({
   LeaveRequestRepository: class {
     create = repository.create;
@@ -43,12 +51,13 @@ const row = {
   feedback: null,
   submitted_at: submittedAt,
   reviewed_at: null,
+  reviews: [],
   created_at: submittedAt,
   updated_at: submittedAt,
   trainee: {
     id: TRAINEE_ID,
     name: 'Test Trainee',
-    mentor: { id: reviewer.id, name: reviewer.name },
+    mentor: { id: reviewer.id, name: reviewer.name, slack_channel_id: 'C0123ABCDEF' },
   },
 };
 
@@ -56,6 +65,8 @@ let service: LeaveRequestService;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  envMock.SLACK_ENABLED = false;
+  slackRepository.create.mockResolvedValue({});
   service = new LeaveRequestService();
 });
 
@@ -79,6 +90,74 @@ describe('LeaveRequestService trainee actions', () => {
       subject: 'Family event',
       reason: 'A family celebration needs travel.',
     });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('queues only the trainee name and subject for the assigned mentor channel', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue(row);
+
+    await service.create(TRAINEE_ID, {
+      subject: 'Family event',
+      reason: 'A family celebration needs travel.',
+    });
+
+    expect(slackRepository.create).toHaveBeenCalledWith({
+      eventType: 'leave.request',
+      channelId: 'C0123ABCDEF',
+      payload: { traineeName: 'Test Trainee', subject: 'Family event' },
+      dedupeKey: `leave_request:${REQUEST_ID}`,
+    });
+  });
+
+  it('does not queue when Slack is disabled, the mentor is missing, or the channel is missing', async () => {
+    repository.create.mockResolvedValue(row);
+    await service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue({
+      ...row,
+      trainee: { ...row.trainee, mentor: null },
+    });
+    await service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+
+    repository.create.mockResolvedValue({
+      ...row,
+      trainee: {
+        ...row.trainee,
+        mentor: { id: reviewer.id, name: reviewer.name, slack_channel_id: null },
+      },
+    });
+    await service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' });
+    expect(slackRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('still returns the created request when Slack queueing fails', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue(row);
+    slackRepository.create.mockRejectedValueOnce(new Error('outbox unavailable'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' })
+    ).resolves.toMatchObject({ id: REQUEST_ID });
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('treats a duplicate outbox key as a successful no-op', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.create.mockResolvedValue(row);
+    slackRepository.create.mockRejectedValueOnce({ code: 'P2002' });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      service.create(TRAINEE_ID, { subject: 'Family event', reason: 'Private reason' })
+    ).resolves.toMatchObject({ id: REQUEST_ID });
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it('lists and reads only the authenticated trainee requests', async () => {
@@ -104,6 +183,56 @@ describe('LeaveRequestService trainee actions', () => {
 });
 
 describe('LeaveRequestService review mapping', () => {
+  it('includes the complete decision history with ISO timestamps', async () => {
+    const reviewed = {
+      ...row,
+      status: 'REJECTED' as const,
+      reviews: [
+        {
+          id: 'review-1',
+          reviewer_id: reviewer.id,
+          reviewer_name: reviewer.name,
+          reviewer_role: 'MENTOR' as const,
+          decision: 'APPROVED' as const,
+          feedback: 'Enjoy the time off.',
+          reviewed_at: submittedAt,
+        },
+        {
+          id: 'review-2',
+          reviewer_id: 'manager-1',
+          reviewer_name: 'Test Manager',
+          reviewer_role: 'MANAGER' as const,
+          decision: 'REJECTED' as const,
+          feedback: 'The dates changed.',
+          reviewed_at: new Date('2026-11-21T11:00:00.000Z'),
+        },
+      ],
+    };
+    repository.listForTrainee.mockResolvedValue([reviewed]);
+
+    const [mapped] = await service.listMine(TRAINEE_ID);
+    expect(mapped?.reviews).toEqual([
+      {
+        id: 'review-1',
+        reviewerId: reviewer.id,
+        reviewerName: reviewer.name,
+        reviewerRole: 'MENTOR',
+        decision: 'APPROVED',
+        feedback: 'Enjoy the time off.',
+        reviewedAt: submittedAt.toISOString(),
+      },
+      {
+        id: 'review-2',
+        reviewerId: 'manager-1',
+        reviewerName: 'Test Manager',
+        reviewerRole: 'MANAGER',
+        decision: 'REJECTED',
+        feedback: 'The dates changed.',
+        reviewedAt: '2026-11-21T11:00:00.000Z',
+      },
+    ]);
+  });
+
   it('maps a competing decision to a conflict', async () => {
     repository.decide.mockResolvedValue({ ok: false, reason: 'already-reviewed' });
 
@@ -143,6 +272,19 @@ describe('LeaveRequestService review mapping', () => {
       feedback: 'Please choose another date.',
       reviewedAt: submittedAt.toISOString(),
     });
+  });
+
+  it('does not queue a Slack notification when a request is reviewed', async () => {
+    envMock.SLACK_ENABLED = true;
+    repository.decide.mockResolvedValue({ ok: true, request: row });
+
+    await service.review(reviewer, REQUEST_ID, { decision: 'APPROVED' });
+    await service.review(reviewer, REQUEST_ID, {
+      decision: 'REJECTED',
+      feedback: 'Please choose another date.',
+    });
+
+    expect(slackRepository.create).not.toHaveBeenCalled();
   });
 });
 
@@ -213,6 +355,56 @@ describe('LeaveRequestService manager review actions', () => {
     });
     expect(repository.listForReviewer).toHaveBeenCalledWith(manager);
     expect(repository.findForReviewer).toHaveBeenCalledWith(manager, REQUEST_ID);
+  });
+
+  it('reports a Manager rejection of a Mentor approval with both reviews', async () => {
+    const rejected = {
+      ...row,
+      status: 'REJECTED' as const,
+      reviewer_id: manager.id,
+      reviewer_role: 'MANAGER' as const,
+      reviewer_name: manager.name,
+      feedback: 'The dates changed.',
+      reviewed_at: submittedAt,
+      reviews: [
+        {
+          id: 'review-1',
+          reviewer_id: reviewer.id,
+          reviewer_name: reviewer.name,
+          reviewer_role: 'MENTOR' as const,
+          decision: 'APPROVED' as const,
+          feedback: null,
+          reviewed_at: submittedAt,
+        },
+        {
+          id: 'review-2',
+          reviewer_id: manager.id,
+          reviewer_name: manager.name,
+          reviewer_role: 'MANAGER' as const,
+          decision: 'REJECTED' as const,
+          feedback: 'The dates changed.',
+          reviewed_at: submittedAt,
+        },
+      ],
+    };
+    repository.decide.mockResolvedValue({ ok: true, request: rejected });
+
+    await expect(
+      service.review(manager, REQUEST_ID, { decision: 'REJECTED', feedback: 'The dates changed.' })
+    ).resolves.toMatchObject({
+      status: 'REJECTED',
+      reviewerRole: 'MANAGER',
+      reviews: [
+        { reviewerRole: 'MENTOR', decision: 'APPROVED' },
+        { reviewerRole: 'MANAGER', decision: 'REJECTED', feedback: 'The dates changed.' },
+      ],
+    });
+    expect(repository.decide).toHaveBeenCalledWith({
+      requestId: REQUEST_ID,
+      reviewer: manager,
+      decision: 'REJECTED',
+      feedback: 'The dates changed.',
+    });
   });
 
   it('rejects any pending request and records the manager as reviewer', async () => {

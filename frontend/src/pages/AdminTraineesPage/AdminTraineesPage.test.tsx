@@ -2,9 +2,20 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
-import { getAdminAnalytics, getAdminTrainees } from '../../api/admin';
+import {
+  deleteMentorSlackChannel,
+  getAdminAnalytics,
+  getAdminTrainee,
+  getAdminTrainees,
+  getMentorSlackChannel,
+  saveMentorSlackChannel,
+} from '../../api/admin';
 import { downloadCsv } from '../../lib/downloadCsv';
-import { buildAdminAnalytics, buildAdminTrainees } from '../../test/fixtures/admin';
+import {
+  buildAdminAnalytics,
+  buildAdminTraineeDetail,
+  buildAdminTrainees,
+} from '../../test/fixtures/admin';
 import { ToastProvider } from '../../components/Toast/Toast';
 import { RealtimeProvider } from '../../context/RealtimeProvider';
 import { installFakeEventSource } from '../../test/fakeEventSource';
@@ -19,8 +30,12 @@ vi.mock('../../context/Useauth', () => ({
 }));
 vi.mock('../../api/admin', () => ({
   getAdminTrainees: vi.fn(),
+  getAdminTrainee: vi.fn(),
   getAdminAnalytics: vi.fn(),
   createAdminTrainee: vi.fn(),
+  getMentorSlackChannel: vi.fn(),
+  saveMentorSlackChannel: vi.fn(),
+  deleteMentorSlackChannel: vi.fn(),
 }));
 vi.mock('../../lib/downloadCsv', () => ({
   downloadCsv: vi.fn(),
@@ -28,12 +43,36 @@ vi.mock('../../lib/downloadCsv', () => ({
 }));
 
 const trainees = buildAdminTrainees();
+const traineesWithPendingReviews = trainees.map((trainee, index) =>
+  index === 0
+    ? {
+        ...trainee,
+        pendingReviewItems: [
+          {
+            taskId: 'html-day-01-t-1',
+            taskTitle: 'Structure a Personal Portfolio',
+            dayId: 'html-day-01',
+            courseTitle: 'HTML & Semantic Web',
+            dayNumber: 1,
+            lastSubmittedAt: '2026-11-19T10:00:00.000Z',
+          },
+        ],
+      }
+    : trainee
+);
 
 beforeEach(() => {
-  vi.mocked(getAdminTrainees).mockResolvedValue(trainees);
+  vi.mocked(getAdminTrainees).mockResolvedValue(traineesWithPendingReviews);
+  vi.mocked(getAdminTrainee).mockImplementation((id) => {
+    const found = buildAdminTraineeDetail(id);
+    return found ? Promise.resolve(found) : Promise.reject(new Error('Missing trainee'));
+  });
   vi.mocked(getAdminAnalytics).mockImplementation((query) =>
     Promise.resolve(buildAdminAnalytics(query)!)
   );
+  vi.mocked(getMentorSlackChannel).mockResolvedValue({ channelId: null });
+  vi.mocked(saveMentorSlackChannel).mockResolvedValue({ channelId: 'C0123ABCDEF' });
+  vi.mocked(deleteMentorSlackChannel).mockResolvedValue({ channelId: null });
   vi.mocked(downloadCsv).mockReset();
   vi.mocked(getAdminAnalytics).mockClear();
 });
@@ -72,6 +111,20 @@ describe('AdminTraineesPage: Dashboard view / Team performance', () => {
     expect(screen.getByText('Average progress')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Team analytics' })).not.toBeInTheDocument();
     expect(getAdminAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('shows submitted tasks waiting for review with a direct review link', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    await screen.findByRole('table', { name: 'Trainees' });
+    expect(screen.getByText('Pending review')).toBeInTheDocument();
+    const pending = screen.getByLabelText('Pending review').closest('section')!;
+    await user.click(within(pending).getByRole('button', { name: /View trainees/ }));
+    const links = within(pending).getAllByRole('link', { name: /Review .* pending task/ });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0].getAttribute('href')).toMatch(/^\/admin\/trainees\/.*\?filter=pending$/);
+    expect(within(pending).getAllByText(/waiting for review/).length).toBeGreaterThan(0);
   });
 
   it('shows only the team analytics on the Team performance view', async () => {

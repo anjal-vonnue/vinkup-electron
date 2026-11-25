@@ -4,6 +4,7 @@ import type {
   DashboardResponse,
   CourseCertificate,
   ReworkTaskSummary,
+  UnreadTaskComment,
 } from '@itp/types';
 import type { AuthenticatedRequest } from '../../types/auth.types';
 import type { CourseIdParams } from './dashboard.schema';
@@ -14,6 +15,30 @@ const dashboardService = new DashboardService();
 const certificateService = new CertificateService();
 
 class DashboardController {
+  getUnreadTaskComments = async (
+    req: Request,
+    res: Response<UnreadTaskComment[]>,
+    next: NextFunction
+  ) => {
+    try {
+      const traineeId = (req as AuthenticatedRequest).user.id;
+      res.status(200).json(await dashboardService.getUnreadTaskComments(traineeId));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  markTaskCommentRead = async (req: Request, res: Response<void>, next: NextFunction) => {
+    try {
+      const traineeId = (req as AuthenticatedRequest).user.id;
+      const { reviewId } = req.params as { reviewId: string };
+      await dashboardService.markTaskCommentRead(traineeId, reviewId);
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getDashboard = async (req: Request, res: Response<DashboardResponse>, next: NextFunction) => {
     try {
       const traineeId = (req as AuthenticatedRequest).user.id;

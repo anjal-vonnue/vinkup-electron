@@ -1,0 +1,59 @@
+.history {
+  margin-top: 1rem;
+}
+
+.heading {
+  margin: 0 0 0.6rem;
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-bg-panel);
+  font-size: 0.82rem;
+}
+
+.itemTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.reviewer {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.date {
+  margin: 0.4rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.feedback {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+}

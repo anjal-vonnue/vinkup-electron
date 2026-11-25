@@ -5,6 +5,7 @@ import type {
   DaySummary,
   NextDay,
   ReworkTaskSummary,
+  UnreadTaskComment,
 } from '@itp/types';
 import { NotFoundError } from '../../errors/AppError';
 import { istDateString, istDateValue, istDayStart } from '../../utils/istDate';
@@ -37,6 +38,30 @@ function toDaySummary(day: DayRow, status: DayStatus): DaySummary {
 }
 
 export class DashboardService {
+  async getUnreadTaskComments(traineeId: string): Promise<UnreadTaskComment[]> {
+    const rows = await dashboardRepository.findUnreadTaskComments(traineeId);
+    return rows.map((row) => ({
+      id: row.id,
+      taskId: row.task.id,
+      taskTitle: row.task.title,
+      dayId: row.task.curriculum_day.id,
+      dayNumber: row.task.curriculum_day.day_number,
+      courseTitle: row.task.curriculum_day.course.title,
+      adminId: row.admin_id,
+      adminName: row.admin.name,
+      submissionNo: row.submission_no,
+      feedback: row.feedback,
+      reviewedAt: row.reviewed_at.toISOString(),
+    }));
+  }
+
+  async markTaskCommentRead(traineeId: string, reviewId: string): Promise<void> {
+    const result = await dashboardRepository.markTaskCommentRead(traineeId, reviewId);
+    if (result.count > 0) return;
+    if (await dashboardRepository.findTaskCommentForTrainee(traineeId, reviewId)) return;
+    throw new NotFoundError('Comment not found.');
+  }
+
   async getDashboard(traineeId: string, now: Date = new Date()): Promise<DashboardResponse> {
     const trendStart = istDateString(TYPING_TREND_DAYS - 1, now);
 

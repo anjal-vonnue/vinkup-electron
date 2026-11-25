@@ -1,13 +1,20 @@
 import type {
- AdminFeedbackEntry,
   AdminAnalytics,
   AdminAnalyticsQuery,
- AdminFlagEvent,
+   AdminFeedbackEntry,
+  AdminFlagEvent,
   AdminTaskCode,
   AdminTraineeDetail,
   AdminTraineeSummary,
   CreateTraineeRequest,
+  MentorSlackChannelResponse,
+  SaveMentorSlackChannelRequest,
   TaskReview,
+  AnalyzeTasksRequest,
+  AnalyzeTasksResponse,
+  CreateReviewPromptRequest,
+  ReviewPrompt,
+  UpdateReviewPromptRequest,
 } from '@itp/types';
 import { apiClient } from './client';
 
@@ -37,7 +44,6 @@ export async function createAdminTrainee(body: CreateTraineeRequest): Promise<Ad
   const res = await apiClient.post<AdminTraineeSummary>('/admin/trainees', body);
   return res.data;
 }
-
 
 export async function approveTask(
   traineeId: string,
@@ -75,10 +81,68 @@ export async function getAdminTaskReviews(
 
 export async function getAdminTraineeFeedback(traineeId: string): Promise<AdminFeedbackEntry[]> {
   const res = await apiClient.get<AdminFeedbackEntry[]>(`/admin/trainees/${traineeId}/feedback`);
-  return res.data;}
+  return res.data;
+}
 
 /** GET /admin/analytics. Leave traineeId out for the whole team. */
 export async function getAdminAnalytics(query: AdminAnalyticsQuery): Promise<AdminAnalytics> {
   const res = await apiClient.get<AdminAnalytics>('/admin/analytics', { params: query });
- return res.data;
+  return res.data;
+}
+
+// ---------- AI review ----------
+
+export async function listReviewPrompts(): Promise<ReviewPrompt[]> {
+  const { data } = await apiClient.get<ReviewPrompt[]>('/admin/ai-review/prompts');
+  return data;
+}
+
+export async function createReviewPrompt(body: CreateReviewPromptRequest): Promise<ReviewPrompt> {
+  const { data } = await apiClient.post<ReviewPrompt>('/admin/ai-review/prompts', body);
+  return data;
+}
+
+export async function updateReviewPrompt(
+  promptId: string,
+  body: UpdateReviewPromptRequest
+): Promise<ReviewPrompt> {
+  const { data } = await apiClient.patch<ReviewPrompt>(
+    `/admin/ai-review/prompts/${promptId}`,
+    body
+  );
+  return data;
+}
+
+export async function deleteReviewPrompt(promptId: string): Promise<void> {
+  await apiClient.delete(`/admin/ai-review/prompts/${promptId}`);
+}
+
+/** Batch analysis can take a while (sequential batches plus provider fallback). */
+export async function analyzeTasks(
+  traineeId: string,
+  body: AnalyzeTasksRequest
+): Promise<AnalyzeTasksResponse> {
+  const { data } = await apiClient.post<AnalyzeTasksResponse>(
+    `/admin/ai-review/trainees/${traineeId}/analyze`,
+    body,
+    { timeout: 5 * 60 * 1000 }
+  );
+  return data;
+}
+
+export async function getMentorSlackChannel(): Promise<MentorSlackChannelResponse> {
+  const res = await apiClient.get<MentorSlackChannelResponse>('/admin/slack-channel');
+  return res.data;
+}
+
+export async function saveMentorSlackChannel(
+  body: SaveMentorSlackChannelRequest
+): Promise<MentorSlackChannelResponse> {
+  const res = await apiClient.put<MentorSlackChannelResponse>('/admin/slack-channel', body);
+  return res.data;
+}
+
+export async function deleteMentorSlackChannel(): Promise<MentorSlackChannelResponse> {
+  const res = await apiClient.delete<MentorSlackChannelResponse>('/admin/slack-channel');
+  return res.data;
 }

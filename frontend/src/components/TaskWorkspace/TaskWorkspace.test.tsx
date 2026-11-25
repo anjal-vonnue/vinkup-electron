@@ -17,7 +17,8 @@ import { RunnerProvider } from '../../runtimes/runnerContext';
 import { ToastProvider } from '../../components/Toast';
 
 import { taskFixture, taskCodeFixture } from '../../test/fixtures/task';
-import { saveTaskCode, submitTask } from '../../api/tasks';
+import { getTaskReview, getTaskReviews, saveTaskCode, submitTask } from '../../api/tasks';
+import { markTaskCommentRead } from '../../api/dashboard';
 import { ApiError } from '../../api/errors';
 import { RealtimeProvider } from '../../context/RealtimeProvider';
 import { installFakeEventSource } from '../../test/fakeEventSource';
@@ -35,6 +36,7 @@ beforeEach(() => {
 });
 
 vi.mock('../../api/tasks');
+vi.mock('../../api/dashboard', () => ({ markTaskCommentRead: vi.fn() }));
 
 vi.mock('../../lib/monacoSetup', () => ({
   applyRuntimeSettings: vi.fn(),
@@ -107,9 +109,9 @@ function installWorkspaceApi(): WorkspaceApi {
 /**
  * Renders TaskWorkspace with all required providers.
  */
-function renderWorkspace(task = taskFixture) {
+function renderWorkspace(task = taskFixture, initialEntries = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <ToastProvider>
         <WorkspaceProvider code={taskCodeFixture}>
           <EditorProvider>
@@ -129,6 +131,9 @@ describe('TaskWorkspace', () => {
 
     vi.mocked(saveTaskCode).mockReset();
     vi.mocked(submitTask).mockReset();
+    vi.mocked(getTaskReview).mockReset();
+    vi.mocked(getTaskReviews).mockReset();
+    vi.mocked(markTaskCommentRead).mockReset();
 
     window.localStorage.clear();
   });
@@ -390,5 +395,57 @@ describe('TaskWorkspace', () => {
     // RealtimeNotifications.test.tsx.
     // The toolbar button turns into the disabled "Approved" state once the task is approved.
     expect(await screen.findByRole('button', { name: /^approved$/i })).toBeDisabled();
+  });
+
+  it('shows the suggestion when opening an already-approved task', async () => {
+    const review = {
+      id: 'review-1',
+      taskId: taskFixture.id,
+      adminId: 'mentor-1',
+      adminName: 'Mentor Maya',
+      submissionNo: 1,
+      decision: 'approved' as const,
+      feedback: 'Consider adding a footer for navigation.',
+      reviewedAt: '2026-11-18T10:00:00.000Z',
+    };
+    vi.mocked(getTaskReview).mockResolvedValue({
+      reviewStatus: 'approved',
+      submissionCount: 1,
+      latestReview: review,
+    });
+    vi.mocked(getTaskReviews).mockResolvedValue([review]);
+
+    renderWorkspace({
+      ...taskFixture,
+      status: 'completed',
+      reviewStatus: 'approved',
+      submissionCount: 1,
+    });
+
+    expect(await screen.findByText('Mentor suggestion')).toBeInTheDocument();
+    expect(screen.getByText('Consider adding a footer for navigation.')).toBeInTheDocument();
+    expect(getTaskReview).toHaveBeenCalledWith(taskFixture.id);
+    await waitFor(() => expect(markTaskCommentRead).toHaveBeenCalledWith(review.id));
+  });
+
+  it('highlights the comment opened from the dashboard and marks it read', async () => {
+    const comment = {
+      id: 'review-old',
+      taskId: taskFixture.id,
+      adminId: 'mentor-1',
+      adminName: 'Mentor Maya',
+      submissionNo: 1,
+      decision: 'approved' as const,
+      feedback: 'Remember to add accessible labels.',
+      reviewedAt: '2026-11-18T10:00:00.000Z',
+    };
+    vi.mocked(getTaskReviews).mockResolvedValue([comment]);
+
+    renderWorkspace(taskFixture, [`/tasks/${taskFixture.id}?commentId=${comment.id}`]);
+
+    const suggestion = await screen.findByLabelText('Mentor suggestion');
+    expect(suggestion).toHaveAttribute('data-comment-highlighted', 'true');
+    expect(suggestion).toHaveTextContent('Remember to add accessible labels.');
+    await waitFor(() => expect(markTaskCommentRead).toHaveBeenCalledWith(comment.id));
   });
 });

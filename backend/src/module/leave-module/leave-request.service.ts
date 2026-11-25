@@ -1,5 +1,12 @@
-import type { CreateLeaveRequestInput, LeaveRequest, ReviewLeaveRequestInput } from '@itp/types';
+import type {
+  CreateLeaveRequestInput,
+  LeaveDecision,
+  LeaveRequest,
+  ReviewLeaveRequestInput,
+} from '@itp/types';
+import { env } from '../../config/env';
 import { ConflictError, NotFoundError } from '../../errors/AppError';
+import { SlackNotificationRepository } from '../slack-module/slack-notification.repository';
 import {
   LeaveRequestRepository,
   type CreateLeaveRequestRecord,
@@ -8,6 +15,7 @@ import {
 } from './leave-request.repository';
 
 const leaveRequestRepository = new LeaveRequestRepository();
+const slackNotificationRepository = new SlackNotificationRepository();
 
 function toLeaveRequest(row: LeaveRow): LeaveRequest {
   return {
@@ -26,9 +34,50 @@ function toLeaveRequest(row: LeaveRow): LeaveRequest {
     reviewerRole: row.reviewer_role,
     feedback: row.feedback,
     reviewedAt: row.reviewed_at?.toISOString() ?? null,
+    reviews: row.reviews.map((review) => ({
+      id: review.id,
+      reviewerId: review.reviewer_id,
+      reviewerName: review.reviewer_name,
+      reviewerRole: review.reviewer_role,
+      // The leave_review decision_is_final CHECK excludes PENDING.
+      decision: review.decision as LeaveDecision,
+      feedback: review.feedback,
+      reviewedAt: review.reviewed_at.toISOString(),
+    })),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
+}
+
+function isDuplicateNotification(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2002'
+  );
+}
+
+async function queueSlackNotification(row: LeaveRow): Promise<void> {
+  if (!env.SLACK_ENABLED) return;
+  const channelId = row.trainee.mentor?.slack_channel_id;
+  if (!channelId) return;
+
+  try {
+    await slackNotificationRepository.create({
+      eventType: 'leave.request',
+      channelId,
+      payload: { traineeName: row.trainee.name, subject: row.subject },
+      dedupeKey: `leave_request:${row.id}`,
+    });
+  } catch (error) {
+    if (!isDuplicateNotification(error)) {
+      console.error('[leave] failed to queue Slack notification', {
+        leaveRequestId: row.id,
+        error,
+      });
+    }
+  }
 }
 
 export class LeaveRequestService {
@@ -40,7 +89,9 @@ export class LeaveRequestService {
       subject: input.subject.trim(),
       reason: input.reason.trim(),
     };
-    return toLeaveRequest(await leaveRequestRepository.create(record));
+    const row = await leaveRequestRepository.create(record);
+    await queueSlackNotification(row);
+    return toLeaveRequest(row);
   };
 
   listMine = async (traineeId: string): Promise<LeaveRequest[]> => {
@@ -69,8 +120,9 @@ export class LeaveRequestService {
 
   /**
    * Both roles call this exact method. Its repository transaction re-checks
-   * scope and PENDING status before writing, so two simultaneous decisions
-   * cannot both succeed.
+   * scope and status before writing, so two simultaneous decisions cannot both
+   * succeed. A Manager may reject a Mentor-approved request or override a
+   * Mentor rejection (approve or re-reject); every other decided request is final.
    */
   review = async (
     reviewer: LeaveReviewer,

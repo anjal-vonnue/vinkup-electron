@@ -17,6 +17,12 @@ const progress = vi.hoisted(() => ({
 const notify = vi.hoisted(() => ({
   publishToMentor: vi.fn(),
 }));
+const slackRepo = vi.hoisted(() => ({
+  createInTx: vi.fn(),
+}));
+const envMock = vi.hoisted(() => ({
+  SLACK_ENABLED: false,
+}));
 
 vi.mock('./task.repository', () => ({
   TaskRepository: class {
@@ -39,8 +45,20 @@ vi.mock('../progress-module/progress.service', () => ({
 
 vi.mock('../realtime-module/realtime.notify', () => notify);
 
+vi.mock('../slack-module/slack-notification.repository', () => ({
+  SlackNotificationRepository: class {
+    createInTx = slackRepo.createInTx;
+  },
+}));
+
+vi.mock('../../config/env', () => ({
+  env: envMock,
+}));
+
 import { TaskService } from './task.service';
 import { realtimeBroker } from '../realtime-module/realtime.broker';
+
+type SubmitCallback = (tx: unknown, progress: unknown) => Promise<void>;
 
 const traineeId = 'trainee-1';
 const taskId = 'html-day-01-t-1';
@@ -65,6 +83,7 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    envMock.SLACK_ENABLED = false;
     service = new TaskService();
 
     progress.assertTaskUnlocked.mockResolvedValue(undefined);
@@ -75,12 +94,19 @@ describe('TaskService', () => {
     repo.findProgressStatus.mockResolvedValue(null);
     repo.saveFiles.mockResolvedValue({});
     repo.markSubmitted.mockImplementation((_t: string, _id: string, submittedAt: Date) =>
-      Promise.resolve({ last_submitted_at: submittedAt })
+      Promise.resolve({
+        last_submitted_at: submittedAt,
+        submission_count: 1,
+        review_status: 'pending',
+      })
     );
     repo.findSubmissionContext.mockResolvedValue({
       mentorId: null,
+      mentorSlackChannelId: null,
       traineeName: 'Asha',
       taskTitle: 'Profile page',
+      courseTitle: 'HTML & CSS',
+      dayNumber: 1,
     });
   });
 
@@ -98,6 +124,7 @@ describe('TaskService', () => {
         status: 'in_progress',
         reviewStatus: null,
         submissionCount: 0,
+        timeSpentSeconds: 0,
         day: { id: 'html-day-01', dayNumber: 1, courseTitle: 'HTML' },
         runtime: 'browser',
         runCommand: null,
@@ -217,7 +244,12 @@ describe('TaskService', () => {
         reviewStatus: 'pending',
         submissionCount: 1,
       });
-      expect(repo.markSubmitted).toHaveBeenCalledWith(traineeId, taskId, expect.any(Date));
+      expect(repo.markSubmitted).toHaveBeenCalledWith(
+        traineeId,
+        taskId,
+        expect.any(Date),
+        expect.any(Function)
+      );
     });
 
     it('rejects an approved task with a 409 without reading the row first', async () => {
@@ -239,8 +271,11 @@ describe('TaskService', () => {
     it('tells the assigned mentor who submitted which task', async () => {
       repo.findSubmissionContext.mockResolvedValue({
         mentorId: 'mentor-1',
+        mentorSlackChannelId: null,
         traineeName: 'Asha',
         taskTitle: 'Profile page',
+        courseTitle: 'HTML & CSS',
+        dayNumber: 1,
       });
       const publish = vi.spyOn(realtimeBroker, 'publish');
 
@@ -274,6 +309,194 @@ describe('TaskService', () => {
 
       await expect(service.submit(traineeId, taskId)).rejects.toBeInstanceOf(NotFoundError);
       expect(repo.markSubmitted).not.toHaveBeenCalled();
+    });
+
+    it('queues a Slack notification for the assigned mentor channel in the submission transaction', async () => {
+      envMock.SLACK_ENABLED = true;
+      const tx = {
+        trainee: {
+          findUnique: vi.fn().mockResolvedValue({
+            name: 'Asha',
+            mentor_id: 'mentor-1',
+            mentor: { slack_channel_id: 'C0123ABCDEF' },
+          }),
+        },
+        task: {
+          findUnique: vi.fn().mockResolvedValue({
+            title: 'Profile page',
+            curriculum_day: { day_number: 1, course: { title: 'HTML & CSS' } },
+          }),
+        },
+      };
+      repo.markSubmitted.mockImplementation(
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 2,
+            review_status: 'pending',
+          };
+          if (onSubmitted) await onSubmitted(tx, progressRow);
+          return progressRow;
+        }
+      );
+
+      await service.submit(traineeId, taskId);
+
+      const [passedTx, passedInput] = slackRepo.createInTx.mock.calls[0] as [
+        unknown,
+        {
+          eventType: string;
+          channelId: string;
+          dedupeKey: string;
+          payload: Record<string, unknown>;
+        },
+      ];
+      expect(passedTx).toBe(tx);
+      expect(passedInput.eventType).toBe('task.submission');
+      expect(passedInput.channelId).toBe('C0123ABCDEF');
+      expect(passedInput.dedupeKey).toBe(`task_submission:${traineeId}:${taskId}:2`);
+      expect(passedInput.payload).toMatchObject({
+        traineeName: 'Asha',
+        taskTitle: 'Profile page',
+        courseTitle: 'HTML & CSS',
+        dayNumber: 1,
+        submissionCount: 2,
+        reviewStatus: 'pending',
+      });
+    });
+
+    it('does not queue Slack notification when mentor has no channel', async () => {
+      envMock.SLACK_ENABLED = true;
+      const tx = {
+        trainee: {
+          findUnique: vi.fn().mockResolvedValue({
+            name: 'Asha',
+            mentor_id: 'mentor-1',
+            mentor: { slack_channel_id: null },
+          }),
+        },
+        task: {
+          findUnique: vi.fn().mockResolvedValue({
+            title: 'Profile page',
+            curriculum_day: { day_number: 1, course: { title: 'HTML & CSS' } },
+          }),
+        },
+      };
+      repo.markSubmitted.mockImplementation(
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
+          if (onSubmitted) await onSubmitted(tx, progressRow);
+          return progressRow;
+        }
+      );
+
+      await service.submit(traineeId, taskId);
+      expect(slackRepo.createInTx).not.toHaveBeenCalled();
+    });
+
+    it('does not queue Slack notification when Slack is disabled', async () => {
+      envMock.SLACK_ENABLED = false;
+      const tx = {
+        trainee: {
+          findUnique: vi.fn().mockResolvedValue({
+            name: 'Asha',
+            mentor_id: 'mentor-1',
+            mentor: { slack_channel_id: 'C0123ABCDEF' },
+          }),
+        },
+        task: {
+          findUnique: vi.fn().mockResolvedValue({
+            title: 'Profile page',
+            curriculum_day: { day_number: 1, course: { title: 'HTML & CSS' } },
+          }),
+        },
+      };
+      repo.markSubmitted.mockImplementation(
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
+          if (onSubmitted) await onSubmitted(tx, progressRow);
+          return progressRow;
+        }
+      );
+
+      await service.submit(traineeId, taskId);
+      expect(slackRepo.createInTx).not.toHaveBeenCalled();
+    });
+
+    it('fails submission when outbox persistence fails (same transaction)', async () => {
+      envMock.SLACK_ENABLED = true;
+      const tx = {
+        trainee: {
+          findUnique: vi.fn().mockResolvedValue({
+            name: 'Asha',
+            mentor_id: 'mentor-1',
+            mentor: { slack_channel_id: 'C0123ABCDEF' },
+          }),
+        },
+        task: {
+          findUnique: vi.fn().mockResolvedValue({
+            title: 'Profile page',
+            curriculum_day: { day_number: 1, course: { title: 'HTML & CSS' } },
+          }),
+        },
+      };
+      slackRepo.createInTx.mockRejectedValue(new Error('db write failed'));
+      repo.markSubmitted.mockImplementation(
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
+          if (onSubmitted) await onSubmitted(tx, progressRow);
+          return progressRow;
+        }
+      );
+
+      await expect(service.submit(traineeId, taskId)).rejects.toThrow('db write failed');
+    });
+
+    it('ignores duplicate outbox events without failing submission', async () => {
+      envMock.SLACK_ENABLED = true;
+      const tx = {
+        trainee: {
+          findUnique: vi.fn().mockResolvedValue({
+            name: 'Asha',
+            mentor_id: 'mentor-1',
+            mentor: { slack_channel_id: 'C0123ABCDEF' },
+          }),
+        },
+        task: {
+          findUnique: vi.fn().mockResolvedValue({
+            title: 'Profile page',
+            curriculum_day: { day_number: 1, course: { title: 'HTML & CSS' } },
+          }),
+        },
+      };
+      slackRepo.createInTx.mockRejectedValue({ code: 'P2002' });
+      repo.markSubmitted.mockImplementation(
+        async (_t: string, _id: string, submittedAt: Date, onSubmitted?: SubmitCallback) => {
+          const progressRow = {
+            last_submitted_at: submittedAt,
+            submission_count: 1,
+            review_status: 'pending',
+          };
+          if (onSubmitted) await onSubmitted(tx, progressRow);
+          return progressRow;
+        }
+      );
+
+      await expect(service.submit(traineeId, taskId)).resolves.toMatchObject({
+        status: 'completed',
+      });
     });
   });
 });

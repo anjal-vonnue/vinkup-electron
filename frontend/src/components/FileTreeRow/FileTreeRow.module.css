@@ -59,7 +59,7 @@
   color: var(--color-text-secondary);
 }
 
-.row:hover .deleteButton,
+/* .row:hover .deleteButton,
 .row:focus-within .deleteButton,
 .deleteButton:focus {
   display: flex;
@@ -67,4 +67,33 @@
 
 .deleteButton:hover {
   color: var(--color-status-error-text);
+} */
+.actionButton {
+  display: none;
+  align-items: center;
+  color: var(--color-text-secondary);
+}
+
+.row:hover .actionButton,
+.row:focus-within .actionButton,
+.actionButton:focus {
+  display: flex;
+}
+
+.actionButton:hover {
+  color: var(--color-text-primary);
+}
+
+.deleteButton:hover {
+  color: var(--color-status-error-text);
+}
+
+.row.rowDropTarget {
+  background-color: var(--color-accent-purple-wash);
+  outline: 1px dashed var(--color-accent-border);
+  outline-offset: -1px;
+}
+
+.rowDragging {
+  opacity: 0.5;
 }

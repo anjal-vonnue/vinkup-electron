@@ -26,7 +26,7 @@ their code and journal, and add new trainees.
   tabs is recorded for mentors and turned into an integrity score out of 100 (it never blocks the
   trainee).
 - **Dashboard, profile and typing test:** progress, time spent, typing speed and daily activity.
-- **Course certificates:** finishing every day of a course unlocks a printable certificate.
+- **Course certificates:** eligible trainees receive a persisted, signed certificate with a unique certificate ID. Certificates can be verified publicly and revoked by authorized staff. See [certificate security](docs/certificate-security.md).
 - **Journal, help and reference pages:** past journal entries with search, a help guide, and reading
   material for every day.
 - **Mentor dashboard** (`/admin`): only the trainees assigned to that mentor; cohort summary;
@@ -35,8 +35,10 @@ their code and journal, and add new trainees.
 - **Manager console** (`/manager`): create, edit, activate and deactivate mentors, managers and
   trainees; assign, reassign and unassign trainees. Reassignment takes effect immediately.
 - **Leave requests:** trainees submit a subject and reason and see only their own history; mentors
-  review requests from assigned trainees and managers review all requests through one shared approval
-  workflow. Decisions are recorded once and cannot be changed. See
+  review requests from assigned trainees and managers review all requests, including rejecting a
+  Mentor-approved request or approving/re-rejecting a Mentor-rejected one. Every decision is kept in
+  an append-only review history, so trainees see who approved or rejected and why. See the
+  [leave workflow](docs/leave-request-workflow.md) and
   [roles and assignments](docs/roles-and-assignments.md#7-leave-request-workflow).
 - **Three roles:** trainees, mentors and managers sign in the same way; each role only reaches its
   own pages and endpoints. See [roles and assignments](docs/roles-and-assignments.md).
@@ -138,6 +140,9 @@ Training-platform/
 | [API reference](docs/api-specifications.md)            | Every endpoint, with requests, responses and errors                  |
 | [Database](docs/database.md)                           | ER diagram and data dictionary                                       |
 | [Roles and assignments](docs/roles-and-assignments.md) | Role hierarchy, mentor assignment, authorization, migration strategy |
+| [Leave workflow](docs/leave-request-workflow.md)       | Leave statuses, Mentor/Manager decisions, append-only review history |
+| [Certificate security](docs/certificate-security.md)   | Certificate issuance, signatures, verification, revocation           |
+| [Slack integration](docs/slack-integration.md)         | Mentor channel setup, shared bot, outbox and retry behavior          |
 | [Release notes v0.2.0](docs/release-notes/v0.2.0.md)   | Mentor dashboard, certificates, integrity score and other changes    |
 | [Release notes v0.1.0](docs/release-notes/v0.1.0.md)   | What's in the first beta, known limitations and future scope         |
 

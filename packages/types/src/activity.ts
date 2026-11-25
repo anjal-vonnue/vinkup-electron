@@ -1,9 +1,11 @@
-export type FlagEventType = 'FULLSCREEN_EXIT' | 'TAB_SWITCH' | 'PASTE_BLOCKED' | 'WINDOW_BLUR';
+/** IDLE = no keyboard/mouse input on the task page for a while. Shown to mentors, never scored. */
+export type FlagEventType =
+  'FULLSCREEN_EXIT' | 'TAB_SWITCH' | 'PASTE_BLOCKED' | 'WINDOW_BLUR' | 'IDLE';
 
 /** POST /api/activity/:taskId/events — the server sets the timestamp */
 export type LogFlagEventRequest = {
   type: FlagEventType;
-  durationMs?: number; // how long the trainee was away, if known
+  durationMs?: number; // how long the trainee was away (or idle, for IDLE), if known
   context?: Record<string, string | number | boolean>; // e.g. { source: 'terminal' }
 };
 

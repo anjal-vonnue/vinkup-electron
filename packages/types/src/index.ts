@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 export * from './common';
 export * from './profile';
 export * from './dashboard';
@@ -12,5 +14,6 @@ export * from './desktop';
 export * from './auth';
 export * from './resources';
 export * from './realtime';
+export * from './aiReview';
 export * from './leave';
 export * from './checkpoint';

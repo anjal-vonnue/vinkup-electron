@@ -60,6 +60,7 @@ function currentMockUser() {
 
 const savedFiles = new Map<string, TaskFile[]>();
 const mockReviews: TaskReview[] = [];
+const readMockReviewIds = new Set<string>();
 const mockLeaveRequests: LeaveRequest[] = [];
 const JOURNAL_STORAGE_KEY = 'itp-mock-journals-v1';
 
@@ -82,6 +83,7 @@ function seedMockLeaveRequests(): void {
     reviewerRole: null,
     feedback: null,
     reviewedAt: null,
+    reviews: [],
   };
   mockLeaveRequests.push(
     {
@@ -188,6 +190,7 @@ function buildMockLeaveRequest(body: CreateLeaveRequestInput): LeaveRequest {
     reviewerRole: null,
     feedback: null,
     reviewedAt: null,
+    reviews: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -244,6 +247,7 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
   const dayCompleteMatch = /^\/days\/([^/]+)\/complete$/.exec(url);
   const dayJournalMatch = /^\/days\/([^/]+)\/journal$/.exec(url);
   const courseDaysMatch = /^\/courses\/([^/]+)\/days$/.exec(url);
+  const unreadCommentReadMatch = /^\/dashboard\/unread-comments\/([^/]+)\/read$/.exec(url);
   const adminTraineeMatch = /^\/admin\/trainees\/([^/]+)$/.exec(url);
   const adminFlagsMatch = /^\/admin\/trainees\/([^/]+)\/flags$/.exec(url);
   const adminCodeMatch = /^\/admin\/trainees\/([^/]+)\/tasks\/([^/]+)\/code$/.exec(url);
@@ -424,9 +428,6 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
     if (!request || !allowed) {
       return errorResponse(config, 404, 'NOT_FOUND', 'Leave request not found.');
     }
-    if (request.status !== 'PENDING') {
-      return errorResponse(config, 409, 'ALREADY_REVIEWED', 'This request was already reviewed.');
-    }
     const body = JSON.parse(config.data as string) as {
       decision: 'APPROVED' | 'REJECTED';
       feedback?: string;
@@ -434,15 +435,44 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
     if (body.decision === 'REJECTED' && !body.feedback?.trim()) {
       return errorResponse(config, 400, 'VALIDATION_FAILED', 'Add feedback before rejecting.');
     }
+    const reviewerRole = staffLeaveReviewMatch[1] === 'manager' ? 'MANAGER' : 'MENTOR';
+    const managerOverridingMentor = reviewerRole === 'MANAGER' && request.reviewerRole === 'MENTOR';
+    const isManagerRejectionOfApproval =
+      managerOverridingMentor && body.decision === 'REJECTED' && request.status === 'APPROVED';
+    const isManagerReviewOfMentorRejection =
+      managerOverridingMentor && request.status === 'REJECTED';
+    const alreadyReviewedByRole = request.reviews.some(
+      (review) => review.reviewerRole === reviewerRole
+    );
+    if (
+      (request.status !== 'PENDING' &&
+        !isManagerRejectionOfApproval &&
+        !isManagerReviewOfMentorRejection) ||
+      alreadyReviewedByRole
+    ) {
+      return errorResponse(config, 409, 'ALREADY_REVIEWED', 'This request was already reviewed.');
+    }
     const now = new Date().toISOString();
     const reviewed: LeaveRequest = {
       ...request,
       status: body.decision,
       reviewerId: currentMockUser().id,
       reviewerName: currentMockUser().name,
-      reviewerRole: staffLeaveReviewMatch[1] === 'manager' ? 'MANAGER' : 'MENTOR',
+      reviewerRole,
       feedback: body.feedback?.trim() || null,
       reviewedAt: now,
+      reviews: [
+        ...request.reviews,
+        {
+          id: `leave-review-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          reviewerId: currentMockUser().id,
+          reviewerName: currentMockUser().name,
+          reviewerRole,
+          decision: body.decision,
+          feedback: body.feedback?.trim() || null,
+          reviewedAt: now,
+        },
+      ],
       updatedAt: now,
     };
     Object.assign(request, reviewed);
@@ -542,6 +572,42 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
 
   if (method === 'get' && url === '/dashboard/rework') {
     return respond(config, 200, []);
+  }
+
+  if (method === 'get' && url === '/dashboard/unread-comments') {
+    const comments = mockReviews
+      .filter(
+        (review) =>
+          review.decision === 'approved' &&
+          review.feedback.trim() &&
+          !readMockReviewIds.has(review.id)
+      )
+      .flatMap((review) => {
+        const task = taskFixtureFor(review.taskId);
+        return task
+          ? [
+              {
+                id: review.id,
+                taskId: task.id,
+                taskTitle: task.title,
+                dayId: task.day.id,
+                dayNumber: task.day.dayNumber,
+                courseTitle: task.day.courseTitle,
+                adminId: review.adminId,
+                adminName: review.adminName,
+                submissionNo: review.submissionNo,
+                feedback: review.feedback,
+                reviewedAt: review.reviewedAt,
+              },
+            ]
+          : [];
+      });
+    return respond(config, 200, comments);
+  }
+
+  if (method === 'patch' && unreadCommentReadMatch) {
+    readMockReviewIds.add(unreadCommentReadMatch[1]);
+    return respond(config, 204, undefined);
   }
 
   if (method === 'get' && url === '/profile') {

@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useToast } from '../Toast';
 import { useFlagTracking } from '../../hooks/Useflagtracking';
+import { useIdleTracking } from '../../hooks/useIdleTracking';
 import type { ReviewStatus, TaskResponse } from '@itp/types';
-import { getTaskCode, getTaskReview, saveTaskCode, submitTask } from '../../api/tasks';
+import {
+  getTaskCode,
+  getTaskReview,
+  getTaskReviews,
+  saveTaskCode,
+  submitTask,
+} from '../../api/tasks';
+import { markTaskCommentRead } from '../../api/dashboard';
 import { applyRuntimeSettings } from '../../lib/monacoSetup';
 import {
   DEFAULT_SIDEBAR_PX,
@@ -41,6 +49,7 @@ import ConfirmDialog from '../ConfirmDialog';
 import EditorPane from '../EditorPane';
 import FilesPanel from '../FilesPanel';
 import InstructionsPanel from '../InstructionsPanel';
+import MentorSuggestion from '../MentorSuggestion/MentorSuggestion';
 import PaneResizer from '../PaneResizer';
 import SaveIndicator from '../SaveIndicator';
 import SubmitTaskButton from '../SubmitTaskButton';
@@ -52,17 +61,18 @@ import styles from './TaskWorkspace.module.css';
 type TaskWorkspaceProps = {
   task: TaskResponse;
   /** Tells the page whether the header timer should be stopped (task submitted, not in rework). */
-  onTimerStoppedChange?: (taskId: string, isStopped: boolean) => void;
 };
 
 type ResizableKind = 'sidebar' | 'result';
 
-export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorkspaceProps) {
+export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   const state = useWorkspaceState();
   const { mode, markWork } = useTaskActivityMode();
   useReportActivityMode(mode);
   const dispatch = useWorkspaceDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const dashboardCommentId = searchParams.get('commentId');
   const { exitWorkspace } = useWorkspaceSession();
   const runner = useRunner();
   const toast = useToast();
@@ -74,27 +84,104 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   );
   // Logs TAB_SWITCH / FULLSCREEN_EXIT and shows the toast. This is the only place exits are logged.
   useFlagTracking({ taskId: task.id, onWarning: showLeaveWarning });
+  // Records long stretches without input as an IDLE flag for the mentor. Silent for the trainee.
+  useIdleTracking({ taskId: task.id });
 
   const [isRefreshConfirmOpen, setIsRefreshConfirmOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(task.reviewStatus ?? null);
+  const [approvedSuggestion, setApprovedSuggestion] = useState<{
+    adminName: string;
+    feedback: string;
+  } | null>(null);
+  const [approvedSuggestions, setApprovedSuggestions] = useState<
+    { id: string; adminName: string; feedback: string }[]
+  >([]);
+  const [dashboardComment, setDashboardComment] = useState<{
+    id: string;
+    adminName: string;
+    feedback: string;
+  } | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   // Submitting can be repeated and doesn't lock editing; this only drives the pill and the label.
   const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
   const hasSubmitted = submittedAt !== null || task.status === 'completed';
   // Submitted and waiting for review (or approved): the timer stops. Rework runs it again.
-  const isTimerStopped = hasSubmitted && reviewStatus !== 'rework';
-
-  // The timer lives in the page header, outside this component, so report the value up.
-  useEffect(() => {
-    onTimerStoppedChange?.(task.id, isTimerStopped);
-  }, [onTimerStoppedChange, task.id, isTimerStopped]);
+  const isTimerStopped = reviewStatus === 'approved';
 
   useEffect(() => {
     applyRuntimeSettings(task.runtime);
   }, [task.runtime]);
+
+  // Load review history when opening a submitted task, including older approval
+  // comments that remain useful after a newer review cycle.
+  useEffect(() => {
+    if (task.status !== 'completed') return;
+
+    let cancelled = false;
+    Promise.all([getTaskReview(task.id), getTaskReviews(task.id)])
+      .then(async ([review, reviews]) => {
+        if (cancelled) return;
+        setReviewStatus(review.reviewStatus);
+        const latestReview = review.latestReview;
+        setApprovedSuggestion(
+          latestReview?.decision === 'approved' && latestReview.feedback.trim()
+            ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
+            : null
+        );
+        setApprovedSuggestions(
+          reviews
+            .filter((entry) => entry.decision === 'approved' && entry.feedback.trim())
+            .map((entry) => ({
+              id: entry.id,
+              adminName: entry.adminName,
+              feedback: entry.feedback,
+            }))
+        );
+        const visibleComments = reviews.filter(
+          (entry) => entry.decision === 'approved' && entry.feedback.trim()
+        );
+        await Promise.allSettled(visibleComments.map((entry) => markTaskCommentRead(entry.id)));
+      })
+      .catch(() => {
+        // Best effort: the reconnect refresh can catch a temporary failure.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id, task.status, task.reviewStatus]);
+
+  // A dashboard deep link can target an older approval comment on this task.
+  // Verify it against this trainee's task history before displaying and marking read.
+  useEffect(() => {
+    if (!dashboardCommentId) return;
+    let cancelled = false;
+    getTaskReviews(task.id)
+      .then(async (reviews) => {
+        const comment = reviews.find(
+          (review) =>
+            review.id === dashboardCommentId &&
+            review.decision === 'approved' &&
+            review.feedback.trim().length > 0
+        );
+        if (!comment || cancelled) return;
+        setDashboardComment({
+          id: comment.id,
+          adminName: comment.adminName,
+          feedback: comment.feedback,
+        });
+        await markTaskCommentRead(comment.id);
+      })
+      .catch(() => {
+        // A stale or unauthorized link should not prevent opening the task.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardCommentId, task.id]);
 
   const stateRef = useRef(state);
   useEffect(() => {
@@ -181,6 +268,7 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     const result = await submitTask(task.id);
     setSubmittedAt(new Date(result.submittedAt));
     setReviewStatus(result.reviewStatus);
+    setApprovedSuggestion(null);
     toast.show({
       message: reviewStatus === 'rework' ? 'Task resubmitted' : 'Task submitted',
       variant: 'success',
@@ -190,8 +278,26 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   /** Re-reads only the review state, so the code in the editor is never replaced. */
   const refreshReview = useCallback(async () => {
     try {
-      const review = await getTaskReview(task.id);
+      const [review, reviews] = await Promise.all([
+        getTaskReview(task.id),
+        getTaskReviews(task.id),
+      ]);
       setReviewStatus(review.reviewStatus);
+      const latestReview = review.latestReview;
+      setApprovedSuggestion(
+        latestReview?.decision === 'approved' && latestReview.feedback.trim()
+          ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
+          : null
+      );
+      setApprovedSuggestions(
+        reviews
+          .filter((entry) => entry.decision === 'approved' && entry.feedback.trim())
+          .map((entry) => ({
+            id: entry.id,
+            adminName: entry.adminName,
+            feedback: entry.feedback,
+          }))
+      );
     } catch {
       // Best effort: the next event or the next page load catches up.
     }
@@ -202,6 +308,12 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     if (event.type !== 'task.reviewed' || event.taskId !== task.id) return;
 
     setReviewStatus(event.reviewStatus);
+    setApprovedSuggestion(
+      event.reviewStatus === 'approved' && event.feedback.trim()
+        ? { adminName: event.mentorName, feedback: event.feedback }
+        : null
+    );
+    void refreshReview();
   });
 
   // After a stream reconnect, catch a review that landed while the stream was down.
@@ -369,6 +481,10 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
               reviewStatus={reviewStatus}
             />
           }
+          taskId={task.id}
+          timeSpentSeconds={task.timeSpentSeconds}
+          timerEnabled={!isTimerStopped}
+          timerAutoStart={!hasSubmitted}
         />
         <div
           ref={rowRef}
@@ -382,7 +498,31 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
                 onTabChange={(tab) => dispatch({ type: 'sidebarTabChanged', tab })}
                 fileCount={selectFileCount(state)}
                 onCollapse={() => dispatch({ type: 'paneToggled', pane: 'sidebar' })}
-                instructions={<InstructionsPanel markdown={task.instructionsMarkdown} />}
+                instructions={
+                  <>
+                    {dashboardComment ? (
+                      <MentorSuggestion
+                        adminName={dashboardComment.adminName}
+                        feedback={dashboardComment.feedback}
+                        highlighted
+                      />
+                    ) : approvedSuggestions.length > 0 ? (
+                      approvedSuggestions.map((suggestion) => (
+                        <MentorSuggestion
+                          key={suggestion.id}
+                          adminName={suggestion.adminName}
+                          feedback={suggestion.feedback}
+                        />
+                      ))
+                    ) : approvedSuggestion ? (
+                      <MentorSuggestion
+                        adminName={approvedSuggestion.adminName}
+                        feedback={approvedSuggestion.feedback}
+                      />
+                    ) : null}
+                    <InstructionsPanel markdown={task.instructionsMarkdown} />
+                  </>
+                }
                 files={<FilesPanel onRefresh={refreshFiles} />}
               />
             </div>

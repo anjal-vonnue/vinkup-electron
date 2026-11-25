@@ -262,7 +262,18 @@ export function buildCertificate(
       traineeName: mockUser.name,
       daysCompleted: DAY_COUNTS[courseId],
       completedAt: isoDaysAgo(1),
-      certificateId: `VK-${courseId.toUpperCase().padEnd(10, '0').slice(0, 10)}`,
+      issuedAt: isoDaysAgo(1),
+      certificateId: `VK-${courseId
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .padEnd(20, '0')
+        .slice(0, 20)}`,
+      status: 'ACTIVE',
+      signature: 'mock-signature',
+      signatureAlgorithm: 'Ed25519',
+      signatureVersion: 'v1',
+      startedAt: '2026-10-06T09:00:00.000Z',
+      timeSpentSeconds: 1,
     },
   };
 }

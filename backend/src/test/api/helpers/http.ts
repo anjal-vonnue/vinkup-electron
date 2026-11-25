@@ -14,6 +14,7 @@ export const api = {
     withCookie(request(app).put(url), cookie).send(body),
   patch: (url: string, body?: object, cookie?: string) =>
     withCookie(request(app).patch(url), cookie).send(body),
+  delete: (url: string, cookie?: string) => withCookie(request(app).delete(url), cookie),
 };
 
 function withCookie(req: request.Test, cookie?: string): request.Test {

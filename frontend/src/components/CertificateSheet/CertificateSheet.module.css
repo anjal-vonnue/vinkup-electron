@@ -13,52 +13,125 @@
   print-color-adjust: exact;
 }
 
+/* Three zones: header (top), main (fills + centres), footer (bottom) */
 .frame {
   position: relative;
   box-sizing: border-box;
   height: 100%;
-  padding: 4cqw 7cqw 7cqw;
+  padding: 4.5cqw 8cqw 4cqw;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   text-align: center;
+  overflow: hidden;
   border: 0.5cqw solid #7c41e4;
   outline: 0.2cqw solid #d9c8fb;
   outline-offset: -1.6cqw;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(124, 65, 228, 0.07), transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #fbf9ff 100%);
+}
+
+/* ---------- Decoration ---------- */
+.corner {
+  position: absolute;
+  width: 6cqw;
+  height: 6cqw;
+  color: #7c41e4;
+  pointer-events: none;
+}
+.cornerTl {
+  top: 2.4cqw;
+  left: 2.4cqw;
+}
+.cornerTr {
+  top: 2.4cqw;
+  right: 2.4cqw;
+  transform: scaleX(-1);
+}
+.cornerBl {
+  bottom: 2.4cqw;
+  left: 2.4cqw;
+  transform: scaleY(-1);
+}
+.cornerBr {
+  bottom: 2.4cqw;
+  right: 2.4cqw;
+  transform: scale(-1, -1);
+}
+
+.watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36cqw;
+  height: 26cqw;
+  transform: translate(-50%, -50%);
+  color: #7c41e4;
+  opacity: 0.045;
+  pointer-events: none;
+}
+
+/* Keep real content above the watermark */
+.header,
+.main,
+.footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Top ---------- */
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
 }
 
 .logo {
-  width: 7cqw;
-  height: 5cqw;
+  width: 85px;
+  height: 85px;
   color: #7c41e4;
   flex: none;
 }
 
 .kicker {
-  margin: 1cqw 0 0;
-  font-size: 1.5cqw;
+  margin: 0.8cqw 0 0;
+  font-size: 1.4cqw;
   font-weight: 800;
   letter-spacing: 0.4em;
+  text-indent: 0.4em; /* balances trailing letter-spacing */
   text-transform: uppercase;
   color: #6941c6;
 }
 
 .title {
-  margin: 2.2cqw 0 3cqw;
-  font-size: 4.6cqw;
+  margin: 1.8cqw 0 0;
+  font-size: 4.2cqw;
   font-weight: 800;
   letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* ---------- Middle ---------- */
+.main {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .lead {
-  margin: 0.6cqw 0;
-  font-size: 1.9cqw;
+  margin: 0.5cqw 0;
+  font-size: 1.8cqw;
   color: #5b5d6e;
 }
 
 .name {
-  margin: 1cqw 0;
+  margin: 1cqw 0 1.2cqw;
   max-width: 85%;
   font-size: 5cqw;
   font-weight: 800;
@@ -67,26 +140,47 @@
   color: #14162a;
 }
 
-.meta {
-  margin: 2.6cqw 0 0;
-  font-size: 1.9cqw;
-  font-weight: 700;
+.course {
+  margin: 0.8cqw 0 0;
+  max-width: 80%;
+  font-size: 2.8cqw;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #6941c6;
+}
+
+.description {
+  margin: 0.8cqw 0 0;
+  font-size: 1.7cqw;
+  line-height: 1.45;
+  color: #5b5d6e;
+}
+
+/* ---------- Bottom ---------- */
+.footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3cqw;
 }
 
 .id {
-  margin: 0.8cqw 0 0;
+  margin: 0;
   font-family: var(--font-mono);
-  font-size: 1.3cqw;
+  font-size: 1.2cqw;
   letter-spacing: 0.08em;
+  color: #6941c6;
+}
+
+.footerNote {
+  margin: 0;
+  font-size: 1.1cqw;
   color: #716c82;
 }
 
-.footer {
-  position: absolute;
-  bottom: 3cqw;
-  margin: 0;
-  font-size: 1.25cqw;
-  color: #716c82;
+span {
+  font-weight: bold;
 }
 
 @media print {

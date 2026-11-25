@@ -24,6 +24,7 @@ import { RoleRoute } from './routes/RoleRoute';
 import { CheckpointAttemptGate } from './routes/CheckpointAttemptGate';
 import LoaderOverlay from './components/Common/LoadingState';
 import CertificatePage from './pages/CertificatePage';
+import CertificateVerificationPage from './pages/CertificateVerificationPage/CertificateVerificationPage';
 
 const TaskPage = lazy(() => import('./pages/TaskPage'));
 const AdminTraineesPage = lazy(() => import('./pages/AdminTraineesPage'));
@@ -146,6 +147,7 @@ export default function App() {
                     </Suspense>
                   }
                 />
+                <Route path="/admin/verify-certificate" element={<CertificateVerificationPage />} />
               </Route>
 
               <Route element={<RoleRoute role="manager" />}>
@@ -181,11 +183,16 @@ export default function App() {
                     </Suspense>
                   }
                 />
+                <Route
+                  path="/manager/verify-certificate"
+                  element={<CertificateVerificationPage />}
+                />
               </Route>
             </Route>
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<LoginPage />} />
             </Route>
+            <Route path="/verify-certificate" element={<CertificateVerificationPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </WorkspaceSessionProvider>

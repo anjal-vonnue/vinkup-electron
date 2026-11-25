@@ -41,3 +41,11 @@ export async function getTaskReviews(taskId: string): Promise<TaskReviewListResp
 
   return res.data;
 }
+
+export async function recordTaskTime(
+  taskId: string,
+  body: { deltaSeconds: number }
+): Promise<{ timeSpentSeconds: number }> {
+  const res = await apiClient.post<{ timeSpentSeconds: number }>(`/tasks/${taskId}/time`, body);
+  return res.data;
+}

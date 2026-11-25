@@ -27,6 +27,7 @@ const code: AdminTaskCode = {
   ],
   codeUpdatedAt: '2026-10-02T12:12:00.000Z',
   lastSubmittedAt: null,
+  timeSpentSeconds: 0,
 };
 
 function renderPanel(overrides: Partial<Parameters<typeof AdminCodePanel>[0]> = {}) {
@@ -45,15 +46,25 @@ function renderPanel(overrides: Partial<Parameters<typeof AdminCodePanel>[0]> = 
 }
 
 describe('AdminCodePanel', () => {
-  it('shows the task, its state and a read-only viewer with every file', async () => {
+  it('shows the task, its state, instructions and the submission file tree', async () => {
     renderPanel();
 
     expect(screen.getByRole('heading', { name: 'Profile page' })).toBeInTheDocument();
     expect(screen.getByText('In progress')).toBeInTheDocument();
     expect(screen.getByText('Saved 02 Oct 2026, 17:42')).toBeInTheDocument();
+    expect(await screen.findByText('Build a profile page.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'INSTRUCTIONS.md' })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /index\.html/ })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /style\.css/ })).toBeInTheDocument();
+  });
+
+  it('shows the selected code file read-only', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(screen.getByRole('treeitem', { name: /index\.html/ }));
+
     expect(await screen.findByLabelText('index.html (read-only)')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /index\.html/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /style\.css/ })).toBeInTheDocument();
     expect(screen.getByText('Read only')).toBeInTheDocument();
   });
 
@@ -61,13 +72,16 @@ describe('AdminCodePanel', () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.click(await screen.findByRole('tab', { name: /style\.css/ }));
+    await user.click(screen.getByRole('treeitem', { name: /style\.css/ }));
 
     expect(screen.getByLabelText('style.css (read-only)')).toBeInTheDocument();
   });
 
   it('offers no way to edit, run, save or submit', async () => {
+    const user = userEvent.setup();
     renderPanel();
+
+    await user.click(screen.getByRole('treeitem', { name: /index\.html/ }));
     await screen.findByLabelText('index.html (read-only)');
 
     expect(
@@ -147,7 +161,7 @@ describe('AdminCodePanel', () => {
       expect(screen.getByRole('button', { name: /History/i })).toBeInTheDocument();
     });
 
-    it('approves a task when Approve is clicked', async () => {
+    it('approves a task with an optional mentor suggestion', async () => {
       vi.mocked(approveTask).mockResolvedValue({
         id: 'rev-app-1',
         taskId: 't1',
@@ -164,10 +178,35 @@ describe('AdminCodePanel', () => {
       renderPanel({ code: completedCode, onReviewSuccess });
 
       await user.click(screen.getByRole('button', { name: 'Approve' }));
+      expect(screen.getByRole('dialog', { name: /Approve: Profile page/ })).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Mentor suggestion (optional)'), 'Add a footer.');
+      await user.click(screen.getByRole('button', { name: 'Approve task' }));
 
-      expect(approveTask).toHaveBeenCalledWith('trainee-1', 't1');
+      expect(approveTask).toHaveBeenCalledWith('trainee-1', 't1', 'Add a footer.');
       expect(screen.getByText('Approved')).toBeInTheDocument();
       expect(onReviewSuccess).toHaveBeenCalledWith('t1', 'approved');
+    });
+
+    it('allows approval without a suggestion', async () => {
+      vi.mocked(approveTask).mockResolvedValue({
+        id: 'rev-app-empty',
+        taskId: 't1',
+        adminId: 'a1',
+        adminName: 'Admin',
+        submissionNo: 1,
+        decision: 'approved',
+        feedback: '',
+        reviewedAt: '2026-10-02T15:00:00.000Z',
+      });
+
+      const user = userEvent.setup();
+      renderPanel({ code: completedCode });
+
+      await user.click(screen.getByRole('button', { name: 'Approve' }));
+      await user.click(screen.getByRole('button', { name: 'Approve task' }));
+
+      expect(approveTask).toHaveBeenCalledWith('trainee-1', 't1', '');
+      expect(screen.getByText('Approved')).toBeInTheDocument();
     });
 
     it('opens rework modal, validates feedback, and submits rework request', async () => {

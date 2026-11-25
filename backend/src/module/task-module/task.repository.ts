@@ -71,24 +71,42 @@ export class TaskRepository {
     taskId: string
   ): Promise<{
     mentorId: string | null;
+    mentorSlackChannelId: string | null;
     traineeName: string;
     taskTitle: string;
+    courseTitle: string;
+    dayNumber: number | null;
   }> => {
     const [trainee, task] = await Promise.all([
       prisma.trainee.findUnique({
         where: { id: traineeId },
-        select: { name: true, mentor_id: true },
+        select: {
+          name: true,
+          mentor_id: true,
+          mentor: { select: { slack_channel_id: true } },
+        },
       }),
       prisma.task.findUnique({
         where: { id: taskId },
-        select: { title: true },
+        select: {
+          title: true,
+          curriculum_day: {
+            select: {
+              day_number: true,
+              course: { select: { title: true } },
+            },
+          },
+        },
       }),
     ]);
 
     return {
       mentorId: trainee?.mentor_id ?? null,
+      mentorSlackChannelId: trainee?.mentor?.slack_channel_id ?? null,
       traineeName: trainee?.name ?? '',
       taskTitle: task?.title ?? '',
+      courseTitle: task?.curriculum_day?.course?.title ?? '',
+      dayNumber: task?.curriculum_day?.day_number ?? null,
     };
   };
 
@@ -124,6 +142,62 @@ export class TaskRepository {
   };
 
   /**
+   * Adds `deltaSeconds` to the trainee's accumulated time on the task.
+   *
+   * Uses a create-if-missing/otherwise-increment pattern so the very first
+   * heartbeat (which arrives before any file save) creates the progress row
+   * and lets the mentor see "started" at the same moment the client does.
+   *
+   * `deltaSeconds` is capped server-side so a stalled/sleeping client or a
+   * tampered payload cannot inject unbounded time.
+   *
+   * `onCreated` runs only when the row was first created, so the service can
+   * publish `task.started` without duplicating `saveCode`'s notification.
+   */
+  recordTimeHeartbeat = async (
+    traineeId: string,
+    taskId: string,
+    deltaSeconds: number,
+    now: Date,
+    onCreated?: (progress: task_progress) => Promise<void>
+  ): Promise<{ created: boolean; timeSpentSeconds: number }> => {
+    const MAX_DELTA_SECONDS = 300;
+    const safeDelta = Math.max(0, Math.min(Math.floor(deltaSeconds), MAX_DELTA_SECONDS));
+
+    try {
+      const created = await prisma.task_progress.create({
+        data: {
+          trainee_id: traineeId,
+          task_id: taskId,
+          status: 'in_progress',
+          time_spent_seconds: safeDelta,
+          last_heartbeat_at: now,
+        },
+      });
+      if (onCreated) await onCreated(created);
+      return { created: true, timeSpentSeconds: created.time_spent_seconds };
+    } catch (error) {
+      // P2002 = unique constraint on (trainee_id, task_id) — a save or another
+      // heartbeat created the row first. Fall through to the increment path.
+      const code = (error as { code?: string } | null)?.code;
+      if (code !== 'P2002') throw error;
+    }
+
+    const updated = await prisma.task_progress.update({
+      where: {
+        trainee_id_task_id: { trainee_id: traineeId, task_id: taskId },
+      },
+      data: {
+        time_spent_seconds: { increment: safeDelta },
+        last_heartbeat_at: now,
+      },
+      select: { time_spent_seconds: true },
+    });
+
+    return { created: false, timeSpentSeconds: updated.time_spent_seconds };
+  };
+
+  /**
    * Marks the task completed as a new submission attempt.
    *
    * Creates an immutable-in-practice snapshot of the current working files
@@ -142,7 +216,8 @@ export class TaskRepository {
   markSubmitted = async (
     traineeId: string,
     taskId: string,
-    submittedAt: Date
+    submittedAt: Date,
+    onSubmitted?: (tx: Prisma.TransactionClient, progress: task_progress) => Promise<void>
   ): Promise<task_progress | null> => {
     const key = {
       trainee_id: traineeId,
@@ -187,7 +262,7 @@ export class TaskRepository {
 
       // First submission: create the progress row and its snapshot.
       if (!existing) {
-        return tx.task_progress.create({
+        const created = await tx.task_progress.create({
           data: {
             trainee_id: traineeId,
             task_id: taskId,
@@ -200,6 +275,8 @@ export class TaskRepository {
             last_submitted_at: submittedAt,
           },
         });
+        if (onSubmitted) await onSubmitted(tx, created);
+        return created;
       }
 
       // Conditional update protects against an approval happening
@@ -225,9 +302,11 @@ export class TaskRepository {
         return null;
       }
 
-      return tx.task_progress.findUniqueOrThrow({
+      const progress = await tx.task_progress.findUniqueOrThrow({
         where: { id: existing.id },
       });
+      if (onSubmitted) await onSubmitted(tx, progress);
+      return progress;
     });
   };
 }

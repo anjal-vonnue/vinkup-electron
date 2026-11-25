@@ -70,6 +70,7 @@ function installDesktopApi(
     onOpenFind: () => () => undefined,
     onFindResult: () => () => undefined,
     onEscape: () => () => undefined,
+    onActivity: () => () => undefined,
   };
 
   window.desktop = { resources } as unknown as DesktopApi;

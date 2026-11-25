@@ -83,10 +83,15 @@ export class AdminRepository {
       select: { trainee_id: true, wpm: true },
     });
 
+  /** "Flags this week" per trainee. Idle flags are left out: they are only shown in the Flags tab. */
   flagCountsSince = (since: Date, traineeIds: string[]) =>
     prisma.flag_event.groupBy({
       by: ['trainee_id'],
-      where: { timestamp: { gte: since }, trainee_id: { in: traineeIds } },
+      where: {
+        timestamp: { gte: since },
+        trainee_id: { in: traineeIds },
+        type: { not: 'IDLE' },
+      },
       _count: { _all: true },
     });
 
@@ -149,6 +154,7 @@ export class AdminRepository {
         first_submitted_at: true,
         last_submitted_at: true,
         code_updated_at: true,
+        time_spent_seconds: true,
       },
     });
 
@@ -204,7 +210,25 @@ export class AdminRepository {
   findStartedTasks = (traineeIds: string[]) => {
     return prisma.task_progress.findMany({
       where: { trainee_id: { in: traineeIds }, status: { in: ['in_progress', 'completed'] } },
-      select: { trainee_id: true, task_id: true, task: { select: { curriculum_day_id: true } } },
+      select: {
+        trainee_id: true,
+        task_id: true,
+        status: true,
+        review_status: true,
+        last_submitted_at: true,
+        task: {
+          select: {
+            title: true,
+            curriculum_day_id: true,
+            curriculum_day: {
+              select: {
+                day_number: true,
+                course: { select: { title: true } },
+              },
+            },
+          },
+        },
+      },
     });
   };
 
@@ -281,5 +305,27 @@ export class AdminRepository {
       where: { trainee_id: { in: traineeIds }, taken_at: { lt: before } },
       select: { trainee_id: true, wpm: true, taken_at: true },
       orderBy: { taken_at: 'asc' },
+    });
+
+  // ---------- mentor Slack channel configuration ----------
+
+  findSlackChannel = (mentorId: string) =>
+    prisma.admin.findUnique({
+      where: { id: mentorId },
+      select: { slack_channel_id: true },
+    });
+
+  saveSlackChannel = (mentorId: string, channelId: string) =>
+    prisma.admin.update({
+      where: { id: mentorId },
+      data: { slack_channel_id: channelId },
+      select: { slack_channel_id: true },
+    });
+
+  deleteSlackChannel = (mentorId: string) =>
+    prisma.admin.update({
+      where: { id: mentorId },
+      data: { slack_channel_id: null },
+      select: { slack_channel_id: true },
     });
 }

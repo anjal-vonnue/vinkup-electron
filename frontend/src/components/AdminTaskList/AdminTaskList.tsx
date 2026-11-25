@@ -23,6 +23,8 @@ type AdminTaskListProps = {
   /** Which review state to show. Kept by the page, so it survives a reload after a review. */
   filter: TaskReviewFilter;
   onFilterChange: (filter: TaskReviewFilter) => void;
+  onAnalyzeWithAi?: () => void;
+  aiEligibleCount?: number;
   traineeId?: string;
   traineeName?: string;
 };
@@ -52,6 +54,8 @@ export default function AdminTaskList({
   onViewCode,
   filter,
   onFilterChange,
+  onAnalyzeWithAi,
+  aiEligibleCount = 0,
   traineeId = '',
   traineeName = 'trainee',
 }: AdminTaskListProps) {
@@ -174,6 +178,20 @@ export default function AdminTaskList({
           >
             <Download size={14} aria-hidden="true" /> Download tasks
           </button>
+          {onAnalyzeWithAi && (
+            <button
+              type="button"
+              className={`${styles.filter} ${styles.download} ${styles.analyze}`}
+              onClick={onAnalyzeWithAi}
+              disabled={aiEligibleCount === 0}
+              title={
+                aiEligibleCount === 0 ? 'There are no submitted tasks awaiting review.' : undefined
+              }
+            >
+              Analyze with AI
+              {aiEligibleCount > 0 && <span className={styles.filterCount}>{aiEligibleCount}</span>}
+            </button>
+          )}
         </div>
       )}
 

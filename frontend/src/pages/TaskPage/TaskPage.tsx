@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router';
 import { Lock } from 'lucide-react';
 import Header from '../../components/Header';
-import SessionTimer from '../../components/SessionTimer';
 import TaskBreadcrumb from '../../components/TaskBreadcrumb';
 import TaskPageSkeleton from '../../components/TaskPageSkeleton';
 import TaskWorkspace from '../../components/TaskWorkspace';
@@ -14,7 +13,6 @@ import { useWorkspaceSession } from '../../context/WorkspaceSessionContext';
 import styles from './TaskPage.module.css';
 
 type TaskData = ReturnType<typeof useTaskData>;
-type TimerStoppedChange = (taskId: string, isStopped: boolean) => void;
 
 type MessageScreenProps = {
   icon: ReactNode;
@@ -53,10 +51,9 @@ function DashboardLink() {
 
 type TaskPageBodyProps = {
   data: TaskData;
-  onTimerStoppedChange: TimerStoppedChange;
 };
 
-function TaskPageBody({ data, onTimerStoppedChange }: TaskPageBodyProps) {
+function TaskPageBody({ data }: TaskPageBodyProps) {
   const { restoreWorkspace } = useWorkspaceSession();
 
   if (data.status === 'loading') {
@@ -111,7 +108,7 @@ function TaskPageBody({ data, onTimerStoppedChange }: TaskPageBodyProps) {
     >
       <EditorProvider>
         <RunnerProvider>
-          <TaskWorkspace task={data.task} onTimerStoppedChange={onTimerStoppedChange} />
+          <TaskWorkspace task={data.task} />
         </RunnerProvider>
       </EditorProvider>
     </WorkspaceProvider>
@@ -151,31 +148,11 @@ export default function TaskPage() {
       />
     ) : undefined;
 
-  // The workspace reports whether the timer should stop (it knows about submits and reviews).
-  // The task id is stored too, so a value from the previous task is never used for this one.
-  const [timerStopped, setTimerStopped] = useState<{ taskId: string; isStopped: boolean } | null>(
-    null
-  );
-  const handleTimerStoppedChange = useCallback<TimerStoppedChange>((id, isStopped) => {
-    setTimerStopped({ taskId: id, isStopped });
-  }, []);
-
-  let sessionTimer: ReactNode;
-  if (data.status === 'success') {
-    const { task } = data;
-    // Until the workspace reports, use the loaded task: already submitted and not sent back.
-    const isTimerStopped =
-      timerStopped?.taskId === task.id
-        ? timerStopped.isStopped
-        : task.status === 'completed' && task.reviewStatus !== 'rework';
-    sessionTimer = <SessionTimer key={task.id} isStopped={isTimerStopped} />;
-  }
-
   return (
     <div className={styles.page}>
-      <Header leading={breadcrumb} status={sessionTimer} />
+      <Header leading={breadcrumb} />
       <div className={styles.body}>
-        <TaskPageBody data={data} onTimerStoppedChange={handleTimerStoppedChange} />
+        <TaskPageBody data={data} />
       </div>
     </div>
   );

@@ -28,6 +28,17 @@ const existing: LeaveRequest = {
   reviewerRole: 'MENTOR',
   feedback: 'Please request earlier next time.',
   reviewedAt: '2026-11-21T12:00:00.000Z',
+  reviews: [
+    {
+      id: 'review-1',
+      reviewerId: 'mentor-1',
+      reviewerName: 'Test Mentor',
+      reviewerRole: 'MENTOR',
+      decision: 'REJECTED',
+      feedback: 'Please request earlier next time.',
+      reviewedAt: '2026-11-21T12:00:00.000Z',
+    },
+  ],
   createdAt: submittedAt,
   updatedAt: '2026-11-21T12:00:00.000Z',
 };
@@ -43,6 +54,39 @@ const created: LeaveRequest = {
   reviewerRole: null,
   feedback: null,
   reviewedAt: null,
+  reviews: [],
+};
+
+const approvedThenRejected: LeaveRequest = {
+  ...existing,
+  id: 'request-3',
+  subject: 'Conference in July',
+  status: 'REJECTED',
+  reviewerId: 'manager-1',
+  reviewerName: 'Mock Manager',
+  reviewerRole: 'MANAGER',
+  feedback: 'The dates changed.',
+  reviewedAt: '2026-11-21T14:00:00.000Z',
+  reviews: [
+    {
+      id: 'review-1',
+      reviewerId: 'mentor-1',
+      reviewerName: 'Mock Mentor',
+      reviewerRole: 'MENTOR',
+      decision: 'APPROVED',
+      feedback: 'Enjoy the conference.',
+      reviewedAt: '2026-11-21T12:00:00.000Z',
+    },
+    {
+      id: 'review-2',
+      reviewerId: 'manager-1',
+      reviewerName: 'Mock Manager',
+      reviewerRole: 'MANAGER',
+      decision: 'REJECTED',
+      feedback: 'The dates changed.',
+      reviewedAt: '2026-11-21T14:00:00.000Z',
+    },
+  ],
 };
 
 describe('LeaveRequestsPage', () => {
@@ -57,9 +101,21 @@ describe('LeaveRequestsPage', () => {
 
     expect(await screen.findByText('Conference')).toBeTruthy();
     expect(screen.getByText('Attending a two-day conference.')).toBeTruthy();
-    expect(screen.getByText('rejected')).toBeTruthy();
+    expect(screen.getAllByText('rejected').length).toBeGreaterThan(0);
     expect(screen.getByText(/Test Mentor \(mentor\)/)).toBeTruthy();
     expect(screen.getByText(/Please request earlier next time./)).toBeTruthy();
+  });
+
+  it('shows both decisions after a Manager rejects a Mentor approval', async () => {
+    vi.mocked(getMyLeaveRequests).mockResolvedValue([approvedThenRejected]);
+
+    render(<LeaveRequestsPage />);
+
+    expect(await screen.findByText('Conference in July')).toBeTruthy();
+    expect(screen.getByText(/Mock Mentor \(mentor\)/)).toBeTruthy();
+    expect(screen.getByText(/Mock Manager \(manager\)/)).toBeTruthy();
+    expect(screen.getByText(/Enjoy the conference./)).toBeTruthy();
+    expect(screen.getByText(/The dates changed./)).toBeTruthy();
   });
 
   it('shows an empty state when the trainee has no requests', async () => {

@@ -4,6 +4,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  powerMonitor,
   safeStorage,
   session,
   shell,
@@ -36,6 +37,7 @@ import { saveCertificatePdf } from './certificatePdf';
 import { GnomeShortcutProtection } from './gnomeShortcutProtection';
 import { startOverlayServer, type OverlayServer } from './overlayServer';
 import { getScreenProtectionDisabled } from './screenProtectionConfig';
+import { ScreenLockWatcher } from './screenLockWatcher';
 import { BUNDLED_ALLOWLIST } from './resources/allowlist';
 import { loadResourcesAllowlist } from './resources/allowlist-source';
 import { ResourcesBrowser } from './resources/browser';
@@ -52,12 +54,18 @@ import {
 const isDev = process.env.NODE_ENV === 'development';
 const AUTH_COOKIE_NAME = 'auth_token';
 const DISABLE_SCREEN_PROTECTION = getScreenProtectionDisabled();
+/** Input in our own second-screen window is passed on to the task page at most this often. */
+const OWN_WINDOW_ACTIVITY_THROTTLE_MS = 5000;
+/** Linux has no 'lock-screen' event, so the lock state is checked this often there. */
+const SCREEN_LOCK_POLL_MS = 15_000;
 
 let mainWindow: BrowserWindow | null = null;
 let localServer: LocalServer | null = null;
 let overlayServer: OverlayServer | null = null;
 let trustedOrigin: string | null = null;
 let authManager: DesktopAuthManager | null = null;
+let screenLockWatcher: ScreenLockWatcher | null = null;
+let lastOwnWindowActivityAt = 0;
 let displayWindowManager: DisplayWindowManager | null = null;
 let gnomeShortcutProtection: GnomeShortcutProtection | null = null;
 let resourcesBrowser: ResourcesBrowser | null = null;
@@ -134,6 +142,14 @@ async function bootstrap(): Promise<void> {
 
   resourcesBrowser = createResourcesBrowser(window);
 
+  // Screen lock / sleep ends the task page's idle stretch and blur flag without flagging.
+  screenLockWatcher = new ScreenLockWatcher(
+    powerMonitor,
+    (locked) => sendToRenderer('power:screen-lock-changed', locked),
+    process.platform === 'linux' ? SCREEN_LOCK_POLL_MS : undefined
+  );
+  screenLockWatcher.start();
+
   // The shared allowlist can be updated without shipping a release. This never
   // blocks startup: the bundled copy is already in use.
   void refreshResourcesAllowlist();
@@ -159,6 +175,12 @@ function createResourcesBrowser(
     onOpenFind: () => sendEvent('resources:open-find'),
     onFindResult: (result) => sendEvent('resources:find-result', result),
     onEscape: () => sendEvent('resources:escape'),
+    onActivity: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:activity');
+    },
+    // A secondary-display browser is our own window: its input counts as activity.
+    onInput: trackMainWindowFocus ? undefined : notifyOwnWindowActivity,
   });
   browser.setLocalPorts(localServicePorts?.snapshot() ?? new Set());
   return browser;
@@ -195,8 +217,17 @@ function createDisplayWindowManager(
       if (!window.isDestroyed()) {
         window.webContents.send('window:allowed-overlay-content-focus-changed', isFocused);
       }
-    }
+    },
+    notifyOwnWindowActivity
   );
+}
+
+/** Tells the task page "the trainee is using our second-screen window" (throttled). */
+function notifyOwnWindowActivity(): void {
+  const now = Date.now();
+  if (now - lastOwnWindowActivityAt < OWN_WINDOW_ACTIVITY_THROTTLE_MS) return;
+  lastOwnWindowActivityAt = now;
+  sendToRenderer('window:own-window-activity', undefined);
 }
 
 async function refreshResourcesAllowlist(): Promise<void> {
@@ -568,6 +599,11 @@ function registerIpcHandlers(): void {
       secondaryResourcesBrowsers.get(overlayWindow)?.close();
     }
     displayWindowManager?.setOverlayResourcesActive(event.sender, active);
+  });
+
+  ipcMain.on('resources:activity', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('resources:activity');
   });
 
   ipcMain.handle('browser:get-availability', (event) => {
@@ -1023,6 +1059,8 @@ app.on('before-quit', (event) => {
   // TODO: ask the renderer to flush activity time before the app exits.
   displayWindowManager?.dispose();
   displayWindowManager = null;
+  screenLockWatcher?.dispose();
+  screenLockWatcher = null;
   authManager?.dispose();
   authManager = null;
   localServicePorts?.dispose();

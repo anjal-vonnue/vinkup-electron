@@ -1,7 +1,14 @@
-import type { CourseCertificate } from '@itp/types';
+import type { CertificateVerificationResponse, CourseCertificate } from '@itp/types';
 import { ForbiddenError, NotFoundError } from '../../errors/AppError';
+import { prisma } from '../../lib/prisma';
 import { CertificateRepository } from './certificate.repository';
-import { buildCertificateId } from './certificate.util';
+import {
+  CERTIFICATE_SIGNATURE_ALGORITHM,
+  CERTIFICATE_SIGNATURE_VERSION,
+  signCertificatePayload,
+  verifyCertificatePayload,
+} from './certificate-signature.util';
+import { generateCertificateId } from './certificate.util';
 
 const certificateRepository = new CertificateRepository();
 
@@ -26,6 +33,68 @@ type RequiredTaskProgress = {
     review_status: string | null;
   }[];
 };
+
+type CertificateRecord = {
+  certificate_id: string;
+  trainee_id: string;
+  course_id: string;
+  trainee_name: string;
+  course_title: string;
+  days_completed: number;
+  completed_at: Date;
+  issued_at: Date;
+  status: 'ACTIVE' | 'REVOKED';
+  revoked_at: Date | null;
+  signature: string;
+  signature_algorithm: string;
+  signature_version: string;
+};
+
+/** Live activity numbers derived from task_progress (see repository). */
+type CourseActivity = {
+  startedAt: Date;
+  timeSpentSeconds: number;
+};
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2002'
+  );
+}
+
+function toCourseCertificate(
+  record: CertificateRecord,
+  activity: CourseActivity
+): CourseCertificate {
+  return {
+    courseId: record.course_id,
+    courseTitle: record.course_title,
+    traineeName: record.trainee_name,
+    daysCompleted: record.days_completed,
+    startedAt: activity.startedAt.toISOString(),
+    completedAt: record.completed_at.toISOString(),
+    issuedAt: record.issued_at.toISOString(),
+    timeSpentSeconds: activity.timeSpentSeconds,
+    certificateId: record.certificate_id,
+    status: record.status,
+    signature: record.signature,
+    signatureAlgorithm: record.signature_algorithm,
+    signatureVersion: record.signature_version,
+  };
+}
+
+function toVerificationPayload(record: CertificateRecord) {
+  return {
+    certificateId: record.certificate_id,
+    traineeName: record.trainee_name,
+    courseTitle: record.course_title,
+    completedAt: record.completed_at.toISOString(),
+    issuedAt: record.issued_at.toISOString(),
+  };
+}
 
 /**
  * Pure: calculates course completion and certificate eligibility.
@@ -113,14 +182,37 @@ export function summarizeCompletions(
 }
 
 export class CertificateService {
-  private async loadSummary(traineeId: string) {
+  private async loadSummary(
+    traineeId: string,
+    db: Parameters<typeof certificateRepository.findAllDays>[0] = prisma
+  ) {
     const [days, completions, requiredTasks] = await Promise.all([
-      certificateRepository.findAllDays(),
-      certificateRepository.findCompletions(traineeId),
-      certificateRepository.findRequiredTaskProgress(traineeId),
+      certificateRepository.findAllDays(db),
+      certificateRepository.findCompletions(traineeId, db),
+      certificateRepository.findRequiredTaskProgress(traineeId, db),
     ]);
 
     return summarizeCompletions(days, completions, requiredTasks);
+  }
+
+  /**
+   * Reads the two derived numbers the certificate sheet shows (start date and
+   * total active time) and maps a persisted certificate row to the response.
+   *
+   * The `startedAt` falls back to `completed_at` when there are no
+   * task_progress rows, which can only happen for a legacy certificate issued
+   * before time tracking existed. `timeSpentSeconds` falls back to 0.
+   */
+  private async describeCertificate(record: CertificateRecord): Promise<CourseCertificate> {
+    const activity = await certificateRepository.findCourseActivity(
+      record.trainee_id,
+      record.course_id
+    );
+
+    return toCourseCertificate(record, {
+      startedAt: activity.startedAt ?? record.completed_at,
+      timeSpentSeconds: activity.timeSpentSeconds,
+    });
   }
 
   /**
@@ -136,35 +228,174 @@ export class CertificateService {
   }
 
   /**
-   * 404 for an unknown course.
-   * 403 until every day is completed and every required task is approved.
+   * Issues a certificate when eligible, or returns the existing persisted certificate.
+   * 404 for an unknown course. 403 until every day is completed and every required task is approved.
    */
   async getCourseCertificate(traineeId: string, courseId: string): Promise<CourseCertificate> {
-    const course = await certificateRepository.findCourse(courseId);
+    const existing = await certificateRepository.findCertificateByTraineeAndCourse(
+      traineeId,
+      courseId
+    );
+    if (existing) return this.describeCertificate(existing);
 
+    const course = await certificateRepository.findCourse(courseId);
     if (!course) {
       throw new NotFoundError('Course not found.');
     }
 
     const completion = (await this.loadSummary(traineeId)).get(courseId);
-
     if (!completion?.complete || !completion.allTasksApproved || !completion.completedAt) {
       throw new ForbiddenError(CERTIFICATE_LOCKED_MESSAGE);
     }
 
     const trainee = await certificateRepository.findTrainee(traineeId);
-
     if (!trainee) {
       throw new NotFoundError('Trainee not found.');
     }
 
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const certificateId = generateCertificateId();
+
+      try {
+        const created = await prisma.$transaction(async (tx) => {
+          const existingInTx = await certificateRepository.findCertificateByTraineeAndCourse(
+            traineeId,
+            courseId,
+            tx
+          );
+          if (existingInTx) return existingInTx;
+
+          const summaryInTx = (await this.loadSummary(traineeId, tx)).get(courseId);
+          if (!summaryInTx?.complete || !summaryInTx.allTasksApproved || !summaryInTx.completedAt) {
+            throw new ForbiddenError(CERTIFICATE_LOCKED_MESSAGE);
+          }
+
+          const courseInTx = await certificateRepository.findCourse(courseId, tx);
+          const traineeInTx = await certificateRepository.findTrainee(traineeId, tx);
+          if (!courseInTx) throw new NotFoundError('Course not found.');
+          if (!traineeInTx) throw new NotFoundError('Trainee not found.');
+
+          const txIssuedAt = new Date();
+          const txPayload = {
+            certificateId,
+            traineeName: traineeInTx.name,
+            courseTitle: courseInTx.title,
+            completedAt: summaryInTx.completedAt.toISOString(),
+            issuedAt: txIssuedAt.toISOString(),
+          };
+
+          return await certificateRepository.createCertificate(
+            {
+              certificate_id: certificateId,
+              trainee_id: traineeId,
+              course_id: courseId,
+              trainee_name: traineeInTx.name,
+              course_title: courseInTx.title,
+              days_completed: summaryInTx.dayCount,
+              completed_at: summaryInTx.completedAt,
+              issued_at: txIssuedAt,
+              signature: signCertificatePayload(txPayload),
+              signature_algorithm: CERTIFICATE_SIGNATURE_ALGORITHM,
+              signature_version: CERTIFICATE_SIGNATURE_VERSION,
+            },
+            tx
+          );
+        });
+
+        return this.describeCertificate(created);
+      } catch (error) {
+        if (isUniqueConstraintError(error)) {
+          const conflict = await certificateRepository.findCertificateByTraineeAndCourse(
+            traineeId,
+            courseId
+          );
+          if (conflict) return this.describeCertificate(conflict);
+          // Certificate ID collision is extremely unlikely; retry with a new ID.
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new Error('Failed to generate a unique certificate ID.');
+  }
+
+  async verifyCertificate(certificateId: string): Promise<CertificateVerificationResponse> {
+    const record = (await certificateRepository.findCertificateByCertificateId(
+      certificateId
+    )) as CertificateRecord | null;
+
+    if (!record) {
+      return {
+        valid: false,
+        signatureValid: false,
+        status: 'UNKNOWN',
+        certificateId,
+        traineeName: null,
+        courseTitle: null,
+        completedAt: null,
+        issuedAt: null,
+        message: 'Certificate not found.',
+      };
+    }
+
+    const signatureValid = verifyCertificatePayload(
+      toVerificationPayload(record),
+      record.signature
+    );
+
+    if (!signatureValid) {
+      return {
+        valid: false,
+        signatureValid: false,
+        status: record.status,
+        certificateId: record.certificate_id,
+        traineeName: record.trainee_name,
+        courseTitle: record.course_title,
+        completedAt: record.completed_at.toISOString(),
+        issuedAt: record.issued_at.toISOString(),
+        message: 'Certificate signature is invalid.',
+      };
+    }
+
+    if (record.status === 'REVOKED') {
+      return {
+        valid: false,
+        signatureValid: true,
+        status: 'REVOKED',
+        certificateId: record.certificate_id,
+        traineeName: record.trainee_name,
+        courseTitle: record.course_title,
+        completedAt: record.completed_at.toISOString(),
+        issuedAt: record.issued_at.toISOString(),
+        message: 'Certificate has been revoked.',
+      };
+    }
+
     return {
-      courseId: course.id,
-      courseTitle: course.title,
-      traineeName: trainee.name,
-      daysCompleted: completion.dayCount,
-      completedAt: completion.completedAt.toISOString(),
-      certificateId: buildCertificateId(traineeId, courseId),
+      valid: true,
+      signatureValid: true,
+      status: 'ACTIVE',
+      certificateId: record.certificate_id,
+      traineeName: record.trainee_name,
+      courseTitle: record.course_title,
+      completedAt: record.completed_at.toISOString(),
+      issuedAt: record.issued_at.toISOString(),
+      message: 'Certificate is valid.',
     };
+  }
+
+  async revokeCertificate(certificateId: string): Promise<CourseCertificate> {
+    const record = (await certificateRepository.findCertificateByCertificateId(
+      certificateId
+    )) as CertificateRecord | null;
+    if (!record) throw new NotFoundError('Certificate not found.');
+    if (record.status === 'REVOKED') return this.describeCertificate(record);
+
+    const revoked = (await certificateRepository.revokeCertificate(
+      certificateId,
+      new Date()
+    )) as CertificateRecord;
+    return this.describeCertificate(revoked);
   }
 }

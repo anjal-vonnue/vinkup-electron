@@ -34,7 +34,9 @@ export type ErrorCode =
   | 'CHECKPOINT_ATTEMPT_FINALIZED'
   | 'CHECKPOINT_ATTEMPT_LIMIT_REACHED'
   | 'CHECKPOINT_EARLY_SUBMISSION_DISABLED'
-  | 'CHECKPOINT_RESULTS_NOT_READY';
+  | 'CHECKPOINT_RESULTS_NOT_READY'
+  | 'RATE_LIMITED'
+  | 'PROMPT_NAME_TAKEN';
 
 /** Every error response from the API looks exactly like this. */
 export type ApiErrorResponse = {

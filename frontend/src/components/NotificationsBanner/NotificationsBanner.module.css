@@ -1,8 +1,8 @@
-.card {
+.banner {
   display: flex;
   flex-direction: column;
-  background-color: rgba(249, 115, 22, 0.06);
-  border: 1px solid rgba(249, 115, 22, 0.25);
+  background-color: var(--color-bg-surface-1);
+  border: 1px solid var(--color-border-card);
   border-radius: 16px;
   margin-top: 1.5rem;
   overflow: hidden;
@@ -24,7 +24,7 @@
 }
 
 .headerButton:hover {
-  background-color: rgba(249, 115, 22, 0.1);
+  background-color: var(--color-bg-surface-2);
 }
 
 .headerLeft {
@@ -46,13 +46,13 @@
 }
 
 .chevron {
-  color: #fb923c;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
   transition: transform 150ms ease;
 }
 
-.icon {
-  color: #fb923c;
+.headerIcon {
+  color: var(--color-accent-purple);
   flex-shrink: 0;
 }
 
@@ -63,7 +63,7 @@
   margin: 0;
 }
 
-.badge {
+.count {
   display: inline-flex;
   align-items: center;
   padding: 0.2rem 0.6rem;
@@ -71,22 +71,40 @@
   font-size: 0.75rem;
   font-weight: 700;
   font-family: var(--font-mono);
-  background: rgba(249, 115, 22, 0.18);
-  color: #fb923c;
-  border: 1px solid rgba(249, 115, 22, 0.35);
+  background: var(--color-accent-tint);
+  color: var(--color-accent-text);
+  border: 1px solid var(--color-border-card);
+}
+
+.listViewport {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-rows 260ms ease,
+    opacity 180ms ease;
+}
+
+.listViewportOpen {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .list {
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 0 1.75rem 1.5rem;
+  padding: 0 1.75rem;
+  transition: padding-bottom 200ms ease;
 }
 
-.subtitle {
-  font-size: 0.9rem;
-  color: var(--color-text-secondary);
-  margin: 0 0 0.25rem 0;
+.listViewportOpen .list {
+  padding-bottom: 1.5rem;
 }
 
 .item {
@@ -94,10 +112,44 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  margin-top: 0.5rem;
   padding: 1rem 1.25rem;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-card);
+  border-left: 4px solid var(--notification-accent);
   border-radius: 12px;
+  max-height: 360px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    max-height 200ms ease,
+    margin-top 200ms ease,
+    padding 200ms ease,
+    border-width 200ms ease,
+    opacity 180ms ease,
+    transform 200ms ease;
+}
+
+.itemExiting {
+  max-height: 0;
+  margin-top: 0;
+  padding-block: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+.item[data-type='rework'] {
+  --notification-accent: #f97316;
+  --notification-tint: rgba(249, 115, 22, 0.12);
+}
+
+.item[data-type='comment'] {
+  --notification-accent: var(--color-accent-purple);
+  --notification-tint: var(--color-accent-tint);
 }
 
 .itemInfo {
@@ -184,7 +236,7 @@
 
 .reviewerNote {
   font-weight: 600;
-  color: #fb923c;
+  color: var(--notification-accent);
 }
 
 .actions {
@@ -202,16 +254,16 @@
   font-size: 0.85rem;
   font-weight: 600;
   border-radius: 8px;
-  background: rgba(249, 115, 22, 0.12);
-  color: #fb923c;
-  border: 1px solid rgba(249, 115, 22, 0.3);
+  background: var(--notification-tint);
+  color: var(--notification-accent);
+  border: 1px solid color-mix(in srgb, var(--notification-accent) 30%, transparent);
   cursor: pointer;
   transition: all 150ms ease;
 }
 
 .feedbackButton:hover {
-  background: rgba(249, 115, 22, 0.22);
-  color: #fdba74;
+  background: color-mix(in srgb, var(--notification-accent) 22%, transparent);
+  color: var(--notification-accent);
 }
 
 .taskButton {
@@ -231,4 +283,43 @@
 
 .taskButton:hover {
   background: var(--color-accent-purple-soft);
+}
+
+@media (max-width: 760px) {
+  .headerButton {
+    padding: 1rem;
+  }
+
+  .headerLeft {
+    flex-wrap: wrap;
+  }
+
+  .headerRight {
+    flex-shrink: 0;
+  }
+
+  .list {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .listViewportOpen .list {
+    padding-bottom: 1rem;
+  }
+
+  .item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listViewport,
+  .item {
+    transition-duration: 1ms;
+  }
 }

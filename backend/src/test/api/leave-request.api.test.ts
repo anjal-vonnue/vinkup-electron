@@ -87,6 +87,7 @@ describe('trainee leave requests', () => {
       reviewerRole: null,
       feedback: null,
       reviewedAt: null,
+      reviews: [],
     });
     expectIsoDateTime(request.submittedAt);
 
@@ -174,6 +175,13 @@ describe('mentor leave review', () => {
       feedback: 'Enjoy the time off.',
     });
     expectIsoDateTime(reviewed.reviewedAt);
+    expect(reviewed.reviews).toHaveLength(1);
+    expect(reviewed.reviews[0]).toMatchObject({
+      reviewerId: mentor.id,
+      reviewerRole: 'MENTOR',
+      decision: 'APPROVED',
+      feedback: 'Enjoy the time off.',
+    });
 
     const traineeView = body<LeaveRequest>(
       await api.get(traineeDetailUrl(request.id), traineeA.cookie)
@@ -300,27 +308,413 @@ describe('leave review conflicts', () => {
     expect(['APPROVED', 'REJECTED']).toContain(row.status);
     expect([mentor.id, manager.id]).toContain(row.reviewer_id);
     expect(row.reviewed_at).not.toBeNull();
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
   });
 
-  it('preserves the first decision when the other role tries again', async () => {
+  it('allows only one of two Managers rejecting the same approval', async () => {
+    const secondManager = await createManager('Second Leave Manager');
+    const request = await createAs(traineeA);
+    expect(
+      (await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie)).status
+    ).toBe(200);
+
+    const results = await Promise.allSettled([
+      api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'First manager rejection.' },
+        manager.cookie
+      ),
+      api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Second manager rejection.' },
+        secondManager.cookie
+      ),
+    ]);
+    const successes = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof api.patch>>> =>
+        result.status === 'fulfilled' && result.value.status === 200
+    );
+    const conflicts = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof api.patch>>> =>
+        result.status === 'fulfilled' && result.value.status === 409
+    );
+    expect(successes).toHaveLength(1);
+    expect(conflicts).toHaveLength(1);
+
+    const history = await db.leave_review.findMany({
+      where: { leave_request_id: request.id },
+      orderBy: { reviewed_at: 'asc' },
+    });
+    expect(history).toHaveLength(2);
+    expect(history[0]?.reviewer_role).toBe('MENTOR');
+    expect(history[1]?.reviewer_role).toBe('MANAGER');
+  });
+
+  it('refuses a second Manager review after a colleague already decided', async () => {
+    const secondManager = await createManager('Second Leave Manager');
+    const request = await createAs(traineeA);
+    expect(
+      (
+        await api.patch(
+          managerReviewUrl(request.id),
+          { decision: 'REJECTED', feedback: 'First rejection.' },
+          manager.cookie
+        )
+      ).status
+    ).toBe(200);
+
+    expectError(
+      await api.patch(managerReviewUrl(request.id), { decision: 'APPROVED' }, secondManager.cookie),
+      409,
+      'ALREADY_REVIEWED'
+    );
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
+  });
+
+  it('keeps a competing first decision when the request is not Mentor-approved', async () => {
     const request = await createAs(traineeA);
     const first = body<LeaveRequest>(
-      await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie)
+      await api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Manager decision first.' },
+        manager.cookie
+      )
     );
 
     expectError(
-      await api.patch(
-        managerReviewUrl(request.id),
-        { decision: 'REJECTED', feedback: 'Too late.' },
-        manager.cookie
-      ),
+      await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie),
       409,
       'ALREADY_REVIEWED'
     );
 
     const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
-    expect(row.status).toBe('APPROVED');
+    expect(row.status).toBe('REJECTED');
     expect(row.reviewer_id).toBe(first.reviewerId);
+    expect(row.reviewer_role).toBe('MANAGER');
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
+  });
+});
+
+describe('manager rejection of a Mentor approval', () => {
+  it('rejects an approved request and keeps both reviews in order', async () => {
+    const request = await createAs(traineeA);
+    const approved = body<LeaveRequest>(
+      await api.patch(
+        adminReviewUrl(request.id),
+        { decision: 'APPROVED', feedback: 'Enjoy the time off.' },
+        mentor.cookie
+      )
+    );
+    expect(approved.reviews).toHaveLength(1);
+
+    const res = await api.patch(
+      managerReviewUrl(request.id),
+      { decision: 'REJECTED', feedback: 'The dates changed after approval.' },
+      manager.cookie
+    );
+    expect(res.status).toBe(200);
+    const rejected = body<LeaveRequest>(res);
+    expect(rejected).toMatchObject({
+      status: 'REJECTED',
+      reviewerId: manager.id,
+      reviewerName: manager.name,
+      reviewerRole: 'MANAGER',
+      feedback: 'The dates changed after approval.',
+    });
+    expect(rejected.reviews).toHaveLength(2);
+    expect(rejected.reviews).toMatchObject([
+      {
+        reviewerId: mentor.id,
+        reviewerName: mentor.name,
+        reviewerRole: 'MENTOR',
+        decision: 'APPROVED',
+        feedback: 'Enjoy the time off.',
+      },
+      {
+        reviewerId: manager.id,
+        reviewerName: manager.name,
+        reviewerRole: 'MANAGER',
+        decision: 'REJECTED',
+        feedback: 'The dates changed after approval.',
+      },
+    ]);
+    rejected.reviews.forEach((review) => expectIsoDateTime(review.reviewedAt));
+
+    const traineeView = body<LeaveRequest>(
+      await api.get(traineeDetailUrl(request.id), traineeA.cookie)
+    );
+    expect(traineeView.status).toBe('REJECTED');
+    expect(traineeView.reviews).toEqual(rejected.reviews);
+
+    const history = await db.leave_review.findMany({
+      where: { leave_request_id: request.id },
+      orderBy: { reviewed_at: 'asc' },
+    });
+    expect(history.map((review) => [review.reviewer_role, review.decision])).toEqual([
+      ['MENTOR', 'APPROVED'],
+      ['MANAGER', 'REJECTED'],
+    ]);
+  });
+
+  it('will not approve an already approved request or let a Mentor re-review it', async () => {
+    const request = await createAs(traineeA);
+    expect(
+      (
+        await api.patch(
+          adminReviewUrl(request.id),
+          { decision: 'APPROVED', feedback: 'Approved by mentor.' },
+          mentor.cookie
+        )
+      ).status
+    ).toBe(200);
+
+    expectError(
+      await api.patch(managerReviewUrl(request.id), { decision: 'APPROVED' }, manager.cookie),
+      409,
+      'ALREADY_REVIEWED'
+    );
+    expectError(
+      await api.patch(
+        adminReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Changed my mind.' },
+        mentor.cookie
+      ),
+      409,
+      'ALREADY_REVIEWED'
+    );
+
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
+  });
+
+  it('keeps the database guard against a Manager-less status change', async () => {
+    const request = await createAs(traineeA);
+    await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie);
+
+    await expect(
+      db.$executeRawUnsafe(
+        `UPDATE "leave_request" SET "status" = 'REJECTED' WHERE "id" = '${request.id}'`
+      )
+    ).rejects.toThrow();
+
+    const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(row.status).toBe('APPROVED');
+  });
+
+  it('requires feedback when a Manager rejects a Mentor approval', async () => {
+    const request = await createAs(traineeA);
+    await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie);
+
+    expectError(
+      await api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: '   ' },
+        manager.cookie
+      ),
+      400,
+      'VALIDATION_FAILED'
+    );
+    const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(row.status).toBe('APPROVED');
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
+  });
+});
+
+describe('manager review of a Mentor rejection', () => {
+  async function mentorRejects() {
+    const request = await createAs(traineeA);
+    const rejected = body<LeaveRequest>(
+      await api.patch(
+        adminReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Mentor suggests another date.' },
+        mentor.cookie
+      )
+    );
+    expect(rejected.status).toBe('REJECTED');
+    expect(rejected.reviews).toHaveLength(1);
+    return request;
+  }
+
+  it('approves a Mentor rejection and keeps both reviews in order', async () => {
+    const request = await mentorRejects();
+
+    const res = await api.patch(
+      managerReviewUrl(request.id),
+      { decision: 'APPROVED', feedback: 'Reconsidered — approved.' },
+      manager.cookie
+    );
+    expect(res.status).toBe(200);
+    const approved = body<LeaveRequest>(res);
+    expect(approved).toMatchObject({
+      status: 'APPROVED',
+      reviewerId: manager.id,
+      reviewerName: manager.name,
+      reviewerRole: 'MANAGER',
+      feedback: 'Reconsidered — approved.',
+    });
+    expect(approved.reviews).toMatchObject([
+      {
+        reviewerId: mentor.id,
+        reviewerRole: 'MENTOR',
+        decision: 'REJECTED',
+        feedback: 'Mentor suggests another date.',
+      },
+      {
+        reviewerId: manager.id,
+        reviewerRole: 'MANAGER',
+        decision: 'APPROVED',
+        feedback: 'Reconsidered — approved.',
+      },
+    ]);
+    approved.reviews.forEach((review) => expectIsoDateTime(review.reviewedAt));
+
+    const traineeView = body<LeaveRequest>(
+      await api.get(traineeDetailUrl(request.id), traineeA.cookie)
+    );
+    expect(traineeView.status).toBe('APPROVED');
+    expect(traineeView.reviews).toEqual(approved.reviews);
+
+    const history = await db.leave_review.findMany({
+      where: { leave_request_id: request.id },
+      orderBy: { reviewed_at: 'asc' },
+    });
+    expect(history.map((review) => [review.reviewer_role, review.decision])).toEqual([
+      ['MENTOR', 'REJECTED'],
+      ['MANAGER', 'APPROVED'],
+    ]);
+  });
+
+  it('re-rejects a Mentor rejection with Manager feedback', async () => {
+    const request = await mentorRejects();
+
+    const res = await api.patch(
+      managerReviewUrl(request.id),
+      { decision: 'REJECTED', feedback: 'Manager confirms the rejection.' },
+      manager.cookie
+    );
+    expect(res.status).toBe(200);
+    const rejected = body<LeaveRequest>(res);
+    expect(rejected).toMatchObject({
+      status: 'REJECTED',
+      reviewerId: manager.id,
+      reviewerRole: 'MANAGER',
+      feedback: 'Manager confirms the rejection.',
+    });
+    expect(rejected.reviews).toMatchObject([
+      {
+        reviewerId: mentor.id,
+        reviewerRole: 'MENTOR',
+        decision: 'REJECTED',
+        feedback: 'Mentor suggests another date.',
+      },
+      {
+        reviewerId: manager.id,
+        reviewerRole: 'MANAGER',
+        decision: 'REJECTED',
+        feedback: 'Manager confirms the rejection.',
+      },
+    ]);
+
+    const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(row.status).toBe('REJECTED');
+    expect(row.reviewer_role).toBe('MANAGER');
+    expect(row.feedback).toBe('Manager confirms the rejection.');
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(2);
+  });
+
+  it('requires feedback to re-reject and leaves the Mentor decision intact', async () => {
+    const request = await mentorRejects();
+
+    expectError(
+      await api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: '   ' },
+        manager.cookie
+      ),
+      400,
+      'VALIDATION_FAILED'
+    );
+    const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(row.status).toBe('REJECTED');
+    expect(row.reviewer_id).toBe(mentor.id);
+    expect(row.reviewer_role).toBe('MENTOR');
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(1);
+  });
+
+  it('refuses further reviews after a Manager overrode the rejection', async () => {
+    const secondManager = await createManager('Second Override Manager');
+    const request = await mentorRejects();
+    expect(
+      (await api.patch(managerReviewUrl(request.id), { decision: 'APPROVED' }, manager.cookie))
+        .status
+    ).toBe(200);
+
+    expectError(
+      await api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Too late.' },
+        secondManager.cookie
+      ),
+      409,
+      'ALREADY_REVIEWED'
+    );
+    expectError(
+      await api.patch(adminReviewUrl(request.id), { decision: 'APPROVED' }, mentor.cookie),
+      409,
+      'ALREADY_REVIEWED'
+    );
+    expect(await db.leave_review.count({ where: { leave_request_id: request.id } })).toBe(2);
+  });
+
+  it('allows only one of two Managers overriding the same Mentor rejection', async () => {
+    const secondManager = await createManager('Concurrent Override Manager');
+    const request = await mentorRejects();
+
+    const results = await Promise.allSettled([
+      api.patch(managerReviewUrl(request.id), { decision: 'APPROVED' }, manager.cookie),
+      api.patch(
+        managerReviewUrl(request.id),
+        { decision: 'REJECTED', feedback: 'Concurrent re-rejection.' },
+        secondManager.cookie
+      ),
+    ]);
+    const successes = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof api.patch>>> =>
+        result.status === 'fulfilled' && result.value.status === 200
+    );
+    const conflicts = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof api.patch>>> =>
+        result.status === 'fulfilled' && result.value.status === 409
+    );
+    expect(successes).toHaveLength(1);
+    expect(conflicts).toHaveLength(1);
+
+    const history = await db.leave_review.findMany({
+      where: { leave_request_id: request.id },
+      orderBy: { reviewed_at: 'asc' },
+    });
+    expect(history).toHaveLength(2);
+    expect(history[0]?.reviewer_role).toBe('MENTOR');
+    expect(history[1]?.reviewer_role).toBe('MANAGER');
+  });
+
+  it('keeps the database guard against a non-Manager override of a rejection', async () => {
+    const request = await mentorRejects();
+
+    // Same status, but the current decision would no longer belong to the Mentor.
+    await expect(
+      db.$executeRawUnsafe(
+        `UPDATE "leave_request" SET "reviewer_role" = 'MANAGER', "reviewer_name" = 'Spoofed' WHERE "id" = '${request.id}'`
+      )
+    ).rejects.toThrow();
+    // Status change without a Manager reviewer is still rejected by the trigger.
+    await expect(
+      db.$executeRawUnsafe(
+        `UPDATE "leave_request" SET "status" = 'APPROVED' WHERE "id" = '${request.id}'`
+      )
+    ).rejects.toThrow();
+
+    const row = await db.leave_request.findUniqueOrThrow({ where: { id: request.id } });
+    expect(row.status).toBe('REJECTED');
     expect(row.reviewer_role).toBe('MENTOR');
   });
 });

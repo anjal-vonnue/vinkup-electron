@@ -13,8 +13,16 @@ import styles from './AdminCodePanel.module.css';
 
 const MAX_REWORK_MARKDOWN_CHARS = 10000;
 
-// Monaco is heavy; load it only when an admin actually opens some code.
-const ReadOnlyCodeViewer = lazy(() => import('../ReadOnlyCodeViewer'));
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
+  return `${s}s`;
+}
+
+const SubmissionBrowser = lazy(() => import('../SubmissionBrowser/SubmissionBrowser'));
 
 type AdminCodePanelProps = {
   traineeId: string;
@@ -56,6 +64,8 @@ export default function AdminCodePanel({
       ? reviewOverride.status
       : (code?.reviewStatus ?? null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [approveSuggestion, setApproveSuggestion] = useState('');
   const [isReworkModalOpen, setIsReworkModalOpen] = useState(false);
   const [reworkFeedback, setReworkFeedback] = useState('');
   const [reworkFileName, setReworkFileName] = useState<string | null>(null);
@@ -80,7 +90,7 @@ export default function AdminCodePanel({
     if (!code || isApproving) return;
     setIsApproving(true);
     try {
-      await approveTask(traineeId, code.taskId);
+      await approveTask(traineeId, code.taskId, approveSuggestion.trim());
       setReviewOverride({
         taskId: code.taskId,
         submissionCount: code.submissionCount,
@@ -88,6 +98,8 @@ export default function AdminCodePanel({
       });
       showToast({ message: 'Task approved successfully', variant: 'success' });
       onReviewSuccess?.(code.taskId, 'approved');
+      setIsApproveModalOpen(false);
+      setApproveSuggestion('');
     } catch (err) {
       showToast({
         message: err instanceof Error ? err.message : 'Failed to approve task.',
@@ -195,14 +207,33 @@ export default function AdminCodePanel({
           </h3>
 
           {code && (
-            <p className={styles.meta}>
-              <span>{TASK_STATUS_LABELS[code.status]}</span>
-              {code.submissionCount > 0 && <span>Attempt #{code.submissionCount}</span>}
-              {code.codeUpdatedAt && <span>Saved {formatIstDateTime(code.codeUpdatedAt)}</span>}
-              {code.lastSubmittedAt && (
-                <span>Submitted {formatIstDateTime(code.lastSubmittedAt)}</span>
+            <div className={styles.meta}>
+              <div className={styles.metaPrimary}>
+                <span className={styles.statusBadge} data-status={code.status}>
+                  {TASK_STATUS_LABELS[code.status]}
+                </span>
+                {code.submissionCount > 0 && (
+                  <span className={styles.attemptChip}>Attempt #{code.submissionCount}</span>
+                )}
+                {code.timeSpentSeconds > 0 && (
+                  <span
+                    className={styles.timeChip}
+                    title="Active time the trainee has spent on this task"
+                  >
+                    <Clock size={11} aria-hidden="true" />
+                    {formatDuration(code.timeSpentSeconds)}
+                  </span>
+                )}
+              </div>
+              {(code.codeUpdatedAt || code.lastSubmittedAt) && (
+                <div className={styles.metaTimeline}>
+                  {code.codeUpdatedAt && <span>Saved {formatIstDateTime(code.codeUpdatedAt)}</span>}
+                  {code.lastSubmittedAt && (
+                    <span>Submitted {formatIstDateTime(code.lastSubmittedAt)}</span>
+                  )}
+                </div>
               )}
-            </p>
+            </div>
           )}
         </div>
 
@@ -236,7 +267,10 @@ export default function AdminCodePanel({
                   <button
                     type="button"
                     className={styles.approveBtn}
-                    onClick={() => void handleApprove()}
+                    onClick={() => {
+                      setApproveSuggestion('');
+                      setIsApproveModalOpen(true);
+                    }}
                     disabled={isApproving}
                   >
                     <Check size={14} aria-hidden="true" />
@@ -319,21 +353,19 @@ export default function AdminCodePanel({
         </div>
       )}
 
-      {code?.isStarterCode && (
-        <p className={styles.starter} role="note">
-          Starter code: this trainee hasn&rsquo;t saved any work on this task.
-        </p>
-      )}
-
-      {code && !code.isStarterCode && code.status === 'in_progress' && (
-        <p className={styles.starter} role="note">
-          Draft: the trainee hasn&rsquo;t submitted this task yet. Approve and Rework appear once
-          they submit.
-        </p>
-      )}
-
       <div className={styles.body}>
         {isLoading && <LoaderOverlay label="Loading code…" />}
+
+        {code?.isStarterCode && (
+          <p role="note">Starter code: this trainee hasn&rsquo;t saved any work on this task.</p>
+        )}
+
+        {code && !code.isStarterCode && code.status === 'in_progress' && (
+          <p role="note">
+            Draft: the trainee hasn&rsquo;t submitted this task yet. Approve and Rework appear once
+            they submit.
+          </p>
+        )}
 
         {error && (
           <ErrorState
@@ -345,14 +377,72 @@ export default function AdminCodePanel({
 
         {code && (
           <Suspense fallback={<LoaderOverlay label="Opening viewer…" />}>
-            <ReadOnlyCodeViewer
+            <SubmissionBrowser
               key={code.taskId}
               files={code.files}
+              instructionsMarkdown={code.instructionsMarkdown}
               scope={`${traineeId}/${code.taskId}`}
             />
           </Suspense>
         )}
       </div>
+
+      {/* Rework Modal */}
+      {isApproveModalOpen && (
+        <div
+          className={styles.modalBackdrop}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isApproving) {
+              setIsApproveModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className={styles.reworkModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="approve-dialog-title"
+          >
+            <h4 id="approve-dialog-title" className={styles.modalTitle}>
+              Approve: {taskTitle}
+            </h4>
+            <p className={styles.modalDesc}>
+              Add an optional suggestion for the trainee. They can view it alongside the approved
+              task.
+            </p>
+            <label className={styles.suggestionLabel} htmlFor="approve-suggestion">
+              Mentor suggestion <span>(optional)</span>
+            </label>
+            <textarea
+              id="approve-suggestion"
+              className={styles.textarea}
+              placeholder="Share a useful next step or improvement idea..."
+              value={approveSuggestion}
+              onChange={(event) => setApproveSuggestion(event.target.value)}
+              rows={5}
+              autoFocus
+            />
+            <div className={styles.modalButtons}>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={() => setIsApproveModalOpen(false)}
+                disabled={isApproving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.submitApproveBtn}
+                onClick={() => void handleApprove()}
+                disabled={isApproving}
+              >
+                {isApproving ? 'Approving…' : 'Approve task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rework Modal */}
       {isReworkModalOpen && (

@@ -128,30 +128,48 @@ export function mimeTypeFor(filePath: string): string {
   return MIME_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
 }
 
-/** Text files the Node runtime can hand back to the editor. */
+const BINARY_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.ico',
+  '.bmp',
+  '.avif',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.wasm',
+  '.zip',
+  '.gz',
+  '.tar',
+  '.tgz',
+  '.7z',
+  '.rar',
+  '.pdf',
+  '.mp3',
+  '.mp4',
+  '.wav',
+  '.webm',
+  '.mov',
+  '.ogg',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.bin',
+  '.node',
+  '.class',
+  '.jar',
+  '.sqlite',
+  '.sqlite3',
+  '.db',
+]);
+
+/** Files the Node runtime can hand back to the editor: anything that isn't a known binary type. */
 export function isTextExtension(filePath: string): boolean {
-  const extension = path.extname(filePath).toLowerCase();
-  if (extension === '' || extension === '.env') return true;
-  return [
-    '.html',
-    '.htm',
-    '.css',
-    '.js',
-    '.mjs',
-    '.cjs',
-    '.jsx',
-    '.ts',
-    '.tsx',
-    '.json',
-    '.sql',
-    '.md',
-    '.svg',
-    '.txt',
-    '.yml',
-    '.yaml',
-    '.prisma',
-    '.xml',
-    '.toml',
-    '.ini',
-  ].includes(extension);
+  return !BINARY_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }

@@ -4,6 +4,7 @@ import type {
   AdminTaskCode,
   AdminTraineeDetail,
   AdminTraineeSummary,
+  MentorSlackChannelResponse,
   TaskFile,
   TypingStats,
 } from '@itp/types';
@@ -15,8 +16,9 @@ import { ProgressService } from '../progress-module/progress.service';
 import { AdminRepository } from './admin.repository';
 import { env } from '../../config/env';
 import { ConflictError, TraineeDomainError } from '../../errors/AppError';
-import type { AnalyticsQuery, CreateTraineeBody } from './admin.schema';
+import type { AnalyticsQuery, CreateTraineeBody, SaveSlackChannelBody } from './admin.schema';
 import { buildAdminIntegrity } from './integrity.overall';
+import { isScoredFlag } from '../day-module/integrity.scoring';
 import {
   buildIntegrityTrend,
   buildProgressTrend,
@@ -64,7 +66,8 @@ export class AdminService {
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,
     }));
-    const flagRows = flagEvents.map((row) => ({
+    // Idle flags are never scored (see isScoredFlag).
+    const flagRows = flagEvents.filter(isScoredFlag).map((row) => ({
       traineeId: row.trainee_id,
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,
@@ -119,6 +122,22 @@ export class AdminService {
         flagsLast7Days: flagsBy.get(trainee.id) ?? 0,
         averageScore: traineeIntegrity?.score ?? null,
         daysScored: traineeIntegrity?.daysScored ?? 0,
+        pendingReviewItems: startedTasks
+          .filter(
+            (row) =>
+              row.trainee_id === trainee.id &&
+              row.status === 'completed' &&
+              row.review_status !== 'approved' &&
+              row.review_status !== 'rework'
+          )
+          .map((row) => ({
+            taskId: row.task_id,
+            taskTitle: row.task.title,
+            dayId: row.task.curriculum_day_id,
+            courseTitle: row.task.curriculum_day.course.title,
+            dayNumber: row.task.curriculum_day.day_number,
+            lastSubmittedAt: row.last_submitted_at?.toISOString() ?? null,
+          })),
       };
     });
   };
@@ -259,6 +278,7 @@ export class AdminService {
       files: (submitted ?? task.starter_files) as unknown as TaskFile[],
       codeUpdatedAt: progress?.code_updated_at?.toISOString() ?? null,
       lastSubmittedAt: progress?.last_submitted_at?.toISOString() ?? null,
+      timeSpentSeconds: progress?.time_spent_seconds ?? 0,
     };
   };
 
@@ -336,7 +356,8 @@ export class AdminService {
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,
     }));
-    const flagRows = flagEvents.map((row) => ({
+    // Idle flags are never scored (see isScoredFlag).
+    const flagRows = flagEvents.filter(isScoredFlag).map((row) => ({
       traineeId: row.trainee_id,
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,
@@ -439,5 +460,27 @@ export class AdminService {
     const row = (await this.listTrainees(adminId)).find((trainee) => trainee.id === created.id);
     if (!row) throw new NotFoundError('Trainee not found.');
     return row;
+  };
+
+  /** GET /api/admin/slack-channel */
+  getSlackChannel = async (mentorId: string): Promise<MentorSlackChannelResponse> => {
+    const row = await repo.findSlackChannel(mentorId);
+    if (!row) throw new NotFoundError('Mentor not found.');
+    return { channelId: row.slack_channel_id };
+  };
+
+  /** PUT /api/admin/slack-channel */
+  saveSlackChannel = async (
+    mentorId: string,
+    input: SaveSlackChannelBody
+  ): Promise<MentorSlackChannelResponse> => {
+    const row = await repo.saveSlackChannel(mentorId, input.channelId);
+    return { channelId: row.slack_channel_id };
+  };
+
+  /** DELETE /api/admin/slack-channel */
+  deleteSlackChannel = async (mentorId: string): Promise<MentorSlackChannelResponse> => {
+    await repo.deleteSlackChannel(mentorId);
+    return { channelId: null };
   };
 }

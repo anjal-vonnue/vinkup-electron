@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type {
   BrowserAvailability,
@@ -5,10 +7,9 @@ import type {
   ResourcesBrowserBounds,
   ResourcesBrowserState,
   ResourcesFindResult,
-  SecondaryDisplayResourcesApi,
 } from '@itp/types';
 
-const resources: SecondaryDisplayResourcesApi = {
+const resources = {
   getAllowlist: () =>
     ipcRenderer.invoke('secondary-resources:get-allowlist') as Promise<ResourcesAllowlist>,
   getState: () =>
@@ -90,3 +91,38 @@ contextBridge.exposeInMainWorld('vinkupDisplay', {
   },
   resources,
 });
+
+// Report activity from the overlay's own UI (address bar, buttons, empty state,
+// any scrollable chrome) so the task timer stays alive when the trainee is
+// interacting with the second window itself, not just the hosted page inside it.
+const ACTIVITY_THROTTLE_MS = 1_000;
+const ACTIVITY_EVENTS = [
+  'mousemove',
+  'mousedown',
+  'keydown',
+  'wheel',
+  'scroll',
+  'touchstart',
+  'pointerdown',
+] as const;
+
+let lastSentAt = 0;
+
+function reportActivity(): void {
+  const now = Date.now();
+  if (now - lastSentAt < ACTIVITY_THROTTLE_MS) return;
+  lastSentAt = now;
+  ipcRenderer.send('resources:activity');
+}
+
+function attachActivityReporter(): void {
+  for (const event of ACTIVITY_EVENTS) {
+    window.addEventListener(event, reportActivity, { passive: true, capture: true });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', attachActivityReporter, { once: true });
+} else {
+  attachActivityReporter();
+}

@@ -7,6 +7,7 @@ import type {
   ResourcesFindResult,
 } from '@itp/types';
 import { hostFromUrl, isAllowedNavigationUrl, resolveNavigationInput } from './allowlist';
+import path from 'node:path';
 
 const PARTITION = 'persist:vinkup-resources';
 
@@ -36,6 +37,9 @@ export interface ResourcesBrowserEvents {
   onOpenFind: () => void;
   onFindResult: (result: ResourcesFindResult) => void;
   onEscape: () => void;
+  onActivity?: () => void;
+  /** Any key, click, scroll or mouse move in the page, focused or not. */
+  onInput?: () => void;
 }
 
 /**
@@ -307,14 +311,11 @@ export class ResourcesBrowser {
   private configureSession(): void {
     const resourcesSession = session.fromPartition(PARTITION);
 
-    // The approved sites do not need camera, microphone, location, notifications,
-    // clipboard access or anything else. Deny everything by default.
     resourcesSession.setPermissionRequestHandler((_contents, _permission, callback) => {
       callback(false);
     });
     resourcesSession.setPermissionCheckHandler(() => false);
 
-    // GitHub renders better without the Electron token in the UA.
     resourcesSession.setUserAgent(
       app.userAgentFallback.replace(/\s(?:Electron|Vinkup|vinkup)\/\S+/g, '')
     );
@@ -343,6 +344,7 @@ export class ResourcesBrowser {
         nodeIntegrationInSubFrames: false,
         webviewTag: false,
         spellcheck: false,
+        preload: path.join(__dirname, '../../preload/resources-activity.js'),
       },
     });
 
@@ -359,9 +361,22 @@ export class ResourcesBrowser {
   private wire(view: WebContentsView): void {
     const contents = view.webContents;
 
+    contents.on('before-input-event', (event, input) => {
+      // Any key press = still working.
+      this.events.onActivity?.();
+      if (this.handleShortcut(input)) event.preventDefault();
+    });
+
+    contents.on('focus', () => {
+      this.setViewFocused(true);
+      this.events.onActivity?.(); // click-into-page = still working
+    });
+
+    contents.on('blur', () => {
+      this.setViewFocused(false);
+    });
+
     contents.setWindowOpenHandler(({ url }) => {
-      // Treat `target="_blank"` as a normal navigation so it still hits the
-      // allowlist and never opens an unmanaged window.
       if (isAllowedNavigationUrl(url, this.allowlist, this.localPorts)) {
         this.loadInPlace(url);
       } else {
@@ -373,21 +388,11 @@ export class ResourcesBrowser {
     contents.on('will-navigate', (event, url) => {
       if (isAllowedNavigationUrl(url, this.allowlist, this.localPorts)) return;
       event.preventDefault();
-      // this.block(url);
-      // Keep the current approved page visible when it tries to navigate to an
-      // unapproved host (for example, an ad or identity-sync redirect).
-      // Resource loads such as scripts, images, and fetches do not emit this
-      // main-frame navigation event and remain unaffected by the allowlist.
     });
 
     contents.on('will-redirect', (event, url) => {
       if (isAllowedNavigationUrl(url, this.allowlist, this.localPorts)) return;
       event.preventDefault();
-      // this.block(url);
-      // Keep the current approved page visible when it tries to navigate to an
-      // unapproved host (for example, an ad or identity-sync redirect).
-      // Resource loads such as scripts, images, and fetches do not emit this
-      // main-frame navigation event and remain unaffected by the allowlist.
     });
 
     contents.on('will-attach-webview', (event) => {
@@ -415,7 +420,6 @@ export class ResourcesBrowser {
         errorKind: null,
         ...this.historyFlags(),
       });
-      // Chromium remembers zoom per origin, so a new site may differ.
       this.updateZoom();
     });
 
@@ -436,6 +440,10 @@ export class ResourcesBrowser {
       this.setViewFocused(false);
     });
 
+    contents.on('input-event', () => {
+      this.events.onInput?.();
+    });
+
     contents.on('found-in-page', (_event, result) => {
       this.events.onFindResult({
         activeMatchOrdinal: result.activeMatchOrdinal,
@@ -445,7 +453,6 @@ export class ResourcesBrowser {
     });
 
     contents.on('did-fail-load', (_event, errorCode, description, validatedUrl, isMainFrame) => {
-      // -3 is ERR_ABORTED: a newer navigation replaced this one.
       if (!isMainFrame || errorCode === -3) return;
       const host = hostFromUrl(validatedUrl) ?? hostFromUrl(this.state.url) ?? 'the page';
       this.update({
@@ -464,8 +471,52 @@ export class ResourcesBrowser {
       });
     });
 
-    contents.on('before-input-event', (event, input) => {
-      if (this.handleShortcut(input)) event.preventDefault();
+    // Inject a scroll/activity listener directly into the page after every
+    // (same-document or full) load. This works even if the preload did not load
+    // or its listeners got torn down by the page, and it *does* fire on
+    // GitHub / MDN / most doc sites because `executeJavaScript` bypasses CSP
+    // for the injected code itself.
+    contents.on('did-finish-load', () => {
+      void contents
+        .executeJavaScript(
+          `(() => {
+            if (window.__vinkupScrollHooked) return;
+            window.__vinkupScrollHooked = true;
+            const THROTTLE = 1000;
+            let last = 0;
+            const report = () => {
+              const now = Date.now();
+              if (now - last < THROTTLE) return;
+              last = now;
+              console.log('__vinkup_activity__');
+            };
+            ['scroll','wheel','mousemove','keydown','pointerdown','touchstart'].forEach((e) =>
+              window.addEventListener(e, report, { passive: true, capture: true })
+            );
+          })();`,
+          true // userGesture
+        )
+        .catch(() => undefined);
+    });
+
+    contents.on('console-message', (...args: unknown[]) => {
+      // Electron 29: (event, level, message, line, sourceId)
+      // Electron 30+: (event, details: { message, level, lineNumber, sourceId, ... })
+      const SENTINEL = '__vinkup_activity__';
+
+      const legacyMessage = args[2];
+      if (legacyMessage === SENTINEL) {
+        this.events.onActivity?.();
+        return;
+      }
+
+      const details = args[1];
+      if (details !== null && typeof details === 'object') {
+        const detailsMessage = (details as { message?: unknown }).message;
+        if (detailsMessage === SENTINEL) {
+          this.events.onActivity?.();
+        }
+      }
     });
   }
 

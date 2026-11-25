@@ -138,66 +138,69 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 
 ## Endpoint summary
 
-| Method | Path                                                   | Auth    | Purpose                                                                                |
-| ------ | ------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------- |
-| GET    | `/api/health`                                          | No      | Liveness check                                                                         |
-| GET    | `/api/auth/google`                                     | No      | Start Google OAuth (redirect)                                                          |
-| GET    | `/api/auth/google/callback`                            | No      | OAuth callback; sets `auth_token` cookie and redirects                                 |
-| POST   | `/api/auth/logout`                                     | Any     | Clear the auth cookie                                                                  |
-| GET    | `/api/auth/me`                                         | Any     | Current user (trainee, mentor or manager) and role from the token                      |
-| GET    | `/api/events`                                          | Any     | Server-Sent Events stream of review and submission notifications                       |
-| GET    | `/api/dashboard`                                       | Trainee | Dashboard: next day, progress counts, time totals, typing summary, finished courses    |
-| GET    | `/api/courses/:courseId/days`                          | Trainee | Days of one course with this trainee's status                                          |
-| GET    | `/api/courses/:courseId/certificate`                   | Trainee | Certificate for a finished course                                                      |
-| GET    | `/api/days/:dayId`                                     | Trainee | Day lesson content (readable even when locked)                                         |
-| GET    | `/api/days/:dayId/status`                              | Trainee | Lock/completion state of a day                                                         |
-| PATCH  | `/api/days/:dayId/complete`                            | Trainee | Complete a day; returns status and next day id                                         |
-| PATCH  | `/api/days/:dayId/status`                              | Trainee | Legacy alias of complete; returns status only                                          |
-| GET    | `/api/days/:dayId/journal`                             | Trainee | Trainee's journal response for a day                                                   |
-| PUT    | `/api/days/:dayId/journal`                             | Trainee | Create/replace journal response                                                        |
-| GET    | `/api/days/:dayId/tasks`                               | Trainee | Task list of a day with per-trainee status                                             |
-| GET    | `/api/days/:dayId/integrity`                           | Trainee | The day's integrity score (0–100) from its focus events                                |
-| GET    | `/api/tasks/:taskId`                                   | Trainee | Task details                                                                           |
-| GET    | `/api/tasks/:taskId/code`                              | Trainee | Saved files, or starter files                                                          |
-| PUT    | `/api/tasks/:taskId/code`                              | Trainee | Replace the saved file set                                                             |
-| POST   | `/api/tasks/:taskId/submit`                            | Trainee | Mark task completed and queue it for review                                            |
-| GET    | `/api/tasks/:taskId/review`                            | Trainee | Own review state and latest review feedback                                            |
-| GET    | `/api/tasks/:taskId/reviews`                           | Trainee | Own review history, newest first                                                       |
-| POST   | `/api/activity/time`                                   | Trainee | Add active/coding seconds to a day                                                     |
-| GET    | `/api/activity/time`                                   | Trainee | Per-day activity for the last N days                                                   |
-| POST   | `/api/activity/:taskId/events`                         | Trainee | Log an integrity flag event for a task                                                 |
-| POST   | `/api/typing-test/results`                             | Trainee | Save a typing test result                                                              |
-| GET    | `/api/typing-test/results`                             | Trainee | All typing results, newest first                                                       |
-| GET    | `/api/profile`                                         | Trainee | Profile page data                                                                      |
-| GET    | `/api/journal`                                         | Trainee | Accessible journal entries, newest curriculum day first                                |
-| GET    | `/api/leave-requests`                                  | Trainee | Own leave requests, newest first                                                       |
-| POST   | `/api/leave-requests`                                  | Trainee | Submit a leave request                                                                 |
-| GET    | `/api/leave-requests/:requestId`                       | Trainee | One of the signed-in trainee's own leave requests                                      |
-| GET    | `/api/admin/trainees`                                  | Mentor  | Only this mentor's assigned trainees, with progress, time, typing, flags and integrity |
-| POST   | `/api/admin/trainees`                                  | Mentor  | Add a trainee, assigned to the creating mentor                                         |
-| GET    | `/api/admin/trainees/:traineeId`                       | Mentor  | One assigned trainee: profile, course progress, worked-on tasks, journal               |
-| GET    | `/api/admin/trainees/:traineeId/flags`                 | Mentor  | An assigned trainee's flag events, newest first                                        |
-| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Mentor  | An assigned trainee's saved files for a task (read-only)                               |
-| GET    | `/api/admin/analytics`                                 | Mentor  | Team analytics for a period: progress, comparison, task status, typing, integrity      |
-| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Mentor  | Approve an assigned trainee's current submission                                       |
-| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Mentor  | Send an assigned trainee's submission back for rework                                  |
-| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Mentor  | Review history for an assigned trainee's task                                          |
-| GET    | `/api/admin/trainees/:traineeId/feedback`              | Mentor  | Every feedback-bearing review for an assigned trainee, newest first                    |
-| GET    | `/api/admin/leave-requests`                            | Mentor  | Leave requests from this mentor's assigned trainees                                    |
-| GET    | `/api/admin/leave-requests/:requestId`                 | Mentor  | One assigned-trainee leave request                                                     |
-| PATCH  | `/api/admin/leave-requests/:requestId/review`          | Mentor  | Approve or reject a pending assigned-trainee leave request                             |
-| GET    | `/api/manager/staff`                                   | Manager | List mentors and managers with role, status and assignment counts                      |
-| POST   | `/api/manager/staff`                                   | Manager | Create a mentor or manager account                                                     |
-| PATCH  | `/api/manager/staff/:staffId`                          | Manager | Update a staff account's name, email or role                                           |
-| PATCH  | `/api/manager/staff/:staffId/status`                   | Manager | Activate or deactivate a staff account                                                 |
-| GET    | `/api/manager/trainees`                                | Manager | List every trainee with their current mentor                                           |
-| POST   | `/api/manager/trainees`                                | Manager | Create a trainee, optionally assigning an active mentor                                |
-| PATCH  | `/api/manager/trainees/:traineeId`                     | Manager | Update a trainee's name or email                                                       |
-| PATCH  | `/api/manager/trainees/:traineeId/status`              | Manager | Activate or deactivate a trainee                                                       |
-| PATCH  | `/api/manager/trainees/:traineeId/mentor`              | Manager | Assign, reassign or unassign (`mentorId: null`) a trainee                              |
-| GET    | `/api/manager/leave-requests`                          | Manager | Every leave request, with the trainee's assigned Mentor                                |
-| GET    | `/api/manager/leave-requests/:requestId`               | Manager | Any leave request                                                                      |
-| PATCH  | `/api/manager/leave-requests/:requestId/review`        | Manager | Approve or reject any pending leave request                                            |
+| Method | Path                                                   | Auth    | Purpose                                                                                    |
+| ------ | ------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------ |
+| GET    | `/api/health`                                          | No      | Liveness check                                                                             |
+| GET    | `/api/auth/google`                                     | No      | Start Google OAuth (redirect)                                                              |
+| GET    | `/api/auth/google/callback`                            | No      | OAuth callback; sets `auth_token` cookie and redirects                                     |
+| POST   | `/api/auth/logout`                                     | Any     | Clear the auth cookie                                                                      |
+| GET    | `/api/auth/me`                                         | Any     | Current user (trainee, mentor or manager) and role from the token                          |
+| GET    | `/api/events`                                          | Any     | Server-Sent Events stream of review and submission notifications                           |
+| GET    | `/api/dashboard`                                       | Trainee | Dashboard: next day, progress counts, time totals, typing summary, finished courses        |
+| GET    | `/api/courses/:courseId/days`                          | Trainee | Days of one course with this trainee's status                                              |
+| GET    | `/api/courses/:courseId/certificate`                   | Trainee | Certificate for a finished course                                                          |
+| GET    | `/api/days/:dayId`                                     | Trainee | Day lesson content (readable even when locked)                                             |
+| GET    | `/api/days/:dayId/status`                              | Trainee | Lock/completion state of a day                                                             |
+| PATCH  | `/api/days/:dayId/complete`                            | Trainee | Complete a day; returns status and next day id                                             |
+| PATCH  | `/api/days/:dayId/status`                              | Trainee | Legacy alias of complete; returns status only                                              |
+| GET    | `/api/days/:dayId/journal`                             | Trainee | Trainee's journal response for a day                                                       |
+| PUT    | `/api/days/:dayId/journal`                             | Trainee | Create/replace journal response                                                            |
+| GET    | `/api/days/:dayId/tasks`                               | Trainee | Task list of a day with per-trainee status                                                 |
+| GET    | `/api/days/:dayId/integrity`                           | Trainee | The day's integrity score (0–100) from its focus events                                    |
+| GET    | `/api/tasks/:taskId`                                   | Trainee | Task details                                                                               |
+| GET    | `/api/tasks/:taskId/code`                              | Trainee | Saved files, or starter files                                                              |
+| PUT    | `/api/tasks/:taskId/code`                              | Trainee | Replace the saved file set                                                                 |
+| POST   | `/api/tasks/:taskId/submit`                            | Trainee | Mark task completed and queue it for review                                                |
+| GET    | `/api/tasks/:taskId/review`                            | Trainee | Own review state and latest review feedback                                                |
+| GET    | `/api/tasks/:taskId/reviews`                           | Trainee | Own review history, newest first                                                           |
+| POST   | `/api/activity/time`                                   | Trainee | Add active/coding seconds to a day                                                         |
+| GET    | `/api/activity/time`                                   | Trainee | Per-day activity for the last N days                                                       |
+| POST   | `/api/activity/:taskId/events`                         | Trainee | Log an integrity flag event for a task                                                     |
+| POST   | `/api/typing-test/results`                             | Trainee | Save a typing test result                                                                  |
+| GET    | `/api/typing-test/results`                             | Trainee | All typing results, newest first                                                           |
+| GET    | `/api/profile`                                         | Trainee | Profile page data                                                                          |
+| GET    | `/api/journal`                                         | Trainee | Accessible journal entries, newest curriculum day first                                    |
+| GET    | `/api/leave-requests`                                  | Trainee | Own leave requests, newest first                                                           |
+| POST   | `/api/leave-requests`                                  | Trainee | Submit a leave request                                                                     |
+| GET    | `/api/leave-requests/:requestId`                       | Trainee | One of the signed-in trainee's own leave requests                                          |
+| GET    | `/api/admin/trainees`                                  | Mentor  | Only this mentor's assigned trainees, with progress, time, typing, flags and integrity     |
+| POST   | `/api/admin/trainees`                                  | Mentor  | Add a trainee, assigned to the creating mentor                                             |
+| GET    | `/api/admin/trainees/:traineeId`                       | Mentor  | One assigned trainee: profile, course progress, worked-on tasks, journal                   |
+| GET    | `/api/admin/trainees/:traineeId/flags`                 | Mentor  | An assigned trainee's flag events, newest first                                            |
+| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Mentor  | An assigned trainee's saved files for a task (read-only)                                   |
+| GET    | `/api/admin/analytics`                                 | Mentor  | Team analytics for a period: progress, comparison, task status, typing, integrity          |
+| GET    | `/api/admin/slack-channel`                             | Mentor  | This mentor's configured Slack channel ID                                              |
+| PUT    | `/api/admin/slack-channel`                             | Mentor  | Save or replace this mentor's Slack channel ID                                         |
+| DELETE | `/api/admin/slack-channel`                             | Mentor  | Clear this mentor's Slack channel ID                                                    |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Mentor  | Approve an assigned trainee's current submission                                           |
+| POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Mentor  | Send an assigned trainee's submission back for rework                                      |
+| GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Mentor  | Review history for an assigned trainee's task                                              |
+| GET    | `/api/admin/trainees/:traineeId/feedback`              | Mentor  | Every feedback-bearing review for an assigned trainee, newest first                        |
+| GET    | `/api/admin/leave-requests`                            | Mentor  | Leave requests from this mentor's assigned trainees                                        |
+| GET    | `/api/admin/leave-requests/:requestId`                 | Mentor  | One assigned-trainee leave request                                                         |
+| PATCH  | `/api/admin/leave-requests/:requestId/review`          | Mentor  | Approve or reject a pending assigned-trainee leave request                                 |
+| GET    | `/api/manager/staff`                                   | Manager | List mentors and managers with role, status and assignment counts                          |
+| POST   | `/api/manager/staff`                                   | Manager | Create a mentor or manager account                                                         |
+| PATCH  | `/api/manager/staff/:staffId`                          | Manager | Update a staff account's name, email or role                                               |
+| PATCH  | `/api/manager/staff/:staffId/status`                   | Manager | Activate or deactivate a staff account                                                     |
+| GET    | `/api/manager/trainees`                                | Manager | List every trainee with their current mentor                                               |
+| POST   | `/api/manager/trainees`                                | Manager | Create a trainee, optionally assigning an active mentor                                    |
+| PATCH  | `/api/manager/trainees/:traineeId`                     | Manager | Update a trainee's name or email                                                           |
+| PATCH  | `/api/manager/trainees/:traineeId/status`              | Manager | Activate or deactivate a trainee                                                           |
+| PATCH  | `/api/manager/trainees/:traineeId/mentor`              | Manager | Assign, reassign or unassign (`mentorId: null`) a trainee                                  |
+| GET    | `/api/manager/leave-requests`                          | Manager | Every leave request, with the trainee's assigned Mentor                                    |
+| GET    | `/api/manager/leave-requests/:requestId`               | Manager | Any leave request                                                                          |
+| PATCH  | `/api/manager/leave-requests/:requestId/review`        | Manager | Review pending requests; reject a Mentor approval; approve or re-reject a Mentor rejection |
 
 58 endpoints (including the legacy `PATCH /api/days/:dayId/status`). "Any" = any signed-in user (`requireAuth`); "Trainee" = `requireTrainee`; "Mentor" = `requireMentor` plus the assignment guard on trainee routes; "Manager" = `requireManager`.
 
@@ -400,12 +403,14 @@ Desktop error codes: `DESKTOP_AUTH_INVALID_STATE`, `DESKTOP_AUTH_INVALID_PKCE`, 
 
 ### GET /api/courses/:courseId/certificate
 
-- **Auth:** required.
+- **Auth:** required trainee.
 - **Path params:** `courseId`: same rules as above.
 - **Business rules** (`certificate.service.ts`):
   1. Unknown course → `404 "Course not found."`.
-  2. A course is finished when the trainee has a `day_completion` row for **every** day of it. Not finished → `403 FORBIDDEN` `"Finish every day of this course to get its certificate."`.
-  3. `completedAt` = the latest `completed_at` among the course's days. `certificateId` = `"VK-"` + the first 10 hex characters, upper-cased, of SHA-256 of `"<traineeId>:<courseId>"`: stable for the same trainee and course, and different for everyone else.
+  2. A course is certificate-eligible when the trainee has completed every curriculum day **and** every required (non-stretch) task has been approved. Not eligible → `403 FORBIDDEN` `"Complete every day and get all required tasks approved to earn this certificate."`.
+  3. Eligible certificates are persisted in the `certificate` table. Issuance is idempotent for the same trainee/course; concurrent requests cannot create duplicates.
+  4. `certificateId` is a cryptographically random public ID (`VK-` + 20 uppercase hex chars).
+  5. Protected fields (`certificateId`, `traineeName`, `courseTitle`, `completedAt`, `issuedAt`) are signed with the backend Ed25519 private key.
 - **Response 200** (`CourseCertificate`):
 
 ```json
@@ -415,11 +420,55 @@ Desktop error codes: `DESKTOP_AUTH_INVALID_STATE`, `DESKTOP_AUTH_INVALID_PKCE`, 
   "traineeName": "Asha K",
   "daysCompleted": 5,
   "completedAt": "2026-10-01T12:40:11.204Z",
-  "certificateId": "VK-3F9A2C71B0"
+  "issuedAt": "2026-10-02T09:00:00.000Z",
+  "certificateId": "VK-3F9A2C71B0ABCDEF1234",
+  "status": "ACTIVE",
+  "signature": "<base64-ed25519-signature>",
+  "signatureAlgorithm": "Ed25519",
+  "signatureVersion": "v1"
 }
 ```
 
-- **Errors:** 400; 401; 403 `FORBIDDEN` (not finished, or a mentor); 404 `"Course not found."` / `"Trainee not found."`.
+- **Errors:** 400; 401; 403 `FORBIDDEN` (not eligible, or non-trainee role); 404 `"Course not found."` / `"Trainee not found."`.
+
+### GET /api/certificates/verify/:certificateId
+
+- **Auth:** none (public endpoint).
+- **Path params:** `certificateId` must match `VK-[A-F0-9]{20}`.
+- **Rate limiting:** basic per-IP rate limit.
+- **Business rules:**
+  1. Unknown certificate → `200` with `valid:false`, `signatureValid:false`, `status:"UNKNOWN"`.
+  2. Signature mismatch over protected DB fields → `200` with `valid:false`, `signatureValid:false`.
+  3. Revoked certificate → `200` with `valid:false`, `signatureValid:true`, `status:"REVOKED"`.
+  4. Active certificate with valid signature → `200` with `valid:true`, `signatureValid:true`, `status:"ACTIVE"`.
+- **Response 200** (`CertificateVerificationResponse`):
+
+```json
+{
+  "valid": true,
+  "signatureValid": true,
+  "status": "ACTIVE",
+  "certificateId": "VK-3F9A2C71B0ABCDEF1234",
+  "traineeName": "Asha K",
+  "courseTitle": "HTML",
+  "completedAt": "2026-10-01T12:40:11.204Z",
+  "issuedAt": "2026-10-02T09:00:00.000Z",
+  "message": "Certificate is valid."
+}
+```
+
+- **Errors:** 400 `VALIDATION_FAILED` (bad certificate ID format); 429 `RATE_LIMITED`.
+
+### POST /api/certificates/:certificateId/revoke
+
+- **Auth:** required mentor or manager.
+- **Path params:** `certificateId` must match `VK-[A-F0-9]{20}`.
+- **Business rules:**
+  1. Unknown certificate → `404 "Certificate not found."`.
+  2. Active certificate → marked `REVOKED`, `revoked_at` set, original data and signature retained.
+  3. Already revoked certificate → returns the revoked certificate (idempotent).
+- **Response 200:** `CourseCertificate` with `status:"REVOKED"`.
+- **Errors:** 400; 401; 403; 404.
 
 ---
 
@@ -1015,6 +1064,37 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 - **Response 201** (`AdminTraineeSummary`): the new trainee's row exactly as `GET /api/admin/trainees` would return it (`daysCompleted: 0`, `lastActiveDate: null`, `averageScore: null`, …), so the page can insert it as is.
 - **Errors:** 400 `VALIDATION_FAILED` / `DOMAIN_NOT_PERMITTED`; 401; 403; 409 `TRAINEE_EXISTS` / `EMAIL_BELONGS_TO_ADMIN`.
 
+### Slack channel configuration
+
+These endpoints manage the authenticated mentor's own Slack channel. The mentor id always comes
+from `req.user.id`; no mentor id is accepted from the client. Trainees and managers get
+`403 FORBIDDEN`, and unauthenticated requests get `401 UNAUTHENTICATED`. See
+[Slack integration](slack-integration.md) for setup and notification behavior.
+
+#### GET /api/admin/slack-channel
+
+- **Auth:** mentor.
+- **Response 200** (`MentorSlackChannelResponse`): `{ "channelId": "C0123ABCDEF" }`, or
+  `{ "channelId": null }` when unset.
+- **Errors:** 401; 403; 404 `NOT_FOUND` if the mentor row no longer exists.
+
+#### PUT /api/admin/slack-channel
+
+- **Auth:** mentor.
+- **Request body** (`SaveMentorSlackChannelRequest`): `{ "channelId": "C0123ABCDEF" }`.
+- **Validation:** trimmed, 1–32 characters, `/^[A-Z0-9]+$/`. Invalid values return
+  `400 VALIDATION_FAILED`.
+- **Response 200** (`MentorSlackChannelResponse`): the saved channel. Saving the same ID is allowed;
+  saving a different ID replaces the old one.
+- **Errors:** 400; 401; 403.
+
+#### DELETE /api/admin/slack-channel
+
+- **Auth:** mentor.
+- **Response 200** (`MentorSlackChannelResponse`): `{ "channelId": null }`. Deleting when unset is
+  a no-op.
+- **Errors:** 401; 403.
+
 ### GET /api/admin/trainees/:traineeId
 
 - **Auth:** admin.
@@ -1250,8 +1330,10 @@ All routes are under `/api/admin`, mounted behind `requireAdmin` (`app.ts`): a t
 Trainees submit a subject and reason and may only read their own requests. Mentors review requests
 from their assigned trainees under `/api/admin`; managers review every request under `/api/manager`.
 Both staff roles share the same service, review payload and `LeaveRequest` response shape; only the
-data scope differs. See [roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow)
-for the permissions and [database.md](./database.md) for the `leave_request` table.
+data scope and permitted decisions differ. See
+[leave-request-workflow.md](./leave-request-workflow.md) for the workflow,
+[roles-and-assignments.md](./roles-and-assignments.md#7-leave-request-workflow) for permissions and
+[database.md](./database.md) for the `leave_request` and `leave_review` tables.
 
 Every leave response uses `LeaveRequest`:
 
@@ -1270,6 +1352,7 @@ Every leave response uses `LeaveRequest`:
   "reviewerRole": null,
   "feedback": null,
   "reviewedAt": null,
+  "reviews": [],
   "createdAt": "2026-11-21T09:00:00.000Z",
   "updatedAt": "2026-11-21T09:00:00.000Z"
 }
@@ -1277,8 +1360,14 @@ Every leave response uses `LeaveRequest`:
 
 `status` ∈ `PENDING | APPROVED | REJECTED`. `reviewerRole` ∈ `MENTOR | MANAGER` once decided, else
 `null`. `assignedMentor` is `null` for an unassigned trainee. All timestamps are ISO-8601 UTC.
-For a decided request, `reviewerId`, `reviewerName`, `reviewerRole` and `reviewedAt` are populated;
-`feedback` is optional for approvals and required for rejections.
+For a decided request, `reviewerId`, `reviewerName`, `reviewerRole` and `reviewedAt` describe the
+**current/final** decision; `feedback` is optional for approvals and required for rejections.
+
+`reviews` is the complete append-only decision history, oldest first. Every `LeaveReview` has
+`id`, `reviewerId`, `reviewerName`, `reviewerRole` (`MENTOR | MANAGER`), `decision` (`APPROVED |
+REJECTED`), `feedback` (`string | null`) and `reviewedAt` (ISO-8601 UTC). A Mentor decision and a
+later Manager decision both appear; the earlier entry is never replaced. `reviews` is `[]` while
+`PENDING`. See [leave-request-workflow.md](./leave-request-workflow.md) for an example.
 
 ### GET /api/leave-requests
 
@@ -1364,13 +1453,21 @@ For a decided request, `reviewerId`, `reviewerName`, `reviewerRole` and `reviewe
 
 - **Business rules:**
   1. The reviewer id, role and name come from the authenticated context, never the body.
-  2. The request must be in the reviewer's scope (mentor: assigned trainee; manager: any) and still
-     `PENDING`; a missing/out-of-scope request is `404`, a decided one is `409 ALREADY_REVIEWED`.
-  3. The decision, reviewer details, feedback and `reviewed_at` are written in one transaction via a
-     conditional `UPDATE ... WHERE status = 'PENDING'`. Only one of two concurrent reviews can win;
-     the loser gets `409 ALREADY_REVIEWED`. Historical requests are never deleted or overwritten.
-  4. A database CHECK constraint plus a `BEFORE UPDATE OF status` trigger also block any later code
-     path from changing a final status.
-- **Response 200** (`LeaveRequest`): the updated request with the recorded decision.
+  2. The request must be in the reviewer's scope (mentor: assigned trainee; manager: any) and either
+     `PENDING`, `APPROVED` with a Mentor as the recorded reviewer (Manager may only `REJECT`), or
+     `REJECTED` with a Mentor as the recorded reviewer (Manager may `APPROVE` or `REJECT`). A
+     missing/out-of-scope request is `404`; any other decided request is `409 ALREADY_REVIEWED`.
+     Mentors cannot change decided requests, and nobody can change a decision already recorded as
+     their own.
+  3. The decision, current-review snapshot and an append-only `leave_review` row are written in one
+     transaction via a conditional `UPDATE` on the expected current status (`PENDING`, or
+     `APPROVED`/`REJECTED` with `reviewer_role = 'MENTOR'` for a Manager override). Only one of two
+     concurrent reviews can win; the loser gets `409 ALREADY_REVIEWED`. The Mentor's earlier entry
+     survives any Manager decision.
+  4. CHECK constraints, `UNIQUE (leave_request_id, reviewer_role)` on `leave_review` and the
+     `leave_request_status_guard` trigger also protect the workflow outside the API. Only
+     `PENDING → APPROVED/REJECTED` and Mentor-decision → Manager-decision transitions are allowed.
+- **Response 200** (`LeaveRequest`): the updated request with the current decision and the complete
+  `reviews` history.
 - **Errors:** 400 `VALIDATION_FAILED` (bad UUID, invalid decision, missing rejection feedback);
   401; 403; 404 `NOT_FOUND`; 409 `ALREADY_REVIEWED`.

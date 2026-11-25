@@ -51,3 +51,14 @@ export const analyticsQuerySchema = z
   });
 
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
+
+export const saveSlackChannelSchema = z.object({
+  channelId: z
+    .string()
+    .trim()
+    .min(1, 'Enter a Slack channel ID.')
+    .max(32, 'Slack channel ID is too long.')
+    .regex(/^[A-Z0-9]+$/, 'Enter a valid Slack channel ID.'),
+});
+
+export type SaveSlackChannelBody = z.infer<typeof saveSlackChannelSchema>;

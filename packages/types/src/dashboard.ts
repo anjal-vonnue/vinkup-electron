@@ -31,13 +31,38 @@ export type DaySummary = {
   status: DayStatus;
 };
 
+export type CertificateStatus = 'ACTIVE' | 'REVOKED';
+
 export type CourseCertificate = {
   courseId: string;
   courseTitle: string;
   traineeName: string;
   daysCompleted: number;
-  completedAt: string; // ISO, latest day_completion.completed_at in the course
-  certificateId: string; // e.g. VK-3F9A2C71B0
+  /** ISO. Earliest task_progress.created_at in this course; falls back to completedAt if none. */
+  startedAt: string;
+  /** ISO. Latest day_completion.completed_at in this course. */
+  completedAt: string;
+  /** ISO. When the certificate was issued. */
+  issuedAt: string;
+  /** Sum of every task's time_spent_seconds in this course (live, computed at read). */
+  timeSpentSeconds: number;
+  certificateId: string;
+  status: CertificateStatus;
+  signature: string;
+  signatureAlgorithm: string;
+  signatureVersion: string;
+};
+
+export type CertificateVerificationResponse = {
+  valid: boolean;
+  signatureValid: boolean;
+  status: CertificateStatus | 'UNKNOWN';
+  certificateId: string;
+  traineeName: string | null;
+  courseTitle: string | null;
+  completedAt: string | null;
+  issuedAt: string | null;
+  message: string;
 };
 /** GET /api/courses/:courseId/days */
 export type CourseDaysResponse = DaySummary[];
@@ -59,4 +84,19 @@ export type ReworkTaskSummary = {
     feedback: string;
     reviewedAt: string;
   } | null;
+};
+
+/** An approved mentor comment the authenticated trainee has not opened yet. */
+export type UnreadTaskComment = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  dayId: string;
+  dayNumber: number;
+  courseTitle: string;
+  adminId: string;
+  adminName: string;
+  submissionNo: number;
+  feedback: string;
+  reviewedAt: string;
 };

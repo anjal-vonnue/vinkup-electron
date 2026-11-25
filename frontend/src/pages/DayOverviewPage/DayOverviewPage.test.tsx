@@ -15,12 +15,16 @@ import {
   getDayIntegrity,
 } from '../../api/days';
 import { getTaskReview } from '../../api/tasks';
+import { markTaskCommentRead } from '../../api/dashboard';
 import { RealtimeProvider } from '../../context/RealtimeProvider';
 import { installFakeEventSource } from '../../test/fakeEventSource';
 import DayOverviewPage from './DayOverviewPage';
 
 vi.mock('../../api/days');
 vi.mock('../../api/tasks');
+vi.mock('../../api/dashboard', () => ({
+  markTaskCommentRead: vi.fn().mockResolvedValue(undefined),
+}));
 // The header needs providers we don't care about here.
 vi.mock('../../components/Header', () => ({ default: () => null }));
 // The self-check checklist stores its ticks per trainee, so it needs a user.
@@ -69,6 +73,7 @@ async function findJournalTextarea() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(markTaskCommentRead).mockResolvedValue(undefined);
   vi.mocked(getDayTasks).mockResolvedValue([completedTask]);
   vi.mocked(getDayStatus).mockResolvedValue(openStatus);
   vi.mocked(getDayJournal).mockResolvedValue({ responseText: null });
@@ -200,6 +205,40 @@ describe('DayOverviewPage: review status', () => {
     expect(await screen.findByText('Please fix the heading hierarchy.')).toBeInTheDocument();
     expect(screen.getByText('Reviewed by Mentor Jane')).toBeInTheDocument();
     expect(getTaskReview).toHaveBeenCalledWith(reworkTask.id);
+  });
+
+  it('opens an approved task suggestion from its separate row action', async () => {
+    const suggestedTask = {
+      ...approvedTask,
+      mentorSuggestion: { adminName: 'Mentor Jane', feedback: 'Consider adding a footer.' },
+    };
+    vi.mocked(getDayTasks).mockResolvedValue([suggestedTask]);
+    vi.mocked(getTaskReview).mockResolvedValue({
+      reviewStatus: 'approved',
+      submissionCount: 1,
+      latestReview: {
+        id: 'rev-approved',
+        taskId: suggestedTask.id,
+        adminId: 'admin-1',
+        adminName: 'Mentor Jane',
+        submissionNo: 1,
+        decision: 'approved',
+        feedback: 'Consider adding a footer.',
+        reviewedAt: '2026-11-12T10:00:00.000Z',
+      },
+    });
+    renderPage();
+
+    await screen.findByText('Approved task');
+    expect(screen.getByText('Approved').closest('[role="button"]')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View mentor suggestion for Approved task' })
+    );
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByText('Consider adding a footer.')).toBeInTheDocument();
+    expect(screen.getByText('Mentor suggestion')).toBeInTheDocument();
+    expect(getTaskReview).toHaveBeenCalledWith(suggestedTask.id);
   });
 });
 

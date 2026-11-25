@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Code, User, X } from 'lucide-react';
 import type { TaskReview } from '@itp/types';
 import { getTaskReview } from '../../api/tasks';
+import { markTaskCommentRead } from '../../api/dashboard';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import MarkdownRenderer from '../MarkdownRenderer/MarkdownRenderer';
 import styles from './TaskFeedbackModal.module.css';
@@ -58,6 +59,13 @@ export default function TaskFeedbackModal({
       cancelled = true;
     };
   }, [isOpen, taskId, initialReview, fetched]);
+
+  useEffect(() => {
+    if (!isOpen || review?.decision !== 'approved' || !review.feedback.trim()) return;
+    void markTaskCommentRead(review.id).catch(() => {
+      // The comment remains available in the task even if marking it read fails.
+    });
+  }, [isOpen, review?.id, review?.decision, review?.feedback]);
 
   // Lock body scroll
   useEffect(() => {
@@ -154,7 +162,9 @@ export default function TaskFeedbackModal({
               </div>
 
               <div className={styles.feedbackContainer}>
-                <div className={styles.feedbackLabel}>Admin Feedback</div>
+                <div className={styles.feedbackLabel}>
+                  {isApproved ? 'Mentor suggestion' : 'Admin Feedback'}
+                </div>
                 <div className={styles.feedbackContent}>
                   {review.feedback ? (
                     <MarkdownRenderer markdown={review.feedback} />

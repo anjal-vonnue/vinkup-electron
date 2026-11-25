@@ -18,18 +18,21 @@ const CHECKPOINT_TABLES = [
 ];
 
 const TRAINEE_TABLES = [
+  'certificate',
   'activity_log',
   'flag_event',
   'typing_test_result',
   'journal_response',
   'day_completion',
   'task_review',
+  'leave_review',
 ];
 
 const TABLES = [
   ...CHECKPOINT_TABLES,
   ...TRAINEE_TABLES,
   'leave_request',
+  'slack_notification_outbox',
   'task_progress',
   'self_check_item',
   'learning_objective',

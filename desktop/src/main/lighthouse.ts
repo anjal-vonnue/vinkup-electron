@@ -32,6 +32,7 @@ type LighthouseModule = {
     }
   ) => Promise<{
     lhr: {
+      runtimeError?: { code: string; message: string };
       finalDisplayedUrl: string;
       categories: Record<string, { score: number | null }>;
       audits: Record<
@@ -81,6 +82,36 @@ function assertLoopbackUrl(value: string): void {
   }
 }
 
+const RUNTIME_ERROR_MESSAGES: Record<string, string> = {
+  NO_FCP: 'The page did not paint any content. Add visible content to the page and try again.',
+  NO_LCP: 'The page has no visible content to measure. Add some content and try again.',
+  PAGE_HUNG: 'The page stopped responding during the audit. Check your scripts for infinite loops.',
+  FAILED_DOCUMENT_REQUEST:
+    'The page could not be loaded. Make sure the file exists and the preview is running.',
+  ERRORED_DOCUMENT_REQUEST:
+    'The page could not be loaded. Make sure the file exists and the preview is running.',
+  PROTOCOL_TIMEOUT: 'The audit timed out. Try again, and check your page for very slow scripts.',
+};
+
+/** Joins the preview base URL with a workspace-relative .html path chosen in the UI. */
+export function buildAuditUrl(baseUrl: string, pagePath: unknown): string {
+  if (pagePath === undefined || pagePath === null || pagePath === '') return baseUrl;
+
+  const segments = typeof pagePath === 'string' ? pagePath.split('/') : [];
+  const valid =
+    typeof pagePath === 'string' &&
+    pagePath.length <= 500 &&
+    /\.html?$/i.test(pagePath) &&
+    !pagePath.includes('\\') &&
+    !pagePath.includes('\0') &&
+    segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+
+  if (!valid) throw new Error('Invalid page selected for the Lighthouse audit.');
+
+  const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  return new URL(segments.map(encodeURIComponent).join('/'), base).toString();
+}
+
 export async function runLighthouseAudit(url: string): Promise<LighthouseAuditResult> {
   assertLoopbackUrl(url);
 
@@ -113,10 +144,13 @@ export async function runLighthouseAudit(url: string): Promise<LighthouseAuditRe
       throw new Error('Lighthouse did not return an audit report.');
     }
 
-    // temporary: remove once we know the cause
-    console.log(
-      JSON.stringify((lhr.audits['errors-in-console'] as { details?: unknown }).details, null, 2)
-    );
+    if (lhr.runtimeError) {
+      console.error('[lighthouse] runtime error', lhr.runtimeError.code, lhr.runtimeError.message);
+      throw new Error(
+        RUNTIME_ERROR_MESSAGES[lhr.runtimeError.code] ??
+          `Lighthouse could not analyse this page (${lhr.runtimeError.code}).`
+      );
+    }
 
     return {
       url: lhr.finalDisplayedUrl,

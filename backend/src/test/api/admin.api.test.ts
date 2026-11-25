@@ -118,6 +118,7 @@ describe('GET /api/admin/trainees', () => {
       flagsLast7Days: 0,
       averageScore: null,
       daysScored: 0,
+      pendingReviewItems: [],
     });
   });
 
@@ -192,6 +193,25 @@ describe('GET /api/admin/trainees', () => {
 
     expect(rowFor(list, b).flagsLast7Days).toBe(2);
     expect(rowFor(list, a).flagsLast7Days).toBe(0);
+  });
+
+  it('leaves idle flags out of the flag count and the integrity score', async () => {
+    await db.flag_event.create({
+      data: {
+        trainee_id: b.id,
+        task_id: TASK.html1Main,
+        type: 'IDLE',
+        review_priority: 'NORMAL',
+        duration_ms: 40 * 60_000,
+        timestamp: minutesAgo(5),
+      },
+    });
+
+    const row = rowFor(await listTrainees(), b);
+
+    expect(row.flagsLast7Days).toBe(0);
+    // An idle flag doesn't make the task count as worked on, so there is still nothing to score.
+    expect(row.averageScore).toBeNull();
   });
 });
 
@@ -359,6 +379,30 @@ describe('GET /api/admin/trainees/:traineeId/flags', () => {
     expect(flagsB[0].durationMs).toBeNull();
     expectIsoDateTime(flagsB[0].timestamp);
     expect(flagsA).toEqual([]);
+  });
+
+  it('lists idle flags with their length, like any other flag', async () => {
+    await db.flag_event.create({
+      data: {
+        trainee_id: b.id,
+        task_id: TASK.html1Main,
+        type: 'IDLE',
+        review_priority: 'NORMAL',
+        duration_ms: 18 * 60_000,
+        timestamp: minutesAgo(5),
+      },
+    });
+
+    const flags = await getAs<AdminFlagEvent[]>(`/api/admin/trainees/${b.id}/flags`, admin.cookie);
+
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toMatchObject({
+      type: 'IDLE',
+      taskId: TASK.html1Main,
+      dayId: DAY.html1,
+      durationMs: 18 * 60_000,
+      reviewPriority: 'NORMAL',
+    });
   });
 
   it('returns 404 NOT_FOUND for an unknown trainee', async () => {

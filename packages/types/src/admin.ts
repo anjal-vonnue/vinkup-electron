@@ -31,6 +31,15 @@ export type AdminTraineeSummary = {
   flagsLast7Days: number;
   averageScore: number | null;
   daysScored: number;
+  /** Submitted tasks waiting for review, included for the mentor dashboard queue. */
+  pendingReviewItems: {
+    taskId: string;
+    taskTitle: string;
+    dayId: string;
+    courseTitle: string;
+    dayNumber: number;
+    lastSubmittedAt: string | null;
+  }[];
 };
 
 export type AdminDay = {
@@ -100,6 +109,7 @@ export type AdminTaskCode = {
   isStarterCode: boolean; // true = no files have been saved
   reviewStatus: ReviewStatus | null;
   submissionCount: number;
+  timeSpentSeconds: number;
   files: TaskFile[]; // Latest submitted files, never the live working copy
   codeUpdatedAt: string | null;
   lastSubmittedAt: string | null;
@@ -127,6 +137,16 @@ export type AdminFeedbackListResponse = AdminFeedbackEntry[];
 export type CreateTraineeRequest = {
   name: string;
   email: string;
+};
+
+/** GET /api/admin/slack-channel */
+export type MentorSlackChannelResponse = {
+  channelId: string | null;
+};
+
+/** PUT /api/admin/slack-channel */
+export type SaveMentorSlackChannelRequest = {
+  channelId: string;
 };
 
 // ---------- Team analytics (GET /api/admin/analytics) ----------

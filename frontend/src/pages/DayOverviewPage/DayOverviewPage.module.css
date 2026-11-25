@@ -176,6 +176,7 @@
 .taskStatus {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   padding: 3px 8px;
   border-radius: 6px;
   background: var(--color-bg-surface-2);
@@ -195,27 +196,39 @@
   font-weight: 600;
 }
 
+.not_started {
+  border: 1px solid transparent;
+}
+
 .in_progress {
   background: var(--color-accent-tint);
-  color: var(--color-accent-purple);
+  color: var(--color-status-progress-text, var(--color-accent-purple));
+  border: 1px solid color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
 }
 
 .completed {
-  background: var(--color-bg-green-fill);
-  color: var(--color-status-success);
+  background: var(--color-status-info-bg);
+  color: var(--color-status-info);
+  border: 1px solid color-mix(in srgb, var(--color-status-info) 30%, transparent);
 }
 
 .approved {
   background: var(--color-bg-green-fill);
   color: var(--color-status-success);
+  border: 1px solid color-mix(in srgb, var(--color-status-success) 30%, transparent);
+}
+
+.suggestion {
+  background: var(--color-accent-tint);
+  color: var(--color-accent-text);
+  border: 1px solid color-mix(in srgb, var(--color-accent-purple) 30%, transparent);
 }
 
 .rework {
   background: rgba(249, 115, 22, 0.15);
-  color: #fb923c;
+  color: var(--color-status-rework-text, #fb923c);
   border: 1px solid rgba(249, 115, 22, 0.3);
 }
-
 .clickableStatus {
   cursor: pointer;
   transition:

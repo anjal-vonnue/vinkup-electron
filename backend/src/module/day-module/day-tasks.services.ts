@@ -7,7 +7,12 @@ type TaskStatus = DayTask['status'];
 
 // If a DayTask field is missing or extra, TypeScript will point at this function:
 // this is the only place that decides the shape of one task in the list.
-function toDayTask(task: TaskRow, status: TaskStatus, reviewStatus: string | null): DayTask {
+function toDayTask(
+  task: TaskRow,
+  status: TaskStatus,
+  reviewStatus: string | null,
+  mentorSuggestion?: DayTask['mentorSuggestion']
+): DayTask {
   return {
     id: task.id,
     title: task.title,
@@ -16,6 +21,9 @@ function toDayTask(task: TaskRow, status: TaskStatus, reviewStatus: string | nul
     status,
     // Only a completed (submitted) task can have a review state.
     reviewStatus: status === 'completed' ? (reviewStatus as ReviewStatus | null) : null,
+    ...(status === 'completed' && reviewStatus === 'approved' && mentorSuggestion
+      ? { mentorSuggestion }
+      : {}),
   };
 }
 
@@ -23,18 +31,33 @@ export const dayTasksService = {
   async getDayTasks(traineeId: string, dayId: string): Promise<DayTask[]> {
     await assertDayIsAccessible(traineeId, dayId);
 
-    // Two queries in total, however many tasks the day has (no query per task).
-    const [tasks, progressRows] = await Promise.all([
+    // Batch-load task data, progress, and feedback (no query per task).
+    const [tasks, progressRows, suggestions] = await Promise.all([
       dayTasksRepository.findTasksByDay(dayId),
       dayTasksRepository.findProgressByDay(traineeId, dayId),
+      dayTasksRepository.findApprovedSuggestionsByDay(traineeId, dayId),
     ]);
 
     const statusByTaskId = new Map(progressRows.map((row) => [row.task_id, row]));
+    const suggestionByTaskId = new Map<string, NonNullable<DayTask['mentorSuggestion']>>();
+    for (const suggestion of suggestions) {
+      if (!suggestionByTaskId.has(suggestion.task_id)) {
+        suggestionByTaskId.set(suggestion.task_id, {
+          adminName: suggestion.admin.name,
+          feedback: suggestion.feedback,
+        });
+      }
+    }
 
     // No progress row yet means the trainee hasn't opened the task.
     return tasks.map((task) => {
       const row = statusByTaskId.get(task.id);
-      return toDayTask(task, row?.status ?? 'not_started', row?.review_status ?? null);
+      return toDayTask(
+        task,
+        row?.status ?? 'not_started',
+        row?.review_status ?? null,
+        suggestionByTaskId.get(task.id)
+      );
     });
   },
 };

@@ -9,6 +9,7 @@ export const taskFixture: TaskResponse = {
   status: 'in_progress',
   reviewStatus: null,
   submissionCount: 0,
+  timeSpentSeconds: 0,
   day: {
     id: 'd1',
     dayNumber: 1,
@@ -152,6 +153,7 @@ export const nodeTaskFixture: TaskResponse = {
   status: 'not_started',
   reviewStatus: null,
   submissionCount: 0,
+  timeSpentSeconds: 0,
   day: {
     id: 'd-node-1',
     dayNumber: 1,
@@ -221,6 +223,7 @@ export const sqlTaskFixture: TaskResponse = {
   status: 'not_started',
   reviewStatus: null,
   submissionCount: 0,
+  timeSpentSeconds: 0,
   day: {
     id: 'd-sql-1',
     dayNumber: 1,

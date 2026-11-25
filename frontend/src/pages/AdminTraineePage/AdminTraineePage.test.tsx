@@ -311,6 +311,16 @@ describe('AdminTraineePage', () => {
     );
   });
 
+  it('opens with the Pending review filter when linked from the dashboard queue', async () => {
+    renderPage(`/admin/trainees/${traineeId}?filter=pending`);
+
+    await screen.findByRole('tabpanel');
+    expect(screen.getByRole('button', { name: /^Pending review \(/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
   it('shows journal responses on the Journal tab', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -388,6 +398,11 @@ describe('AdminTraineePage', () => {
 
     expect(getAdminTaskCode).toHaveBeenCalledWith(traineeId, completed.taskId);
     const viewer = await screen.findByRole('region', { name: completed.title });
+    const firstFile = (await within(viewer).findAllByRole('treeitem')).find(
+      (row) => row.getAttribute('aria-expanded') === null
+    );
+    if (!firstFile) throw new Error('submitted task has no file row');
+    await user.click(firstFile);
     expect(await within(viewer).findByText('Read only')).toBeInTheDocument();
     expect(
       within(viewer).queryByRole('button', { name: /run|save|reset|submit/i })
@@ -410,6 +425,7 @@ describe('AdminTraineePage', () => {
       files: [{ path: 'index.html', content: '<!-- starter -->' }],
       codeUpdatedAt: null,
       lastSubmittedAt: null,
+      timeSpentSeconds: 0,
     });
     renderPage();
 
@@ -441,8 +457,9 @@ describe('AdminTraineePage', () => {
 
     await user.click(await screen.findByRole('button', { name: `View code for ${task.title}` }));
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve task' }));
 
-    expect(approveTask).toHaveBeenCalledWith(traineeId, task.taskId);
+    expect(approveTask).toHaveBeenCalledWith(traineeId, task.taskId, '');
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Close code viewer' })).not.toBeInTheDocument()
     );
@@ -460,6 +477,7 @@ describe('AdminTraineePage', () => {
     // The reload after the approval never finishes, so a loader would stay on screen.
     vi.mocked(getAdminTrainee).mockReturnValue(new Promise(() => {}));
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve task' }));
 
     await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 800 }));
     expect(screen.queryByText('Loading trainee…')).not.toBeInTheDocument();
@@ -475,6 +493,7 @@ describe('AdminTraineePage', () => {
     await user.click(await screen.findByRole('button', { name: /^Pending review \(/ }));
     await user.click(await screen.findByRole('button', { name: `View code for ${task.title}` }));
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve task' }));
 
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Close code viewer' })).not.toBeInTheDocument()
@@ -626,7 +645,7 @@ describe('AdminTraineePage', () => {
 
     expect(within(report).getByRole('heading', { name: 'Focus events' })).toBeInTheDocument();
 
-    expect(document.title).toBe(reportDocumentTitle(detail.profile.trainee.name));
+    expect(document.title).toBe(reportDocumentTitle('Rahul Sharma'));
 
     act(() => {
       window.dispatchEvent(new Event('afterprint'));

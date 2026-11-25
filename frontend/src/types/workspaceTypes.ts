@@ -28,4 +28,6 @@ export type WorkspaceAction =
   /** open: false is used by the Node runtime when a file appears from the terminal (FE-08) */
   | { type: 'fileCreated'; path: string; content?: string; open?: boolean }
   | { type: 'fileDeleted'; path: string }
-  | { type: 'folderDeleted'; path: string };
+  | { type: 'folderDeleted'; path: string }
+  /** Rename or move a file, or a whole folder: `from` becomes `to`. Validate with planRelocation first. */
+  | { type: 'pathRelocated'; from: string; to: string };

@@ -161,9 +161,8 @@ export type LighthouseAuditResult = {
 };
 
 export interface AuditApi {
-  run: (taskId: string) => Promise<LighthouseAuditResult>;
+  run: (taskId: string, pagePath?: string) => Promise<LighthouseAuditResult>;
 }
-
 export interface WorkspaceApi {
   open: (input: WorkspaceOpenInput) => Promise<WorkspaceOpenResult>;
   sync: (input: WorkspaceSyncInput) => Promise<void>;
@@ -232,6 +231,16 @@ export interface DesktopApi {
     ) => () => void;
     /** Returns an unsubscribe function. */
     onFullscreenChange: (listener: (isFullscreen: boolean) => void) => () => void;
+    /**
+     * The trainee used our own second-screen window (key, click, scroll or mouse move),
+     * even without focusing it. Sent at most every few seconds. Returns an unsubscribe function.
+     */
+    onOwnWindowActivity?: (listener: () => void) => () => void;
+    /**
+     * The screen was locked or the computer went to sleep (true), or is back (false).
+     * Returns an unsubscribe function.
+     */
+    onScreenLockChange?: (listener: (locked: boolean) => void) => () => void;
   };
 
   certificate: {
@@ -283,6 +292,8 @@ export interface DesktopApi {
     onFindResult: (listener: (result: ResourcesFindResult) => void) => () => void;
     /** Returns an unsubscribe function. Esc from inside the page. */
     onEscape: (listener: () => void) => () => void;
+
+    onActivity: (listener: () => void) => () => void;
   };
   /** Saves the printable trainee report as an A4 portrait PDF. */
   report: {
