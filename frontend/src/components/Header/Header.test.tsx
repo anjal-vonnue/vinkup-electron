@@ -213,6 +213,47 @@ describe('Header', () => {
     }
   });
 
+  it('locks the other nav links and highlights Checkpoints during a checkpoint attempt', () => {
+    render(
+      <MemoryRouter initialEntries={['/checkpoints/attempts/a1']}>
+        <Routes>
+          <Route path="/checkpoints/attempts/:attemptId" element={<Header />} />
+          <Route path="/journal" element={<span>Journal page</span>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const checkpointsLink = screen.getByRole('link', { name: 'Checkpoints' });
+    expect(checkpointsLink.className).toMatch(/active/);
+    expect(checkpointsLink.className).toMatch(/workspaceActive/);
+
+    for (const label of ['Home', 'Typing Test', 'Journal', 'Leave', 'Resources']) {
+      const link = screen.getByRole('link', { name: label });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(link.className).toMatch(/linkDisabled/);
+      expect(link.className).not.toMatch(/active/);
+      expect(fireEvent.click(link)).toBe(false);
+    }
+
+    expect(screen.queryByText('Journal page')).not.toBeInTheDocument();
+  });
+
+  it('does not lock the header on the checkpoint list', () => {
+    render(
+      <MemoryRouter initialEntries={['/checkpoints']}>
+        <Routes>
+          <Route path="/checkpoints" element={<Header />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-disabled', 'true');
+    const checkpointsLink = screen.getByRole('link', { name: 'Checkpoints' });
+    expect(checkpointsLink.className).toMatch(/active/);
+    expect(checkpointsLink.className).not.toMatch(/workspaceActive/);
+  });
+
   it.each(['/days/js-day-01', '/days/js-day-01/references'])(
     'marks Home active on the day page (%s)',
     (path) => {

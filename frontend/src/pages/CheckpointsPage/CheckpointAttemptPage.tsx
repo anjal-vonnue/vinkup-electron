@@ -212,6 +212,9 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
       const target = event.target as Element | null;
       const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null;
       if (!anchor) return;
+      // Links the header disables during the attempt never navigate, so they
+      // must not raise the leave confirmation either.
+      if (anchor.getAttribute('aria-disabled') === 'true') return;
       const href = anchor.getAttribute('href') ?? '';
       if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
       if (href.startsWith(`/checkpoints/attempts/${attempt.id}`)) return;
