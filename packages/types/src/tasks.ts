@@ -53,6 +53,7 @@ export type TaskResponse = {
   reviewStatus: ReviewStatus | null;
   /** How many times this trainee has submitted the task. */
   submissionCount: number;
+  timeSpentSeconds: number;
   day: {
     id: string;
     dayNumber: number;

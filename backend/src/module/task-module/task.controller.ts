@@ -58,6 +58,14 @@ class TaskController {
       next(error);
     }
   };
+
+  async recordTime(req: Request, res: Response) {
+    const traineeId = (req as AuthenticatedRequest).user.id;
+    const { taskId } = req.params as { taskId: string };
+    const { deltaSeconds } = req.body as { deltaSeconds: number };
+    const result = await taskService.recordTime(traineeId, taskId, deltaSeconds);
+    res.json(result);
+  }
 }
 
 export const taskController = new TaskController();

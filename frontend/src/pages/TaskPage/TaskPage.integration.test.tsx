@@ -10,7 +10,7 @@ import { ToastProvider } from '../../components/Toast';
 // Only the API layer is faked; the page, autosave, toolbar and dialog are real.
 vi.mock('../../api/tasks');
 vi.mock('../../api/activity');
-// Header needs a logged-in user  this is context, not an API call.
+// Header needs a logged-in user — this is context, not an API call.
 vi.mock('../../context/Useauth', () => ({
   useAuth: () => ({
     user: { id: 'user-1', name: 'Rahul Sharma', email: 'rahul@example.com' },
@@ -90,7 +90,7 @@ describe('TaskPage (integration): edit, autosave, submit', () => {
       await vi.advanceTimersByTimeAsync(SAVE_TAKES_MS * 3);
     });
 
-    // Every save that started has settled before submitTask is called. (flush() currently
+    // Every save that started has settled before submitTask is called.
     const submitIndex = events.indexOf('submit t1');
     expect(submitIndex).toBeGreaterThan(0);
     const beforeSubmit = events.slice(0, submitIndex);
@@ -103,11 +103,11 @@ describe('TaskPage (integration): edit, autosave, submit', () => {
         '<h1>Edited</h1>'
       );
     }
+
+    // After a successful submit the toolbar shows the Submitted pill
+    // (rendered by TaskToolbar, since the header SessionTimer was removed)
+    // and the Resubmit button.
     expect(await screen.findByText(/^Submitted \d\d:\d\d$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /resubmit/i })).toBeInTheDocument();
-
-    // The header timer has stopped and shows the submitted state instead.
-    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
-    expect(screen.getByRole('status', { name: /^Submitted/ })).toBeInTheDocument();
   });
 });

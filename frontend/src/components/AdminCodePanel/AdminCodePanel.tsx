@@ -13,6 +13,15 @@ import styles from './AdminCodePanel.module.css';
 
 const MAX_REWORK_MARKDOWN_CHARS = 10000;
 
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
+  return `${s}s`;
+}
+
 const SubmissionBrowser = lazy(() => import('../SubmissionBrowser/SubmissionBrowser'));
 
 type AdminCodePanelProps = {
@@ -198,14 +207,33 @@ export default function AdminCodePanel({
           </h3>
 
           {code && (
-            <p className={styles.meta}>
-              <span>{TASK_STATUS_LABELS[code.status]}</span>
-              {code.submissionCount > 0 && <span>Attempt #{code.submissionCount}</span>}
-              {code.codeUpdatedAt && <span>Saved {formatIstDateTime(code.codeUpdatedAt)}</span>}
-              {code.lastSubmittedAt && (
-                <span>Submitted {formatIstDateTime(code.lastSubmittedAt)}</span>
+            <div className={styles.meta}>
+              <div className={styles.metaPrimary}>
+                <span className={styles.statusBadge} data-status={code.status}>
+                  {TASK_STATUS_LABELS[code.status]}
+                </span>
+                {code.submissionCount > 0 && (
+                  <span className={styles.attemptChip}>Attempt #{code.submissionCount}</span>
+                )}
+                {code.timeSpentSeconds > 0 && (
+                  <span
+                    className={styles.timeChip}
+                    title="Active time the trainee has spent on this task"
+                  >
+                    <Clock size={11} aria-hidden="true" />
+                    {formatDuration(code.timeSpentSeconds)}
+                  </span>
+                )}
+              </div>
+              {(code.codeUpdatedAt || code.lastSubmittedAt) && (
+                <div className={styles.metaTimeline}>
+                  {code.codeUpdatedAt && <span>Saved {formatIstDateTime(code.codeUpdatedAt)}</span>}
+                  {code.lastSubmittedAt && (
+                    <span>Submitted {formatIstDateTime(code.lastSubmittedAt)}</span>
+                  )}
+                </div>
               )}
-            </p>
+            </div>
           )}
         </div>
 

@@ -154,6 +154,7 @@ export class AdminRepository {
         first_submitted_at: true,
         last_submitted_at: true,
         code_updated_at: true,
+        time_spent_seconds: true,
       },
     });
 

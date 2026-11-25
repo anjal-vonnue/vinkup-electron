@@ -124,6 +124,7 @@ describe('TaskService', () => {
         status: 'in_progress',
         reviewStatus: null,
         submissionCount: 0,
+        timeSpentSeconds: 0,
         day: { id: 'html-day-01', dayNumber: 1, courseTitle: 'HTML' },
         runtime: 'browser',
         runCommand: null,

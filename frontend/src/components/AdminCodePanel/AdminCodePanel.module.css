@@ -35,16 +35,109 @@
   outline-offset: 2px;
 }
 
+/* ─── Meta (status + attempt + time, then timeline) ─────────────────── */
+
 .meta {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.metaPrimary {
+  display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  align-items: center;
+  gap: 8px;
+}
 
-  margin-top: 4px;
+/* Status badge — colour per task_status. */
 
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.statusBadge[data-status='not_started'] {
   color: var(--color-text-secondary);
+  background: var(--color-bg-surface-2, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.statusBadge[data-status='in_progress'] {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+}
+
+.statusBadge[data-status='completed'] {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.28);
+}
+
+/* Attempt number — neutral chip, monospaced digits. */
+
+.attemptChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--color-bg-surface-2, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Time on task — accent-tinted to draw the eye, since it's the actionable metric. */
+
+.timeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: rgba(124, 65, 228, 0.12);
+  border: 1px solid rgba(124, 65, 228, 0.28);
+  color: var(--color-accent-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Timeline — muted, dot-separated, no chips. */
+
+.metaTimeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  opacity: 0.8;
+}
+
+.metaTimeline > span + span::before {
+  content: '·';
+  margin-right: 10px;
+  opacity: 0.6;
 }
 
 .close {
@@ -331,6 +424,13 @@
   border: 0;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.timeSpent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .textarea:focus {

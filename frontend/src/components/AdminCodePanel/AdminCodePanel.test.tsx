@@ -27,6 +27,7 @@ const code: AdminTaskCode = {
   ],
   codeUpdatedAt: '2026-10-02T12:12:00.000Z',
   lastSubmittedAt: null,
+  timeSpentSeconds: 0,
 };
 
 function renderPanel(overrides: Partial<Parameters<typeof AdminCodePanel>[0]> = {}) {

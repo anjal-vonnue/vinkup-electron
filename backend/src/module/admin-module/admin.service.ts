@@ -278,6 +278,7 @@ export class AdminService {
       files: (submitted ?? task.starter_files) as unknown as TaskFile[],
       codeUpdatedAt: progress?.code_updated_at?.toISOString() ?? null,
       lastSubmittedAt: progress?.last_submitted_at?.toISOString() ?? null,
+      timeSpentSeconds: progress?.time_spent_seconds ?? 0,
     };
   };
 

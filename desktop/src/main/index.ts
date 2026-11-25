@@ -175,6 +175,10 @@ function createResourcesBrowser(
     onOpenFind: () => sendEvent('resources:open-find'),
     onFindResult: (result) => sendEvent('resources:find-result', result),
     onEscape: () => sendEvent('resources:escape'),
+    onActivity: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('resources:activity');
+    },
     // A secondary-display browser is our own window: its input counts as activity.
     onInput: trackMainWindowFocus ? undefined : notifyOwnWindowActivity,
   });
@@ -595,6 +599,11 @@ function registerIpcHandlers(): void {
       secondaryResourcesBrowsers.get(overlayWindow)?.close();
     }
     displayWindowManager?.setOverlayResourcesActive(event.sender, active);
+  });
+
+  ipcMain.on('resources:activity', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('resources:activity');
   });
 
   ipcMain.handle('browser:get-availability', (event) => {

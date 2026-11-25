@@ -425,6 +425,7 @@ describe('AdminTraineePage', () => {
       files: [{ path: 'index.html', content: '<!-- starter -->' }],
       codeUpdatedAt: null,
       lastSubmittedAt: null,
+      timeSpentSeconds: 0,
     });
     renderPage();
 

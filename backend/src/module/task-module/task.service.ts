@@ -35,6 +35,7 @@ export class TaskService {
       status: progressService.taskStatus(progress),
       reviewStatus: progress?.review_status ?? null,
       submissionCount: progress?.submission_count ?? 0,
+      timeSpentSeconds: progress?.time_spent_seconds ?? 0,
       day: {
         id: task.curriculum_day.id,
         dayNumber: task.curriculum_day.day_number,
@@ -196,7 +197,8 @@ export class TaskService {
     }
 
     const submittedAt = (row.last_submitted_at ?? now).toISOString();
-    const context = submissionContext ?? (await taskRepository.findSubmissionContext(traineeId, taskId));
+    const context =
+      submissionContext ?? (await taskRepository.findSubmissionContext(traineeId, taskId));
 
     // Notify only the assigned mentor.
     if (context.mentorId) {
@@ -217,5 +219,37 @@ export class TaskService {
       reviewStatus: 'pending',
       submissionCount: row.submission_count,
     };
+  }
+
+  async recordTime(
+    traineeId: string,
+    taskId: string,
+    deltaSeconds: number
+  ): Promise<{ timeSpentSeconds: number }> {
+    await progressService.assertTaskUnlocked(traineeId, taskId);
+
+    if (deltaSeconds <= 0) {
+      const progress = await taskRepository.findProgress(traineeId, taskId);
+      return { timeSpentSeconds: progress?.time_spent_seconds ?? 0 };
+    }
+
+    const now = new Date();
+    const result = await taskRepository.recordTimeHeartbeat(
+      traineeId,
+      taskId,
+      deltaSeconds,
+      now,
+      // First heartbeat before any save also counts as "started".
+      async () => {
+        await publishToMentor(traineeId, {
+          type: 'task.started',
+          traineeId,
+          taskId,
+          startedAt: now.toISOString(),
+        });
+      }
+    );
+
+    return { timeSpentSeconds: result.timeSpentSeconds };
   }
 }
