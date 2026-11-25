@@ -101,6 +101,13 @@ export type WorkspaceOpenInput = {
   files: Record<string, string>;
   /** Hidden helpers written under .vinkup/ (Prisma support files). */
   supportFiles?: Record<string, string>;
+  /**
+   * Checkpoint SQL questions run in the terminal against PostgreSQL installed on the machine,
+   * like the PostgreSQL course tasks.
+   */
+  requiresPostgres?: boolean;
+  /** Checkpoint SQL: schema loaded once, the first time the database is opened. */
+  setupSql?: string | null;
 };
 
 export type WorkspaceOpenResult = WorkspaceEnvironment & {

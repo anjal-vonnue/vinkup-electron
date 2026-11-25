@@ -27,14 +27,26 @@ export type LocalWorkspace = {
 const SYNC_DELAY_MS = 120;
 const MISSING_API_ERROR = 'Local workspaces are only available in the desktop app.';
 
+export type LocalWorkspaceOptions = {
+  /** Checkpoint SQL: open the machine's PostgreSQL and pass DATABASE_URL to the workspace. */
+  requiresPostgres?: boolean;
+  /** Checkpoint SQL: schema loaded once, the first time the database is opened. */
+  setupSql?: string | null;
+};
+
 /**
  * Opens the host workspace for a task, mirrors editor changes to disk and feeds
  * terminal-created files back into the editor. One hook per mounted runtime.
  */
-export function useLocalWorkspace(taskId: string): LocalWorkspace {
+export function useLocalWorkspace(
+  taskId: string,
+  options: LocalWorkspaceOptions = {}
+): LocalWorkspace {
   const state = useWorkspaceState();
   const dispatch = useWorkspaceDispatch();
   const files = state.files;
+  const requiresPostgres = options.requiresPostgres === true;
+  const setupSql = options.setupSql ?? null;
 
   const api = getWorkspaceApi();
   const [status, setStatus] = useState<LocalWorkspaceStatus>(api ? 'opening' : 'error');
@@ -60,6 +72,8 @@ export function useLocalWorkspace(taskId: string): LocalWorkspace {
         taskId,
         files: filesForWorkspace(initialFiles),
         supportFiles: supportFilesForWorkspace(initialFiles),
+        requiresPostgres,
+        setupSql,
       })
       .then((result) => {
         if (cancelled) return;
@@ -79,7 +93,7 @@ export function useLocalWorkspace(taskId: string): LocalWorkspace {
       // its folder holds node_modules, and the trainee expects to resume the same session.
       // WorkspaceSessionContext closes it when they explicitly leave (Home / Back to tasks).
     };
-  }, [api, taskId, attempt]);
+  }, [api, taskId, attempt, requiresPostgres, setupSql]);
 
   const retry = useCallback(() => {
     setStatus('opening');

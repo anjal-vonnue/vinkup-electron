@@ -6,6 +6,10 @@ import { courseFromTaskId } from './paths';
 const execFileAsync = promisify(execFile);
 
 const PSQL_TIMEOUT_MS = 5_000;
+/** Schema and seed SQL can be larger than a version check. */
+const SETUP_TIMEOUT_MS = 30_000;
+/** Created inside the setup transaction, so a failed setup is retried on the next open. */
+const SETUP_MARKER_TABLE = 'public.vinkup_checkpoint_setup';
 const MAX_DATABASE_NAME = 63;
 const DATABASE_PREFIX = 'vinkup';
 /** psql connects to this database to run CREATE DATABASE and to check the server. */
@@ -181,11 +185,12 @@ async function ensureDatabase(
 async function runPsql(
   url: string,
   args: string[],
-  pathValue: string
+  pathValue: string,
+  timeoutMs = PSQL_TIMEOUT_MS
 ): Promise<{ stdout: string; stderr: string }> {
   try {
     const { stdout, stderr } = await execFileAsync('psql', [url, ...args], {
-      timeout: PSQL_TIMEOUT_MS,
+      timeout: timeoutMs,
       maxBuffer: 256 * 1024,
       env: { ...process.env, PATH: pathValue },
     });
@@ -193,6 +198,33 @@ async function runPsql(
   } catch (error) {
     throw describeFailure(error);
   }
+}
+
+/**
+ * Loads a checkpoint question's setup SQL into the machine's database once. The marker table
+ * is created in the same transaction, so a setup that fails halfway leaves nothing behind and
+ * is retried the next time the workspace opens.
+ */
+export async function applySetupSql(url: string, sql: string, pathValue: string): Promise<void> {
+  const marker = await runPsql(
+    url,
+    ['-Atqc', `select to_regclass('${SETUP_MARKER_TABLE}') is not null`],
+    pathValue
+  );
+  if (marker.stdout.trim() === 't') return;
+
+  await runPsql(
+    url,
+    [
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      `BEGIN;\n${sql}\nCREATE TABLE ${SETUP_MARKER_TABLE} ` +
+        '(applied_at timestamptz not null default now());\nCOMMIT;',
+    ],
+    pathValue,
+    SETUP_TIMEOUT_MS
+  );
 }
 
 /** Turns psql's output into a message a trainee can act on. */

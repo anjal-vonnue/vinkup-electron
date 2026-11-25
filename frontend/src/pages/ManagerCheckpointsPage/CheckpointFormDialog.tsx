@@ -784,6 +784,13 @@ export default function CheckpointFormDialog({
 
                   <section className={styles.section}>
                     <h3>Workspace settings</h3>
+                    <p className={styles.helpText}>
+                      SQL questions open the Node.js terminal against PostgreSQL installed on this
+                      machine, like the PostgreSQL course tasks. The setup SQL runs once, the first
+                      time the workspace opens. Use the terminal for{' '}
+                      <code>psql &quot;$DATABASE_URL&quot;</code>; Run commands do not expand shell
+                      variables.
+                    </p>
                     <div className={styles.grid3}>
                       <label className={styles.field}>
                         <span>Runtime</span>
@@ -798,7 +805,7 @@ export default function CheckpointFormDialog({
                         >
                           <option value="node">Node.js</option>
                           <option value="browser">Browser (HTML/CSS/JS)</option>
-                          <option value="sql">SQL (PostgreSQL)</option>
+                          <option value="sql">SQL (PostgreSQL terminal)</option>
                         </select>
                       </label>
                       <label className={styles.field}>
@@ -814,7 +821,7 @@ export default function CheckpointFormDialog({
                         <input
                           value={form.practicalSetupSql}
                           onChange={(event) => update('practicalSetupSql', event.target.value)}
-                          placeholder="Optional schema SQL"
+                          placeholder="Optional schema SQL, loaded once"
                           disabled={form.practicalRuntime !== 'sql'}
                         />
                       </label>

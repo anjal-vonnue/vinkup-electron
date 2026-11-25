@@ -2,11 +2,29 @@ import { describe, expect, it } from 'vitest';
 import type { CheckpointWorkspaceFile } from '@itp/types';
 import {
   checkpointWorkspaceId,
+  runtimeNeedsPostgres,
   workspaceFilesFromRecord,
   workspaceFilesSignature,
+  workspaceRuntimeFor,
 } from './practicalWorkspaceFiles';
 
 const DESKTOP_WORKSPACE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+describe('workspaceRuntimeFor', () => {
+  it('runs SQL checkpoints in the Node terminal against the machine PostgreSQL', () => {
+    expect(workspaceRuntimeFor('sql')).toBe('node');
+    expect(runtimeNeedsPostgres('sql')).toBe(true);
+  });
+
+  it('keeps browser and node questions as they are', () => {
+    expect(workspaceRuntimeFor('browser')).toBe('browser');
+    expect(workspaceRuntimeFor('node')).toBe('node');
+    expect(workspaceRuntimeFor(null)).toBe('node');
+    expect(runtimeNeedsPostgres('browser')).toBe(false);
+    expect(runtimeNeedsPostgres('node')).toBe(false);
+    expect(runtimeNeedsPostgres(null)).toBe(false);
+  });
+});
 
 describe('checkpointWorkspaceId', () => {
   it('builds a stable id per attempt and question', () => {

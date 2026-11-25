@@ -1,4 +1,17 @@
-import type { CheckpointWorkspaceFile } from '@itp/types';
+import type { CheckpointQuestionRuntime, CheckpointWorkspaceFile, TaskRuntime } from '@itp/types';
+
+/**
+ * SQL checkpoints run in the Node.js terminal against PostgreSQL installed on the
+ * machine, like the PostgreSQL course tasks, instead of the in-app PGlite engine.
+ */
+export function workspaceRuntimeFor(runtime: CheckpointQuestionRuntime | null): TaskRuntime {
+  return runtime === 'sql' ? 'node' : (runtime ?? 'node');
+}
+
+/** True when the question's workspace needs the machine's PostgreSQL. */
+export function runtimeNeedsPostgres(runtime: CheckpointQuestionRuntime | null): boolean {
+  return runtime === 'sql';
+}
 
 /**
  * Desktop workspaces are keyed by a task id that must match `[A-Za-z0-9_-]{1,64}`.

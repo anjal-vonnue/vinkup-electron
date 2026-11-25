@@ -37,6 +37,7 @@ import {
   useWorkspaceState,
 } from '../../pages/TaskPage/state/WorkspaceContext';
 import WorkspaceFilesViewer from './WorkspaceFilesViewer';
+import { runtimeNeedsPostgres, workspaceRuntimeFor } from './practicalWorkspaceFiles';
 import { useWorkspaceFilesReporter } from './useWorkspaceFilesReporter';
 import styles from './PracticalWorkspace.module.css';
 
@@ -59,7 +60,7 @@ type PracticalWorkspaceProps = {
 type ResizableKind = 'sidebar' | 'result';
 
 function runtimeLabel(runtime: CheckpointQuestion['runtime']): string {
-  if (runtime === 'sql') return 'SQL workspace';
+  if (runtime === 'sql') return 'PostgreSQL workspace';
   if (runtime === 'browser') return 'Browser workspace';
   return 'Node workspace';
 }
@@ -80,14 +81,16 @@ function taskFor(
     reviewStatus: null,
     submissionCount: 0,
     day: { id: 'checkpoint', dayNumber: 0, courseTitle: 'Checkpoint' },
-    runtime: question.runtime ?? 'node',
+    runtime: workspaceRuntimeFor(question.runtime),
     runCommand: question.runCommand,
     setupSql: question.setupSql,
+    requiresPostgres: runtimeNeedsPostgres(question.runtime),
   };
 }
 
 type PracticalWorkspaceBodyProps = {
   task: TaskResponse;
+  runtimeBadge: string;
   initialFiles: CheckpointWorkspaceFile[];
   workspaceId: string;
   hasStarterFiles: boolean;
@@ -98,6 +101,7 @@ type PracticalWorkspaceBodyProps = {
 
 function PracticalWorkspaceBody({
   task,
+  runtimeBadge,
   initialFiles,
   workspaceId,
   hasStarterFiles,
@@ -256,7 +260,7 @@ function PracticalWorkspaceBody({
     <div className={styles.workspaceShell}>
       <header className={styles.toolbar}>
         <div className={styles.toolbarMeta}>
-          <span className={styles.runtimeBadge}>{runtimeLabel(task.runtime)}</span>
+          <span className={styles.runtimeBadge}>{runtimeBadge}</span>
           {hasStarterFiles && <span className={styles.hint}>Starter files ready</span>}
         </div>
 
@@ -383,6 +387,7 @@ export default function PracticalWorkspace({
         <RunnerProvider>
           <PracticalWorkspaceBody
             task={task}
+            runtimeBadge={runtimeLabel(question.runtime)}
             initialFiles={initialFiles}
             workspaceId={workspaceId}
             hasStarterFiles={initialFiles.length > 0}
