@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { DashboardResponse, DaySummary, ReworkTaskSummary } from '@itp/types';
-import { getDashboard, getReworkTasks } from '../../api/dashboard';
+import { ChevronDown, MessageSquareText } from 'lucide-react';
+import type {
+  DashboardResponse,
+  DaySummary,
+  ReworkTaskSummary,
+  UnreadTaskComment,
+} from '@itp/types';
+import { getDashboard, getReworkTasks, getUnreadTaskComments } from '../../api/dashboard';
 import { getCourseDays } from '../../api/courses';
 import { CURRICULUM_COURSES } from '../../constants/courses';
 import Header from '../../components/Header';
@@ -19,6 +25,7 @@ import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime'
 import { useGreeting } from '../../hooks/useGreeting';
 import styles from './DashboardPage.module.css';
 import HelpButton from '../../components/HelpButton';
+import { formatIstDateTime } from '../../lib/formatDateTime';
 
 const DEFAULT_COURSE_ID = 'html';
 
@@ -37,6 +44,8 @@ export default function DashboardPage() {
 
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [reworkTasks, setReworkTasks] = useState<ReworkTaskSummary[]>([]);
+  const [unreadComments, setUnreadComments] = useState<UnreadTaskComment[]>([]);
+  const [areUnreadCommentsOpen, setAreUnreadCommentsOpen] = useState(false);
   const [feedbackTask, setFeedbackTask] = useState<ReworkTaskSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -66,13 +75,15 @@ export default function DashboardPage() {
         return { data, courseId, firstDays, firstDaysError };
       }),
       getReworkTasks().catch(() => [] as ReworkTaskSummary[]),
+      getUnreadTaskComments().catch(() => [] as UnreadTaskComment[]),
     ])
-      .then(([{ data, courseId, firstDays, firstDaysError }, rework]) => {
+      .then(([{ data, courseId, firstDays, firstDaysError }, rework, comments]) => {
         if (cancelled) return;
         if (firstDays) setDaysByCourse((prev) => ({ ...prev, [courseId]: firstDays }));
         if (firstDaysError) setDaysErrors((prev) => ({ ...prev, [courseId]: firstDaysError }));
         setDashboard(data);
         setReworkTasks(rework);
+        setUnreadComments(comments);
         setActiveCourseId(data.nextDay?.courseId ?? DEFAULT_COURSE_ID);
       })
       .catch((err: unknown) => {
@@ -138,12 +149,14 @@ export default function DashboardPage() {
    */
   const refreshReviewState = useCallback(async () => {
     try {
-      const [data, rework] = await Promise.all([
+      const [data, rework, comments] = await Promise.all([
         getDashboard(),
         getReworkTasks().catch(() => [] as ReworkTaskSummary[]),
+        getUnreadTaskComments().catch(() => [] as UnreadTaskComment[]),
       ]);
       setDashboard(data);
       setReworkTasks(rework);
+      setUnreadComments(comments);
     } catch {
       // Best effort: the next event, reconnect or page load catches up.
     }
@@ -241,6 +254,68 @@ export default function DashboardPage() {
             onOpenFeedback={(task) => setFeedbackTask(task)}
             onOpenTask={(taskId) => void navigate(`/tasks/${taskId}`)}
           />
+        )}
+
+        {unreadComments.length > 0 && (
+          <section className={styles.unreadComments} aria-labelledby="unread-comments-title">
+            <div className={styles.unreadHeader}>
+              <div>
+                <p className={styles.unreadEyebrow}>Mentor comments</p>
+                <h2 id="unread-comments-title">New comments</h2>
+              </div>
+              <button
+                type="button"
+                className={styles.unreadToggle}
+                aria-expanded={areUnreadCommentsOpen}
+                aria-controls="unread-comments-list"
+                aria-label={`${areUnreadCommentsOpen ? 'Hide' : 'Show'} ${unreadComments.length} new mentor comments`}
+                onClick={() => setAreUnreadCommentsOpen((open) => !open)}
+              >
+                <MessageSquareText size={16} aria-hidden="true" />
+                <span className={styles.unreadCount} aria-hidden="true">
+                  {unreadComments.length}
+                </span>
+                <ChevronDown
+                  size={16}
+                  aria-hidden="true"
+                  className={
+                    areUnreadCommentsOpen ? styles.unreadChevronOpen : styles.unreadChevron
+                  }
+                />
+              </button>
+            </div>
+            {areUnreadCommentsOpen && (
+              <ul className={styles.unreadList} id="unread-comments-list">
+                {unreadComments.map((comment) => (
+                  <li key={comment.id}>
+                    <button
+                      type="button"
+                      className={styles.unreadComment}
+                      onClick={() =>
+                        void navigate(`/tasks/${comment.taskId}?commentId=${comment.id}`)
+                      }
+                      aria-label={`Open new comment on ${comment.taskTitle}, ${comment.courseTitle} day ${comment.dayNumber}`}
+                    >
+                      <span className={styles.unreadCommentTop}>
+                        <strong>{comment.taskTitle}</strong>
+                        <time dateTime={comment.reviewedAt}>
+                          {formatIstDateTime(comment.reviewedAt)}
+                        </time>
+                      </span>
+                      <span className={styles.unreadMeta}>
+                        {comment.courseTitle} · Day {comment.dayNumber} · {comment.adminName}
+                      </span>
+                      <span className={styles.unreadPreview}>
+                        {comment.feedback.length > 180
+                          ? `${comment.feedback.slice(0, 180).trimEnd()}…`
+                          : comment.feedback}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
 
         <section className={styles.section}>

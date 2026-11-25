@@ -228,6 +228,7 @@ model task_review {
   // Admin feedback. Empty for an approval written without a note.
   feedback      String          @default("")
   reviewed_at   DateTime        @default(now()) @db.Timestamptz
+  trainee_read_at DateTime? @db.Timestamptz
   created_at    DateTime        @default(now()) @db.Timestamptz
   updated_at    DateTime        @updatedAt @db.Timestamptz
 
@@ -239,6 +240,7 @@ model task_review {
   @@unique([trainee_id, task_id, submission_no])
   @@index([trainee_id, task_id, reviewed_at])
   @@index([trainee_id, reviewed_at])
+  @@index([trainee_id, trainee_read_at, reviewed_at])
 }
 
 // Trainee leave application. One row is kept for the whole lifecycle; the row

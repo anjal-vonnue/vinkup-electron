@@ -6,6 +6,21 @@
   color: var(--color-text-primary);
 }
 
+.highlighted {
+  outline: 2px solid var(--color-accent-purple, #8b5cf6);
+  outline-offset: 3px;
+  animation: commentArrival 900ms ease-out;
+}
+
+@keyframes commentArrival {
+  from {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-accent-purple, #8b5cf6) 28%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
 .heading {
   display: flex;
   align-items: flex-start;

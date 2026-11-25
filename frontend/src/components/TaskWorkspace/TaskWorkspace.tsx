@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useToast } from '../Toast';
 import { useFlagTracking } from '../../hooks/Useflagtracking';
 import { useIdleTracking } from '../../hooks/useIdleTracking';
 import type { ReviewStatus, TaskResponse } from '@itp/types';
-import { getTaskCode, getTaskReview, saveTaskCode, submitTask } from '../../api/tasks';
+import {
+  getTaskCode,
+  getTaskReview,
+  getTaskReviews,
+  saveTaskCode,
+  submitTask,
+} from '../../api/tasks';
+import { markTaskCommentRead } from '../../api/dashboard';
 import { applyRuntimeSettings } from '../../lib/monacoSetup';
 import {
   DEFAULT_SIDEBAR_PX,
@@ -65,6 +72,8 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   useReportActivityMode(mode);
   const dispatch = useWorkspaceDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const dashboardCommentId = searchParams.get('commentId');
   const { exitWorkspace } = useWorkspaceSession();
   const runner = useRunner();
   const toast = useToast();
@@ -88,6 +97,14 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     adminName: string;
     feedback: string;
   } | null>(null);
+  const [approvedSuggestions, setApprovedSuggestions] = useState<
+    { id: string; adminName: string; feedback: string }[]
+  >([]);
+  const [dashboardComment, setDashboardComment] = useState<{
+    id: string;
+    adminName: string;
+    feedback: string;
+  } | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   // Submitting can be repeated and doesn't lock editing; this only drives the pill and the label.
   const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
@@ -104,14 +121,14 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     applyRuntimeSettings(task.runtime);
   }, [task.runtime]);
 
-  // Load feedback when opening an already-approved task. The state update runs
-  // in the request callback, outside the synchronous effect body.
+  // Load review history when opening a submitted task, including older approval
+  // comments that remain useful after a newer review cycle.
   useEffect(() => {
-    if (task.reviewStatus !== 'approved') return;
+    if (task.status !== 'completed') return;
 
     let cancelled = false;
-    getTaskReview(task.id)
-      .then((review) => {
+    Promise.all([getTaskReview(task.id), getTaskReviews(task.id)])
+      .then(async ([review, reviews]) => {
         if (cancelled) return;
         setReviewStatus(review.reviewStatus);
         const latestReview = review.latestReview;
@@ -120,6 +137,19 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
             ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
             : null
         );
+        setApprovedSuggestions(
+          reviews
+            .filter((entry) => entry.decision === 'approved' && entry.feedback.trim())
+            .map((entry) => ({
+              id: entry.id,
+              adminName: entry.adminName,
+              feedback: entry.feedback,
+            }))
+        );
+        const visibleComments = reviews.filter(
+          (entry) => entry.decision === 'approved' && entry.feedback.trim()
+        );
+        await Promise.allSettled(visibleComments.map((entry) => markTaskCommentRead(entry.id)));
       })
       .catch(() => {
         // Best effort: the reconnect refresh can catch a temporary failure.
@@ -128,7 +158,36 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
     return () => {
       cancelled = true;
     };
-  }, [task.id, task.reviewStatus]);
+  }, [task.id, task.status, task.reviewStatus]);
+
+  // A dashboard deep link can target an older approval comment on this task.
+  // Verify it against this trainee's task history before displaying and marking read.
+  useEffect(() => {
+    if (!dashboardCommentId) return;
+    let cancelled = false;
+    getTaskReviews(task.id)
+      .then(async (reviews) => {
+        const comment = reviews.find(
+          (review) =>
+            review.id === dashboardCommentId &&
+            review.decision === 'approved' &&
+            review.feedback.trim().length > 0
+        );
+        if (!comment || cancelled) return;
+        setDashboardComment({
+          id: comment.id,
+          adminName: comment.adminName,
+          feedback: comment.feedback,
+        });
+        await markTaskCommentRead(comment.id);
+      })
+      .catch(() => {
+        // A stale or unauthorized link should not prevent opening the task.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardCommentId, task.id]);
 
   const stateRef = useRef(state);
   useEffect(() => {
@@ -225,13 +284,25 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
   /** Re-reads only the review state, so the code in the editor is never replaced. */
   const refreshReview = useCallback(async () => {
     try {
-      const review = await getTaskReview(task.id);
+      const [review, reviews] = await Promise.all([
+        getTaskReview(task.id),
+        getTaskReviews(task.id),
+      ]);
       setReviewStatus(review.reviewStatus);
       const latestReview = review.latestReview;
       setApprovedSuggestion(
         latestReview?.decision === 'approved' && latestReview.feedback.trim()
           ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
           : null
+      );
+      setApprovedSuggestions(
+        reviews
+          .filter((entry) => entry.decision === 'approved' && entry.feedback.trim())
+          .map((entry) => ({
+            id: entry.id,
+            adminName: entry.adminName,
+            feedback: entry.feedback,
+          }))
       );
     } catch {
       // Best effort: the next event or the next page load catches up.
@@ -248,6 +319,7 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
         ? { adminName: event.mentorName, feedback: event.feedback }
         : null
     );
+    void refreshReview();
   });
 
   // After a stream reconnect, catch a review that landed while the stream was down.
@@ -430,12 +502,26 @@ export default function TaskWorkspace({ task, onTimerStoppedChange }: TaskWorksp
                 onCollapse={() => dispatch({ type: 'paneToggled', pane: 'sidebar' })}
                 instructions={
                   <>
-                    {approvedSuggestion && (
+                    {dashboardComment ? (
+                      <MentorSuggestion
+                        adminName={dashboardComment.adminName}
+                        feedback={dashboardComment.feedback}
+                        highlighted
+                      />
+                    ) : approvedSuggestions.length > 0 ? (
+                      approvedSuggestions.map((suggestion) => (
+                        <MentorSuggestion
+                          key={suggestion.id}
+                          adminName={suggestion.adminName}
+                          feedback={suggestion.feedback}
+                        />
+                      ))
+                    ) : approvedSuggestion ? (
                       <MentorSuggestion
                         adminName={approvedSuggestion.adminName}
                         feedback={approvedSuggestion.feedback}
                       />
-                    )}
+                    ) : null}
                     <InstructionsPanel markdown={task.instructionsMarkdown} />
                   </>
                 }

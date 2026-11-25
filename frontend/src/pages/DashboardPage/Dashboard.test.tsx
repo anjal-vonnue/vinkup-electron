@@ -1,11 +1,11 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
-import type { DashboardResponse, DaySummary, DayStatus } from '@itp/types';
+import type { DashboardResponse, DaySummary, DayStatus, UnreadTaskComment } from '@itp/types';
 
 import DashboardPage from './DashboardPage';
-import { getDashboard, getReworkTasks } from '../../api/dashboard';
+import { getDashboard, getReworkTasks, getUnreadTaskComments } from '../../api/dashboard';
 import { getCourseDays } from '../../api/courses';
 import { RealtimeProvider } from '../../context/RealtimeProvider';
 import { installFakeEventSource } from '../../test/fakeEventSource';
@@ -20,6 +20,8 @@ vi.mock('react-router', async () => {
 vi.mock('../../api/dashboard', () => ({
   getDashboard: vi.fn(),
   getReworkTasks: vi.fn(),
+  getUnreadTaskComments: vi.fn(),
+  markTaskCommentRead: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../api/courses', () => ({
@@ -215,6 +217,7 @@ describe('DashboardPage', () => {
     vi.clearAllMocks();
     window.sessionStorage.clear();
     vi.mocked(getReworkTasks).mockResolvedValue([]);
+    vi.mocked(getUnreadTaskComments).mockResolvedValue([]);
     vi.mocked(getCourseDays).mockImplementation((courseId: string) => {
       const days = daysByCourse[courseId];
       return days ? Promise.resolve(days) : Promise.reject(new Error('Course not found.'));
@@ -248,6 +251,51 @@ describe('DashboardPage', () => {
     renderPage();
 
     expect(await screen.findByText('Header')).toBeInTheDocument();
+  });
+
+  it('shows unread mentor comments and opens the matching task and comment', async () => {
+    const comment: UnreadTaskComment = {
+      id: 'review-1',
+      taskId: 'html-day-01-t-1',
+      taskTitle: 'Profile page',
+      dayId: 'html-day-01',
+      dayNumber: 1,
+      courseTitle: 'HTML',
+      adminName: 'Mentor Maya',
+      feedback: 'Consider adding an accessible footer.',
+      reviewedAt: '2026-11-24T10:00:00.000Z',
+    };
+    vi.mocked(getDashboard).mockResolvedValue(mockDashboard);
+    vi.mocked(getUnreadTaskComments).mockResolvedValue([comment]);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    const unread = await screen.findByRole('region', { name: 'New comments' });
+    const toggle = within(unread).getByRole('button', {
+      name: 'Show 1 new mentor comments',
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(unread).queryByText('Profile page')).not.toBeInTheDocument();
+    await user.click(toggle);
+
+    const expandedToggle = within(unread).getByRole('button', {
+      name: 'Hide 1 new mentor comments',
+    });
+    expect(expandedToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(within(unread).getByText('Profile page')).toBeInTheDocument();
+    expect(within(unread).getByText(/HTML · Day 1 · Mentor Maya/)).toBeInTheDocument();
+    expect(within(unread).getByText('Consider adding an accessible footer.')).toBeInTheDocument();
+    await user.click(expandedToggle);
+    expect(within(unread).queryByText('Profile page')).not.toBeInTheDocument();
+    await user.click(within(unread).getByRole('button', { name: 'Show 1 new mentor comments' }));
+    await user.click(
+      within(unread).getByRole('button', {
+        name: 'Open new comment on Profile page, HTML day 1',
+      })
+    );
+
+    expect(navigate).toHaveBeenCalledWith('/tasks/html-day-01-t-1?commentId=review-1');
   });
 
   it('shows the welcome banner with the trainee first name and curriculum progress', async () => {
