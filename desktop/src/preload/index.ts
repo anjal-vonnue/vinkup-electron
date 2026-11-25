@@ -151,8 +151,8 @@ const api: DesktopApi = {
     },
   },
   audit: {
-    run: (taskId: string) =>
-      ipcRenderer.invoke('lighthouse:run', taskId) as Promise<LighthouseAuditResult>,
+    run: (taskId: string, pagePath?: string) =>
+      ipcRenderer.invoke('lighthouse:run', taskId, pagePath) as Promise<LighthouseAuditResult>,
   },
   run: {
     install: (taskId: string) => ipcRenderer.invoke('run:install', taskId) as Promise<void>,

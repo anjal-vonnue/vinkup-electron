@@ -347,7 +347,7 @@ describe('LocalBrowserRuntime', () => {
     ).toBeInTheDocument();
 
     expect(auditRun).toHaveBeenCalledTimes(1);
-    expect(auditRun).toHaveBeenCalledWith('t1');
+    expect(auditRun).toHaveBeenCalledWith('t1', 'services.html');
 
     expect(
       screen.getByRole('img', {
@@ -495,7 +495,7 @@ describe('LocalBrowserRuntime', () => {
     await runLighthouseAudit(user);
 
     await waitFor(() => {
-      expect(auditRun).toHaveBeenCalledWith('t1');
+      expect(auditRun).toHaveBeenCalledWith('t1', 'services.html');
     });
 
     expect(workspaceApi.sync).toHaveBeenCalled();
