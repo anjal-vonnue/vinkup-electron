@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { recordTaskTime } from '../api/tasks';
 import type { DesktopApi } from '@itp/types';
 
-const HEARTBEAT_MS = 1_000;
-const IDLE_PAUSE_MS = 3_000;
+const HEARTBEAT_MS = 5_000;
+const IDLE_PAUSE_MS = 3 * 60 * 1_000;
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'] as const;
 
 export type UseTaskTimerOptions = {

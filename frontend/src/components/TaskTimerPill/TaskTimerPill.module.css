@@ -4,8 +4,8 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--surface-muted, #f3f4f6);
-  color: var(--text-muted, #4b5563);
+  background: var(--color-bg-pill-inactive);
+  color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -14,3 +14,10 @@
 .paused {
   opacity: 0.65;
 }
+/* 
+@media (prefers-color-scheme: dark) {
+  .pill {
+    background: var(--surface-muted, #374151);
+    color: var(--text-muted, #d1d5db);
+  }
+} */
