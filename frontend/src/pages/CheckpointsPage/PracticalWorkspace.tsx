@@ -80,6 +80,7 @@ function taskFor(
     status: 'in_progress',
     reviewStatus: null,
     submissionCount: 0,
+    timeSpentSeconds: 0,
     day: { id: 'checkpoint', dayNumber: 0, courseTitle: 'Checkpoint' },
     runtime: workspaceRuntimeFor(question.runtime),
     runCommand: question.runCommand,
