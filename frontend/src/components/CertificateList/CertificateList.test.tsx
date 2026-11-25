@@ -17,6 +17,8 @@ const certificates: CourseCertificate[] = [
     signature: 'sig-html',
     signatureAlgorithm: 'Ed25519',
     signatureVersion: 'v1',
+    startedAt: '2026-10-06T09:00:00.000Z',
+    timeSpentSeconds: 1,
   },
   {
     courseId: 'node',
@@ -30,6 +32,8 @@ const certificates: CourseCertificate[] = [
     signature: 'sig-node',
     signatureAlgorithm: 'Ed25519',
     signatureVersion: 'v1',
+    startedAt: '2026-10-06T09:00:00.000Z',
+    timeSpentSeconds: 1,
   },
 ];
 

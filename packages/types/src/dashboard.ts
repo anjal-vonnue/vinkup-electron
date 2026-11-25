@@ -38,9 +38,15 @@ export type CourseCertificate = {
   courseTitle: string;
   traineeName: string;
   daysCompleted: number;
-  completedAt: string; // ISO, latest day_completion.completed_at in the course
-  issuedAt: string; // ISO, when the certificate was issued
-  certificateId: string; // e.g. VK-...
+  /** ISO. Earliest task_progress.created_at in this course; falls back to completedAt if none. */
+  startedAt: string;
+  /** ISO. Latest day_completion.completed_at in this course. */
+  completedAt: string;
+  /** ISO. When the certificate was issued. */
+  issuedAt: string;
+  /** Sum of every task's time_spent_seconds in this course (live, computed at read). */
+  timeSpentSeconds: number;
+  certificateId: string;
   status: CertificateStatus;
   signature: string;
   signatureAlgorithm: string;

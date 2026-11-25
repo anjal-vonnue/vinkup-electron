@@ -8,6 +8,7 @@ import { ToastProvider } from '../../components/Toast';
 import CertificatePage from './CertificatePage';
 import { getCertificate } from '../../api/certificate';
 import { ApiError } from '../../api/errors';
+import { formatHours } from '../../lib/certificate';
 
 vi.mock('../../api/certificate', () => ({
   getCertificate: vi.fn(),
@@ -22,14 +23,17 @@ const certificate: CourseCertificate = {
   courseTitle: 'CSS',
   traineeName: 'Asha Rao',
   daysCompleted: 15,
+  startedAt: '2026-10-01T09:00:00.000Z',
   completedAt: '2026-10-06T09:00:00.000Z',
   issuedAt: '2026-10-07T09:00:00.000Z',
+  timeSpentSeconds: 7200,
   certificateId: 'VK-3F9A2C71B0ABCDEF1234',
   status: 'ACTIVE',
   signature: 'c2lnbmF0dXJl',
   signatureAlgorithm: 'Ed25519',
   signatureVersion: 'v1',
 };
+
 function renderPage(courseId = 'css') {
   return render(
     <ToastProvider>
@@ -89,13 +93,32 @@ describe('CertificatePage', () => {
       await screen.findByRole('heading', { name: 'Certificate of completion' })
     ).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Vinkup' })).toBeInTheDocument();
+
+    // Main block — broken into separate <p>s so each can be matched directly.
     expect(screen.getByText('This certifies that')).toBeInTheDocument();
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
-    expect(screen.getByText('has completed the CSS course')).toBeInTheDocument();
-    expect(screen.getByText('15 days · completed 6 October 2026')).toBeInTheDocument();
-    expect(screen.getByText('Issued 7 October 2026')).toBeInTheDocument();
+    expect(screen.getByText('has successfully completed the course in')).toBeInTheDocument();
+    expect(screen.getByText('CSS')).toBeInTheDocument();
+
+    // The description <p> mixes plain text with two <span>s. `getByText` only
+    // matches direct text nodes, so we use a function matcher that reads
+    // `element.textContent` to include the spans.
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          element.textContent ===
+            `a 15-day training programme, with a total learning time of ${formatHours(
+              certificate.timeSpentSeconds
+            )}.`
+      )
+    ).toBeInTheDocument();
+
+    // Footer.
     expect(screen.getByText('Certificate ID VK-3F9A2C71B0ABCDEF1234')).toBeInTheDocument();
-    expect(screen.getByText('Vinkup · In-House Trainee Training Platform')).toBeInTheDocument();
+    expect(
+      screen.getByText('Issued 6 October 2026 · Vinkup · In-House Trainee Training Platform')
+    ).toBeInTheDocument();
   });
 
   it('offers a link back to the dashboard', async () => {
