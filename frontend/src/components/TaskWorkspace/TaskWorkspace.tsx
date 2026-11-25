@@ -92,7 +92,7 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
   const hasSubmitted = submittedAt !== null || task.status === 'completed';
   // Submitted and waiting for review (or approved): the timer stops. Rework runs it again.
-  const isTimerStopped = hasSubmitted && reviewStatus !== 'rework';
+  const isTimerStopped = reviewStatus === 'approved';
 
   useEffect(() => {
     applyRuntimeSettings(task.runtime);
@@ -412,6 +412,7 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
           taskId={task.id}
           timeSpentSeconds={task.timeSpentSeconds}
           timerEnabled={!isTimerStopped}
+          timerAutoStart={!hasSubmitted}
         />
         <div
           ref={rowRef}

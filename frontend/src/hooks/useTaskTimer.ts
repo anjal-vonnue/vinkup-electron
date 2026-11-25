@@ -9,14 +9,17 @@ const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchsta
 export type UseTaskTimerOptions = {
   taskId: string;
   initialSeconds: number;
-  /**
-   * Extra activity source — e.g. an EventTarget that the Electron main process
-   * posts `'activity'` events to while the trainee is using the secondary
-   * reference window. Keeps the timer running across both windows.
-   */
+  /** Extra activity source for cross-window activity from the Electron shell. */
   activitySignal?: EventTarget | null;
   /** Set false to stop tracking entirely (e.g. task approved and locked). */
   enabled?: boolean;
+  /**
+   * If true, the timer starts immediately on mount (fresh task).
+   * If false, it stays paused until the trainee presses a key in the workspace
+   * (rework / already-submitted task). Mouse moves, scrolling and reference-browser
+   * activity never start a stopped timer — they only keep a running one alive.
+   */
+  autoStart?: boolean;
 };
 
 export type UseTaskTimerResult = {
@@ -29,14 +32,20 @@ export function useTaskTimer({
   initialSeconds,
   activitySignal = null,
   enabled = true,
+  autoStart = false,
 }: UseTaskTimerOptions): UseTaskTimerResult {
   const [displayedSeconds, setDisplayedSeconds] = useState(initialSeconds);
   const [isRunning, setIsRunning] = useState(false);
 
-  const accumulatedMsRef = useRef(initialSeconds * 1000); // committed
-  const sessionStartMsRef = useRef<number | null>(null); // set while active
-  const lastSyncedMsRef = useRef(initialSeconds * 1000); // server-known total
+  const accumulatedMsRef = useRef(initialSeconds * 1000);
+  const sessionStartMsRef = useRef<number | null>(null);
+  const lastSyncedMsRef = useRef(initialSeconds * 1000);
   const idleTimerRef = useRef<number | null>(null);
+
+  // True once the timer has actually started counting at least once since the
+  // last time it was disabled. Distinguishes "never started" (wait for a
+  // keystroke to start) from "started then idle-paused" (any activity resumes).
+  const hasStartedRef = useRef(autoStart);
 
   const totalMs = useCallback(
     () =>
@@ -53,7 +62,6 @@ export function useTaskTimer({
     try {
       await recordTaskTime(taskId, { deltaSeconds });
     } catch {
-      // Put it back so the next heartbeat retries. Worst case a crash loses ≤1 tick.
       lastSyncedMsRef.current -= sentMs;
     }
   }, [taskId, totalMs]);
@@ -79,23 +87,49 @@ export function useTaskTimer({
     idleTimerRef.current = window.setTimeout(pause, IDLE_PAUSE_MS);
   }, [enabled, pause, resume]);
 
-  // Activity listeners (main window + optional secondary-window signal).
+  // Activity listeners. Only a keystroke STARTS a stopped timer; every other
+  // activity CONTINUES an already-started one. When disabled, all listeners
+  // are removed and hasStartedRef is reset so the next enable waits for a
+  // keystroke again.
   useEffect(() => {
-    if (!enabled) return;
-    const handler = () => noteActivity();
-    ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, handler, { passive: true }));
-    window.addEventListener('focus', handler);
-    activitySignal?.addEventListener('activity', handler);
-    handler(); // start running on mount
+    if (!enabled) {
+      hasStartedRef.current = false;
+      return;
+    }
+
+    const onKeyDown = (): void => {
+      hasStartedRef.current = true;
+      noteActivity();
+    };
+
+    const onAnyActivity = (): void => {
+      if (!hasStartedRef.current) return;
+      noteActivity();
+    };
+
+    window.addEventListener('keydown', onKeyDown, { passive: true });
+    ACTIVITY_EVENTS.filter((evt) => evt !== 'keydown').forEach((evt) =>
+      window.addEventListener(evt, onAnyActivity, { passive: true })
+    );
+    window.addEventListener('focus', onAnyActivity);
+    activitySignal?.addEventListener('activity', onAnyActivity);
+
+    if (autoStart) {
+      hasStartedRef.current = true;
+      noteActivity();
+    }
+
     return () => {
-      ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, handler));
-      window.removeEventListener('focus', handler);
-      activitySignal?.removeEventListener('activity', handler);
+      window.removeEventListener('keydown', onKeyDown);
+      ACTIVITY_EVENTS.filter((evt) => evt !== 'keydown').forEach((evt) =>
+        window.removeEventListener(evt, onAnyActivity)
+      );
+      window.removeEventListener('focus', onAnyActivity);
+      activitySignal?.removeEventListener('activity', onAnyActivity);
       if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
     };
-  }, [enabled, noteActivity, activitySignal]);
+  }, [enabled, noteActivity, activitySignal, autoStart]);
 
-  // Heartbeat: push un-synced time to the server while active.
   useEffect(() => {
     if (!enabled) return;
     const id = window.setInterval(() => {
@@ -104,7 +138,6 @@ export function useTaskTimer({
     return () => window.clearInterval(id);
   }, [enabled, syncDelta]);
 
-  // Display tick (only re-renders the component that uses this hook).
   useEffect(() => {
     const id = window.setInterval(() => {
       setDisplayedSeconds(Math.floor(totalMs() / 1000));
@@ -112,8 +145,6 @@ export function useTaskTimer({
     return () => window.clearInterval(id);
   }, [totalMs]);
 
-  // Flush on unmount / beforeunload so leaving the workspace or closing the app
-  // does not lose the last few seconds.
   useEffect(() => {
     if (!enabled) return;
     const flush = () => {
@@ -130,32 +161,15 @@ export function useTaskTimer({
     };
   }, [enabled, syncDelta, totalMs]);
 
-  // Activity from the Resources browser (side panel + secondary displays) is
-  // forwarded here by main. Treat it exactly like a key press in the main window.
   useEffect(() => {
     if (!enabled) return;
     const desktop = (window as { desktop?: DesktopApi }).desktop;
     if (!desktop?.resources?.onActivity) return;
 
-    // const handler = () => noteActivity();
-    const unsubscribe = desktop.resources.onActivity(() => {
-      console.log('[timer] resources activity');
-      noteActivity();
-    });
+    const handler = () => noteActivity();
+    const unsubscribe = desktop.resources.onActivity(handler);
     return () => unsubscribe();
   }, [enabled, noteActivity]);
-
-  // When the task leaves "in progress / rework" (i.e. it's been submitted
-  // and is pending review, or has been approved) stop the current session
-  // and flush whatever has accumulated since the last heartbeat.
-  useEffect(() => {
-    if (enabled) return;
-    if (sessionStartMsRef.current === null) return;
-    accumulatedMsRef.current = totalMs();
-    sessionStartMsRef.current = null;
-    setIsRunning(false);
-    void syncDelta();
-  }, [enabled, syncDelta, totalMs]);
 
   return { displayedSeconds, isRunning };
 }

@@ -109,6 +109,7 @@ export type AdminTaskCode = {
   isStarterCode: boolean; // true = no files have been saved
   reviewStatus: ReviewStatus | null;
   submissionCount: number;
+  timeSpentSeconds: number;
   files: TaskFile[]; // Latest submitted files, never the live working copy
   codeUpdatedAt: string | null;
   lastSubmittedAt: string | null;

@@ -29,6 +29,7 @@ export type TaskToolbarProps = {
   timeSpentSeconds: number;
   timerActivitySignal?: EventTarget;
   timerEnabled?: boolean;
+  timerAutoStart?: boolean;
 };
 
 /** 14:32 */
@@ -53,6 +54,7 @@ export default function TaskToolbar({
   timeSpentSeconds,
   timerActivitySignal,
   timerEnabled = true,
+  timerAutoStart = false,
 }: TaskToolbarProps) {
   return (
     <div className={styles.toolbar}>
@@ -74,6 +76,7 @@ export default function TaskToolbar({
         initialSeconds={timeSpentSeconds}
         activitySignal={timerActivitySignal}
         enabled={timerEnabled}
+        autoStart={timerAutoStart}
       />
 
       {reviewStatus === 'rework' && (

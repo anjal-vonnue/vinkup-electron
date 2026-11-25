@@ -17,6 +17,24 @@ type Props = {
   /** Wire this to an EventTarget fed by Electron IPC from the reference window. */
   activitySignal?: EventTarget | null;
   enabled?: boolean;
+  /**
+   * Whether the timer should start counting on mount. Fresh tasks pass true;
+   * already-submitted tasks pass false so they wait for the first keystroke.
+   */
+  autoStart?: boolean;
+};
+
+type TaskTimerOptions = {
+  taskId: string;
+  initialSeconds: number;
+  activitySignal?: EventTarget | null;
+  enabled: boolean;
+  autoStart: boolean;
+};
+
+type TaskTimerState = {
+  displayedSeconds: number;
+  isRunning: boolean;
 };
 
 export default function TaskTimerPill({
@@ -24,12 +42,17 @@ export default function TaskTimerPill({
   initialSeconds,
   activitySignal,
   enabled = true,
+  autoStart = false,
 }: Props) {
-  const { displayedSeconds, isRunning } = useTaskTimer({
+  const typedUseTaskTimer = useTaskTimer as unknown as (
+    options: TaskTimerOptions
+  ) => TaskTimerState;
+  const { displayedSeconds, isRunning } = typedUseTaskTimer({
     taskId,
     initialSeconds,
     activitySignal,
     enabled,
+    autoStart,
   });
 
   return (

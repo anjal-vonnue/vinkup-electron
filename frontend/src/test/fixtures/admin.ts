@@ -425,6 +425,7 @@ export function buildAdminTaskCode(traineeId: string, taskId: string): AdminTask
         files: starter.files,
         codeUpdatedAt: null,
         lastSubmittedAt: null,
+        timeSpentSeconds: 0,
       },
     };
   }
@@ -447,6 +448,7 @@ export function buildAdminTaskCode(traineeId: string, taskId: string): AdminTask
       files,
       codeUpdatedAt: row.codeUpdatedAt,
       lastSubmittedAt: row.lastSubmittedAt,
+      timeSpentSeconds: 0,
     },
   };
 }

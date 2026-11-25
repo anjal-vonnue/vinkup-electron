@@ -279,6 +279,7 @@ describe('AdminTaskList', () => {
       files: [{ path: 'src/main.ts', content: 'saved code' }],
       codeUpdatedAt: '2026-10-02T12:12:00.000Z',
       lastSubmittedAt: '2026-10-02T12:12:00.000Z',
+      timeSpentSeconds: 0,
     });
     renderList({ taskList: mixedTasks });
 
@@ -318,6 +319,7 @@ describe('AdminTaskList', () => {
         isStarterCode: false,
         reviewStatus: null,
         submissionCount: 1,
+        timeSpentSeconds: 0,
         files: [{ path: 'index.html', content: taskId }],
         codeUpdatedAt: '2026-10-01T12:12:00.000Z',
         lastSubmittedAt: '2026-10-01T12:12:00.000Z',
@@ -354,6 +356,7 @@ describe('AdminTaskList', () => {
         files: [{ path: 'index.html', content: taskId }],
         codeUpdatedAt: '2026-10-01T12:12:00.000Z',
         lastSubmittedAt: '2026-10-01T12:12:00.000Z',
+        timeSpentSeconds: 0,
       })
     );
     renderList({ taskList: mixedTasks });
