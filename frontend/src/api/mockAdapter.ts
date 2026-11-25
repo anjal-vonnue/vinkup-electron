@@ -60,6 +60,7 @@ function currentMockUser() {
 
 const savedFiles = new Map<string, TaskFile[]>();
 const mockReviews: TaskReview[] = [];
+const readMockReviewIds = new Set<string>();
 const mockLeaveRequests: LeaveRequest[] = [];
 const JOURNAL_STORAGE_KEY = 'itp-mock-journals-v1';
 
@@ -246,6 +247,7 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
   const dayCompleteMatch = /^\/days\/([^/]+)\/complete$/.exec(url);
   const dayJournalMatch = /^\/days\/([^/]+)\/journal$/.exec(url);
   const courseDaysMatch = /^\/courses\/([^/]+)\/days$/.exec(url);
+  const unreadCommentReadMatch = /^\/dashboard\/unread-comments\/([^/]+)\/read$/.exec(url);
   const adminTraineeMatch = /^\/admin\/trainees\/([^/]+)$/.exec(url);
   const adminFlagsMatch = /^\/admin\/trainees\/([^/]+)\/flags$/.exec(url);
   const adminCodeMatch = /^\/admin\/trainees\/([^/]+)\/tasks\/([^/]+)\/code$/.exec(url);
@@ -570,6 +572,42 @@ async function handle(config: InternalAxiosRequestConfig): Promise<AxiosResponse
 
   if (method === 'get' && url === '/dashboard/rework') {
     return respond(config, 200, []);
+  }
+
+  if (method === 'get' && url === '/dashboard/unread-comments') {
+    const comments = mockReviews
+      .filter(
+        (review) =>
+          review.decision === 'approved' &&
+          review.feedback.trim() &&
+          !readMockReviewIds.has(review.id)
+      )
+      .flatMap((review) => {
+        const task = taskFixtureFor(review.taskId);
+        return task
+          ? [
+              {
+                id: review.id,
+                taskId: task.id,
+                taskTitle: task.title,
+                dayId: task.day.id,
+                dayNumber: task.day.dayNumber,
+                courseTitle: task.day.courseTitle,
+                adminId: review.adminId,
+                adminName: review.adminName,
+                submissionNo: review.submissionNo,
+                feedback: review.feedback,
+                reviewedAt: review.reviewedAt,
+              },
+            ]
+          : [];
+      });
+    return respond(config, 200, comments);
+  }
+
+  if (method === 'patch' && unreadCommentReadMatch) {
+    readMockReviewIds.add(unreadCommentReadMatch[1]);
+    return respond(config, 204, undefined);
   }
 
   if (method === 'get' && url === '/profile') {

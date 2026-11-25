@@ -15,12 +15,16 @@ import {
   getDayIntegrity,
 } from '../../api/days';
 import { getTaskReview } from '../../api/tasks';
+import { markTaskCommentRead } from '../../api/dashboard';
 import { RealtimeProvider } from '../../context/RealtimeProvider';
 import { installFakeEventSource } from '../../test/fakeEventSource';
 import DayOverviewPage from './DayOverviewPage';
 
 vi.mock('../../api/days');
 vi.mock('../../api/tasks');
+vi.mock('../../api/dashboard', () => ({
+  markTaskCommentRead: vi.fn().mockResolvedValue(undefined),
+}));
 // The header needs providers we don't care about here.
 vi.mock('../../components/Header', () => ({ default: () => null }));
 // The self-check checklist stores its ticks per trainee, so it needs a user.
@@ -69,6 +73,7 @@ async function findJournalTextarea() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(markTaskCommentRead).mockResolvedValue(undefined);
   vi.mocked(getDayTasks).mockResolvedValue([completedTask]);
   vi.mocked(getDayStatus).mockResolvedValue(openStatus);
   vi.mocked(getDayJournal).mockResolvedValue({ responseText: null });

@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { DashboardResponse, DaySummary, ReworkTaskSummary } from '@itp/types';
-import { getDashboard, getReworkTasks } from '../../api/dashboard';
+import type {
+  DashboardResponse,
+  DaySummary,
+  ReworkTaskSummary,
+  UnreadTaskComment,
+} from '@itp/types';
+import { getDashboard, getReworkTasks, getUnreadTaskComments } from '../../api/dashboard';
 import { getCourseDays } from '../../api/courses';
 import { CURRICULUM_COURSES } from '../../constants/courses';
 import Header from '../../components/Header';
 import CurrentLessonCard from '../../components/CurrentLessonCard';
-import ReworkBanner from '../../components/ReworkBanner';
+import NotificationsBanner from '../../components/NotificationsBanner';
+import type { DashboardNotification } from '../../components/NotificationsBanner';
 import TaskFeedbackModal from '../../components/TaskFeedbackModal';
 import TrackTabs from '../../components/TrackTabs';
 import ScheduleGrid from '../../components/ScheduleGrid';
@@ -37,7 +43,10 @@ export default function DashboardPage() {
 
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [reworkTasks, setReworkTasks] = useState<ReworkTaskSummary[]>([]);
-  const [feedbackTask, setFeedbackTask] = useState<ReworkTaskSummary | null>(null);
+  const [unreadComments, setUnreadComments] = useState<UnreadTaskComment[]>([]);
+  const [feedbackNotification, setFeedbackNotification] = useState<DashboardNotification | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
@@ -66,13 +75,15 @@ export default function DashboardPage() {
         return { data, courseId, firstDays, firstDaysError };
       }),
       getReworkTasks().catch(() => [] as ReworkTaskSummary[]),
+      getUnreadTaskComments().catch(() => [] as UnreadTaskComment[]),
     ])
-      .then(([{ data, courseId, firstDays, firstDaysError }, rework]) => {
+      .then(([{ data, courseId, firstDays, firstDaysError }, rework, comments]) => {
         if (cancelled) return;
         if (firstDays) setDaysByCourse((prev) => ({ ...prev, [courseId]: firstDays }));
         if (firstDaysError) setDaysErrors((prev) => ({ ...prev, [courseId]: firstDaysError }));
         setDashboard(data);
         setReworkTasks(rework);
+        setUnreadComments(comments);
         setActiveCourseId(data.nextDay?.courseId ?? DEFAULT_COURSE_ID);
       })
       .catch((err: unknown) => {
@@ -133,23 +144,25 @@ export default function DashboardPage() {
   };
 
   /**
-   * Re-reads what a review changes: the rework banner and the dashboard counts.
+   * Re-reads what a review changes: notifications and the dashboard counts.
    * The course schedule is left alone, so the trainee keeps the tab they opened.
    */
   const refreshReviewState = useCallback(async () => {
     try {
-      const [data, rework] = await Promise.all([
+      const [data, rework, comments] = await Promise.all([
         getDashboard(),
         getReworkTasks().catch(() => [] as ReworkTaskSummary[]),
+        getUnreadTaskComments().catch(() => [] as UnreadTaskComment[]),
       ]);
       setDashboard(data);
       setReworkTasks(rework);
+      setUnreadComments(comments);
     } catch {
       // Best effort: the next event, reconnect or page load catches up.
     }
   }, []);
 
-  // A mentor's decision changes the rework banner while this page stays open.
+  // A mentor's decision changes the notification banner while this page stays open.
   useRealtimeEvent((event) => {
     if (event.type !== 'task.reviewed') return;
     void refreshReviewState();
@@ -159,6 +172,47 @@ export default function DashboardPage() {
   useRealtimeRefresh(() => {
     void refreshReviewState();
   });
+
+  const notifications = useMemo(() => {
+    const reworkNotifications = reworkTasks.flatMap((task): DashboardNotification[] => {
+      const review = task.latestReview;
+      if (!review) return [];
+      return [
+        {
+          id: review.id,
+          type: 'rework',
+          taskId: task.taskId,
+          taskTitle: task.taskTitle,
+          dayNumber: task.dayNumber,
+          courseTitle: task.courseTitle,
+          adminId: review.adminId,
+          adminName: review.adminName,
+          submissionNo: task.submissionCount,
+          decision: 'rework',
+          feedback: review.feedback,
+          reviewedAt: review.reviewedAt,
+        },
+      ];
+    });
+    const commentNotifications: DashboardNotification[] = unreadComments.map((comment) => ({
+      id: comment.id,
+      type: 'comment',
+      taskId: comment.taskId,
+      taskTitle: comment.taskTitle,
+      dayNumber: comment.dayNumber,
+      courseTitle: comment.courseTitle,
+      adminId: comment.adminId,
+      adminName: comment.adminName,
+      submissionNo: comment.submissionNo,
+      decision: 'approved',
+      feedback: comment.feedback,
+      reviewedAt: comment.reviewedAt,
+    }));
+
+    return [...reworkNotifications, ...commentNotifications].sort(
+      (left, right) => new Date(right.reviewedAt).getTime() - new Date(left.reviewedAt).getTime()
+    );
+  }, [reworkTasks, unreadComments]);
 
   if (isLoading) {
     return (
@@ -235,11 +289,27 @@ export default function DashboardPage() {
           <p className={styles.status}>You&apos;ve completed every course. Great work!</p>
         )}
 
-        {reworkTasks.length > 0 && (
-          <ReworkBanner
-            tasks={reworkTasks}
-            onOpenFeedback={(task) => setFeedbackTask(task)}
-            onOpenTask={(taskId) => void navigate(`/tasks/${taskId}`)}
+        {notifications.length > 0 && (
+          <NotificationsBanner
+            notifications={notifications}
+            onOpenFeedback={(notification) => {
+              if (notification.type === 'comment') {
+                setUnreadComments((comments) =>
+                  comments.filter((comment) => comment.id !== notification.id)
+                );
+              }
+              setFeedbackNotification(notification);
+            }}
+            onOpenTask={(notification) => {
+              const commentQuery =
+                notification.type === 'comment' ? `?commentId=${notification.id}` : '';
+              if (notification.type === 'comment') {
+                setUnreadComments((comments) =>
+                  comments.filter((comment) => comment.id !== notification.id)
+                );
+              }
+              void navigate(`/tasks/${notification.taskId}${commentQuery}`);
+            }}
           />
         )}
 
@@ -288,27 +358,20 @@ export default function DashboardPage() {
           />
         </section>
       </div>
-      {feedbackTask && (
+      {feedbackNotification && (
         <TaskFeedbackModal
-          isOpen={feedbackTask !== null}
-          onClose={() => setFeedbackTask(null)}
-          taskId={feedbackTask.taskId}
-          taskTitle={feedbackTask.taskTitle}
-          initialReview={
-            feedbackTask.latestReview
-              ? {
-                  id: feedbackTask.latestReview.id,
-                  taskId: feedbackTask.taskId,
-                  adminId: feedbackTask.latestReview.adminId,
-                  adminName: feedbackTask.latestReview.adminName,
-                  submissionNo: feedbackTask.submissionCount,
-                  decision: 'rework',
-                  feedback: feedbackTask.latestReview.feedback,
-                  reviewedAt: feedbackTask.latestReview.reviewedAt,
-                }
-              : null
-          }
-          onOpenEditor={() => void navigate(`/tasks/${feedbackTask.taskId}`)}
+          isOpen={feedbackNotification !== null}
+          onClose={() => setFeedbackNotification(null)}
+          taskId={feedbackNotification.taskId}
+          taskTitle={feedbackNotification.taskTitle}
+          initialReview={feedbackNotification}
+          onOpenEditor={() => {
+            const commentQuery =
+              feedbackNotification.type === 'comment'
+                ? `?commentId=${feedbackNotification.id}`
+                : '';
+            void navigate(`/tasks/${feedbackNotification.taskId}${commentQuery}`);
+          }}
         />
       )}
       <HelpButton />

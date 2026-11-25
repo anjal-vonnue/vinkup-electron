@@ -5,6 +5,9 @@ import { getTaskReview } from '../../api/tasks';
 import TaskModal from './TaskModal';
 
 vi.mock('../../api/tasks', () => ({ getTaskReview: vi.fn() }));
+vi.mock('../../api/dashboard', () => ({
+  markTaskCommentRead: vi.fn().mockResolvedValue(undefined),
+}));
 
 afterEach(() => {
   cleanup();

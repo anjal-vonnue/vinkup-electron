@@ -10,6 +10,9 @@ const repo = vi.hoisted(() => ({
   findTypingSince: vi.fn(),
   findReworkTasks: vi.fn(),
   findLatestTaskReview: vi.fn(),
+  findUnreadTaskComments: vi.fn(),
+  markTaskCommentRead: vi.fn(),
+  findTaskCommentForTrainee: vi.fn(),
 }));
 const { mockGetDayStatuses } = vi.hoisted(() => ({ mockGetDayStatuses: vi.fn() }));
 const { mockCompletedCourseIds } = vi.hoisted(() => ({ mockCompletedCourseIds: vi.fn() }));
@@ -24,6 +27,9 @@ vi.mock('./dashboard.repository', () => ({
     findTypingSince = repo.findTypingSince;
     findReworkTasks = repo.findReworkTasks;
     findLatestTaskReview = repo.findLatestTaskReview;
+    findUnreadTaskComments = repo.findUnreadTaskComments;
+    markTaskCommentRead = repo.markTaskCommentRead;
+    findTaskCommentForTrainee = repo.findTaskCommentForTrainee;
   },
 }));
 
@@ -279,6 +285,64 @@ describe('DashboardService', () => {
           },
         },
       ]);
+    });
+  });
+
+  describe('unread task comments', () => {
+    it('returns comment details with task and day navigation context', async () => {
+      repo.findUnreadTaskComments.mockResolvedValue([
+        {
+          id: 'review-1',
+          task_id: 'html-day-01-t-1',
+          admin_id: 'mentor-1',
+          submission_no: 1,
+          feedback: 'Add a footer.',
+          reviewed_at: new Date('2026-11-24T10:00:00.000Z'),
+          admin: { name: 'Mentor Jane' },
+          task: {
+            id: 'html-day-01-t-1',
+            title: 'Profile page',
+            curriculum_day: {
+              id: 'html-day-01',
+              day_number: 1,
+              course: { title: 'HTML' },
+            },
+          },
+        },
+      ]);
+
+      await expect(service.getUnreadTaskComments(traineeId)).resolves.toEqual([
+        {
+          id: 'review-1',
+          taskId: 'html-day-01-t-1',
+          taskTitle: 'Profile page',
+          dayId: 'html-day-01',
+          dayNumber: 1,
+          courseTitle: 'HTML',
+          adminId: 'mentor-1',
+          adminName: 'Mentor Jane',
+          submissionNo: 1,
+          feedback: 'Add a footer.',
+          reviewedAt: '2026-11-24T10:00:00.000Z',
+        },
+      ]);
+      expect(repo.findUnreadTaskComments).toHaveBeenCalledWith(traineeId);
+    });
+
+    it('treats a repeated read update as success for an owned comment', async () => {
+      repo.markTaskCommentRead.mockResolvedValue({ count: 0 });
+      repo.findTaskCommentForTrainee.mockResolvedValue({ id: 'review-1' });
+
+      await expect(service.markTaskCommentRead(traineeId, 'review-1')).resolves.toBeUndefined();
+    });
+
+    it('rejects attempts to mark another trainee comment as read', async () => {
+      repo.markTaskCommentRead.mockResolvedValue({ count: 0 });
+      repo.findTaskCommentForTrainee.mockResolvedValue(null);
+
+      await expect(service.markTaskCommentRead(traineeId, 'review-foreign')).rejects.toBeInstanceOf(
+        NotFoundError
+      );
     });
   });
 });

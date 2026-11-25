@@ -6,12 +6,14 @@ type MentorSuggestionProps = {
   adminName: string;
   feedback: string;
   compact?: boolean;
+  highlighted?: boolean;
 };
 
 export default function MentorSuggestion({
   adminName,
   feedback,
   compact = false,
+  highlighted = false,
 }: MentorSuggestionProps) {
   if (!feedback.trim()) return null;
 
@@ -27,7 +29,11 @@ export default function MentorSuggestion({
   }
 
   return (
-    <aside className={styles.suggestion} aria-label="Mentor suggestion">
+    <aside
+      className={`${styles.suggestion} ${highlighted ? styles.highlighted : ''}`}
+      aria-label="Mentor suggestion"
+      data-comment-highlighted={highlighted || undefined}
+    >
       <div className={styles.heading}>
         <MessageSquareText size={18} aria-hidden="true" />
         <div>

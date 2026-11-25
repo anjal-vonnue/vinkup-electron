@@ -10,6 +10,55 @@ const daySummaryFields = {
 } as const;
 
 export class DashboardRepository {
+  /** Unread, non-empty approval comments for this trainee, with task navigation context. */
+  findUnreadTaskComments = (traineeId: string) =>
+    prisma.task_review.findMany({
+      where: {
+        trainee_id: traineeId,
+        decision: 'approved',
+        feedback: { not: '' },
+        trainee_read_at: null,
+      },
+      orderBy: [{ reviewed_at: 'desc' }, { created_at: 'desc' }],
+      select: {
+        id: true,
+        task_id: true,
+        admin_id: true,
+        submission_no: true,
+        feedback: true,
+        reviewed_at: true,
+        admin: { select: { name: true } },
+        task: {
+          select: {
+            id: true,
+            title: true,
+            curriculum_day: {
+              select: { id: true, day_number: true, course: { select: { title: true } } },
+            },
+          },
+        },
+      },
+    });
+
+  /** Mark one of this trainee's approved comments read; repeated calls are safe. */
+  markTaskCommentRead = (traineeId: string, reviewId: string) =>
+    prisma.task_review.updateMany({
+      where: {
+        id: reviewId,
+        trainee_id: traineeId,
+        decision: 'approved',
+        feedback: { not: '' },
+        trainee_read_at: null,
+      },
+      data: { trainee_read_at: new Date() },
+    });
+
+  findTaskCommentForTrainee = (traineeId: string, reviewId: string) =>
+    prisma.task_review.findFirst({
+      where: { id: reviewId, trainee_id: traineeId, decision: 'approved', feedback: { not: '' } },
+      select: { id: true },
+    });
+
   /** One day with the lesson-card fields and how many days its course has. */
   findDayWithCourseSize = (dayId: string) => {
     return prisma.curriculum_day.findUnique({

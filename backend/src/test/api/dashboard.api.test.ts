@@ -3,6 +3,8 @@ import type { DashboardResponse } from '@itp/types';
 import { db } from './helpers/db';
 import {
   DAY,
+  TASK,
+  createAdmin,
   freshTrainees,
   istDate,
   istDateString,
@@ -179,5 +181,93 @@ describe('GET /api/dashboard', () => {
 
     expect(body<object>(res)).not.toHaveProperty('courses');
     expect(body<object>(res)).not.toHaveProperty('days');
+  });
+});
+
+describe('dashboard unread task comments', () => {
+  it('lists each unread approval comment and marks only the selected comment read', async () => {
+    const mentor = await createAdmin('Comment Mentor');
+    await markDayCompleted(a.id, DAY.html1);
+    await db.task_progress.update({
+      where: { trainee_id_task_id: { trainee_id: a.id, task_id: TASK.html1Main } },
+      data: { review_status: 'approved', submission_count: 2 },
+    });
+    const first = await db.task_review.create({
+      data: {
+        trainee_id: a.id,
+        task_id: TASK.html1Main,
+        admin_id: mentor.id,
+        submission_no: 1,
+        decision: 'approved',
+        feedback: 'First optional suggestion.',
+        reviewed_at: new Date('2026-11-23T10:00:00.000Z'),
+      },
+    });
+    const second = await db.task_review.create({
+      data: {
+        trainee_id: a.id,
+        task_id: TASK.html1Main,
+        admin_id: mentor.id,
+        submission_no: 2,
+        decision: 'approved',
+        feedback: 'Another optional suggestion.',
+        reviewed_at: new Date('2026-11-24T10:00:00.000Z'),
+      },
+    });
+
+    const initial = await api.get('/api/dashboard/unread-comments', a.cookie);
+    expect(initial.status).toBe(200);
+    expect(body<unknown[]>(initial)).toHaveLength(2);
+    expect(body<Record<string, unknown>[]>(initial)[0]).toMatchObject({
+      id: second.id,
+      taskId: TASK.html1Main,
+      taskTitle: 'Profile page',
+      dayId: DAY.html1,
+      dayNumber: 1,
+      courseTitle: 'HTML',
+      adminId: mentor.id,
+      adminName: 'Comment Mentor',
+      submissionNo: 2,
+      feedback: 'Another optional suggestion.',
+    });
+
+    expect(
+      (await api.patch(`/api/dashboard/unread-comments/${first.id}/read`, {}, a.cookie)).status
+    ).toBe(204);
+    // Repeating the same update is idempotent.
+    expect(
+      (await api.patch(`/api/dashboard/unread-comments/${first.id}/read`, {}, a.cookie)).status
+    ).toBe(204);
+    const remaining = body<{ id: string }[]>(
+      await api.get('/api/dashboard/unread-comments', a.cookie)
+    );
+    expect(remaining.map((comment) => comment.id)).toEqual([second.id]);
+  });
+
+  it('does not expose or allow marking another trainee comment as read', async () => {
+    const mentor = await createAdmin('Comment Mentor');
+    await markDayCompleted(a.id, DAY.html1);
+    await db.task_progress.update({
+      where: { trainee_id_task_id: { trainee_id: a.id, task_id: TASK.html1Main } },
+      data: { review_status: 'approved' },
+    });
+    const review = await db.task_review.create({
+      data: {
+        trainee_id: a.id,
+        task_id: TASK.html1Main,
+        admin_id: mentor.id,
+        submission_no: 1,
+        decision: 'approved',
+        feedback: 'Private suggestion.',
+      },
+    });
+
+    expect(body<unknown[]>(await api.get('/api/dashboard/unread-comments', b.cookie))).toEqual([]);
+    expect(
+      (await api.patch(`/api/dashboard/unread-comments/${review.id}/read`, {}, b.cookie)).status
+    ).toBe(404);
+    expect(
+      (await db.task_review.findUnique({ where: { id: review.id } }))?.trainee_read_at
+    ).toBeNull();
   });
 });

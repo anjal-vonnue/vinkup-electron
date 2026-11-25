@@ -79,3 +79,18 @@ export type ReworkTaskSummary = {
     reviewedAt: string;
   } | null;
 };
+
+/** An approved mentor comment the authenticated trainee has not opened yet. */
+export type UnreadTaskComment = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  dayId: string;
+  dayNumber: number;
+  courseTitle: string;
+  adminId: string;
+  adminName: string;
+  submissionNo: number;
+  feedback: string;
+  reviewedAt: string;
+};
