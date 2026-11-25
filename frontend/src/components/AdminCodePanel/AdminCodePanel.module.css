@@ -112,7 +112,7 @@
   border-radius: 6px;
   background: rgba(124, 65, 228, 0.12);
   border: 1px solid rgba(124, 65, 228, 0.28);
-  color: #2d2356;
+  color: var(--color-accent-text);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
