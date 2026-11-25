@@ -18,6 +18,7 @@ import { env } from '../../config/env';
 import { ConflictError, TraineeDomainError } from '../../errors/AppError';
 import type { AnalyticsQuery, CreateTraineeBody, SaveSlackChannelBody } from './admin.schema';
 import { buildAdminIntegrity } from './integrity.overall';
+import { isScoredFlag } from '../day-module/integrity.scoring';
 import {
   buildIntegrityTrend,
   buildProgressTrend,
@@ -65,7 +66,8 @@ export class AdminService {
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,
     }));
-    const flagRows = flagEvents.map((row) => ({
+    // Idle flags are never scored (see isScoredFlag).
+    const flagRows = flagEvents.filter(isScoredFlag).map((row) => ({
       traineeId: row.trainee_id,
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,
@@ -353,7 +355,8 @@ export class AdminService {
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,
     }));
-    const flagRows = flagEvents.map((row) => ({
+    // Idle flags are never scored (see isScoredFlag).
+    const flagRows = flagEvents.filter(isScoredFlag).map((row) => ({
       traineeId: row.trainee_id,
       taskId: row.task_id,
       dayId: row.task.curriculum_day_id,

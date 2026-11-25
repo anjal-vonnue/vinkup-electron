@@ -55,6 +55,8 @@ export default function AdminCodePanel({
       ? reviewOverride.status
       : (code?.reviewStatus ?? null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [approveSuggestion, setApproveSuggestion] = useState('');
   const [isReworkModalOpen, setIsReworkModalOpen] = useState(false);
   const [reworkFeedback, setReworkFeedback] = useState('');
   const [reworkFileName, setReworkFileName] = useState<string | null>(null);
@@ -79,7 +81,7 @@ export default function AdminCodePanel({
     if (!code || isApproving) return;
     setIsApproving(true);
     try {
-      await approveTask(traineeId, code.taskId);
+      await approveTask(traineeId, code.taskId, approveSuggestion.trim());
       setReviewOverride({
         taskId: code.taskId,
         submissionCount: code.submissionCount,
@@ -87,6 +89,8 @@ export default function AdminCodePanel({
       });
       showToast({ message: 'Task approved successfully', variant: 'success' });
       onReviewSuccess?.(code.taskId, 'approved');
+      setIsApproveModalOpen(false);
+      setApproveSuggestion('');
     } catch (err) {
       showToast({
         message: err instanceof Error ? err.message : 'Failed to approve task.',
@@ -235,7 +239,10 @@ export default function AdminCodePanel({
                   <button
                     type="button"
                     className={styles.approveBtn}
-                    onClick={() => void handleApprove()}
+                    onClick={() => {
+                      setApproveSuggestion('');
+                      setIsApproveModalOpen(true);
+                    }}
                     disabled={isApproving}
                   >
                     <Check size={14} aria-hidden="true" />
@@ -351,6 +358,63 @@ export default function AdminCodePanel({
           </Suspense>
         )}
       </div>
+
+      {/* Rework Modal */}
+      {isApproveModalOpen && (
+        <div
+          className={styles.modalBackdrop}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isApproving) {
+              setIsApproveModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className={styles.reworkModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="approve-dialog-title"
+          >
+            <h4 id="approve-dialog-title" className={styles.modalTitle}>
+              Approve: {taskTitle}
+            </h4>
+            <p className={styles.modalDesc}>
+              Add an optional suggestion for the trainee. They can view it alongside the approved
+              task.
+            </p>
+            <label className={styles.suggestionLabel} htmlFor="approve-suggestion">
+              Mentor suggestion <span>(optional)</span>
+            </label>
+            <textarea
+              id="approve-suggestion"
+              className={styles.textarea}
+              placeholder="Share a useful next step or improvement idea..."
+              value={approveSuggestion}
+              onChange={(event) => setApproveSuggestion(event.target.value)}
+              rows={5}
+              autoFocus
+            />
+            <div className={styles.modalButtons}>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={() => setIsApproveModalOpen(false)}
+                disabled={isApproving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.submitApproveBtn}
+                onClick={() => void handleApprove()}
+                disabled={isApproving}
+              >
+                {isApproving ? 'Approving…' : 'Approve task'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rework Modal */}
       {isReworkModalOpen && (

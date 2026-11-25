@@ -2,3 +2,16 @@
   padding: 8px;
   overflow-y: auto;
 }
+
+.tree {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.treeDropRoot {
+  outline: 1px dashed var(--color-accent-border);
+  outline-offset: -4px;
+  border-radius: 6px;
+}

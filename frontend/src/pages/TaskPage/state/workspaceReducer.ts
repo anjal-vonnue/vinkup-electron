@@ -1,5 +1,6 @@
 import type { WorkspaceAction, WorkspaceState } from '../../../types/workspaceTypes';
 import { expandParents } from './workspaceUtils';
+import { rewritePath } from '../../../lib/relocatePath';
 
 export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
   switch (action.type) {
@@ -92,6 +93,38 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return Object.keys(state.files)
         .filter((path) => path.startsWith(prefix))
         .reduce((next, path) => workspaceReducer(next, { type: 'fileDeleted', path }), state);
+    }
+
+    case 'pathRelocated': {
+      const { from, to } = action;
+      if (from === to) return state;
+
+      const entries = Object.entries(state.files).map(
+        ([path, content]) => [rewritePath(path, from, to), content] as const
+      );
+      // Two files landing on one path would silently drop one: refuse instead.
+      if (new Set(entries.map(([path]) => path)).size !== entries.length) return state;
+
+      // The destination's parent folders stay open so the moved item is visible.
+      const parentSegments = to.split('/').slice(0, -1);
+      const parents = parentSegments.map((_, index) =>
+        parentSegments.slice(0, index + 1).join('/')
+      );
+
+      return {
+        ...state,
+        files: Object.fromEntries(entries),
+        // savedFiles is left alone on purpose: the new path then counts as unsaved and the old
+        // one as deleted, so the next save stores the rename.
+        openPaths: state.openPaths.map((path) => rewritePath(path, from, to)),
+        activePath: state.activePath === null ? null : rewritePath(state.activePath, from, to),
+        expandedFolders: [
+          ...new Set([
+            ...state.expandedFolders.map((path) => rewritePath(path, from, to)),
+            ...parents,
+          ]),
+        ],
+      };
     }
 
     case 'folderToggled': {

@@ -38,6 +38,8 @@ export interface ResourcesBrowserEvents {
   onFindResult: (result: ResourcesFindResult) => void;
   onEscape: () => void;
   onActivity?: () => void;
+  /** Any key, click, scroll or mouse move in the page, focused or not. */
+  onInput?: () => void;
 }
 
 /**
@@ -428,6 +430,18 @@ export class ResourcesBrowser {
 
     contents.on('page-title-updated', (_event, title) => {
       this.update({ title });
+    });
+
+    contents.on('focus', () => {
+      this.setViewFocused(true);
+    });
+
+    contents.on('blur', () => {
+      this.setViewFocused(false);
+    });
+
+    contents.on('input-event', () => {
+      this.events.onInput?.();
     });
 
     contents.on('found-in-page', (_event, result) => {

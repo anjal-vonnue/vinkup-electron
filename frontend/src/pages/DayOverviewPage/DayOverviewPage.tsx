@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowRight, AlertCircle, CheckCircle2, Circle, Clock, Send } from 'lucide-react';
+import {
+  ArrowRight,
+  AlertCircle,
+  CheckCircle2,
+  Circle,
+  Clock,
+  MessageSquareText,
+  Send,
+} from 'lucide-react';
 import type { DayTask, DayContent, DayCurrentStatus, DayIntegrityResponse } from '@itp/types';
 import {
   getDayTasks,
@@ -40,17 +48,42 @@ function getErrorMessage(error: unknown, fallback: string): string {
 function getTaskStatusTag(task: DayTask) {
   if (task.status === 'completed') {
     if (task.reviewStatus === 'approved') {
-      return { label: 'Approved', className: styles.approved, isRework: false, Icon: CheckCircle2 };
+      return {
+        label: 'Approved',
+        className: styles.approved,
+        isRework: false,
+        Icon: CheckCircle2,
+      };
     }
     if (task.reviewStatus === 'rework') {
-      return { label: 'Rework', className: styles.rework, isRework: true, Icon: AlertCircle };
+      return {
+        label: 'Rework',
+        className: styles.rework,
+        isRework: true,
+        Icon: AlertCircle,
+      };
     }
-    return { label: 'Completed', className: styles.completed, isRework: false, Icon: Send };
+    return {
+      label: 'Completed',
+      className: styles.completed,
+      isRework: false,
+      Icon: Send,
+    };
   }
   if (task.status === 'in_progress') {
-    return { label: 'In progress', className: styles.in_progress, isRework: false, Icon: Clock };
+    return {
+      label: 'In progress',
+      className: styles.in_progress,
+      isRework: false,
+      Icon: Clock,
+    };
   }
-  return { label: 'Not started', className: styles.not_started, isRework: false, Icon: Circle };
+  return {
+    label: 'Not started',
+    className: styles.not_started,
+    isRework: false,
+    Icon: Circle,
+  };
 }
 
 function DayTasks({
@@ -133,6 +166,7 @@ function DayTasks({
                         role="button"
                         tabIndex={0}
                         className={`${styles.taskStatus} ${tag.className} ${styles.clickableStatus}`}
+                        aria-label={`Rework requested for ${task.title}. View feedback.`}
                         title="Modifications requested. Click to view feedback."
                         onClick={(e) => {
                           e.stopPropagation();
@@ -153,6 +187,29 @@ function DayTasks({
                       <span className={`${styles.taskStatus} ${tag.className}`}>
                         <StatusIcon size={12} aria-hidden="true" />
                         {tag.label}
+                      </span>
+                    )}
+                    {task.mentorSuggestion?.feedback.trim() && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={`${styles.taskStatus} ${styles.suggestion} ${styles.clickableStatus}`}
+                        aria-label={`View mentor suggestion for ${task.title}`}
+                        title="View the mentor suggestion."
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenFeedback(task);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.stopPropagation();
+                            event.preventDefault();
+                            onOpenFeedback(task);
+                          }
+                        }}
+                      >
+                        <MessageSquareText size={12} aria-hidden="true" />
+                        Suggestion
                       </span>
                     )}
                     {task.isStretchGoal && (

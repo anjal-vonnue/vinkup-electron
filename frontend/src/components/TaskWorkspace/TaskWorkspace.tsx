@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useToast } from '../Toast';
 import { useFlagTracking } from '../../hooks/Useflagtracking';
+import { useIdleTracking } from '../../hooks/useIdleTracking';
 import type { ReviewStatus, TaskResponse } from '@itp/types';
 import { getTaskCode, getTaskReview, saveTaskCode, submitTask } from '../../api/tasks';
 import { applyRuntimeSettings } from '../../lib/monacoSetup';
@@ -41,6 +42,7 @@ import ConfirmDialog from '../ConfirmDialog';
 import EditorPane from '../EditorPane';
 import FilesPanel from '../FilesPanel';
 import InstructionsPanel from '../InstructionsPanel';
+import MentorSuggestion from '../MentorSuggestion/MentorSuggestion';
 import PaneResizer from '../PaneResizer';
 import SaveIndicator from '../SaveIndicator';
 import SubmitTaskButton from '../SubmitTaskButton';
@@ -73,12 +75,18 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   );
   // Logs TAB_SWITCH / FULLSCREEN_EXIT and shows the toast. This is the only place exits are logged.
   useFlagTracking({ taskId: task.id, onWarning: showLeaveWarning });
+  // Records long stretches without input as an IDLE flag for the mentor. Silent for the trainee.
+  useIdleTracking({ taskId: task.id });
 
   const [isRefreshConfirmOpen, setIsRefreshConfirmOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus | null>(task.reviewStatus ?? null);
+  const [approvedSuggestion, setApprovedSuggestion] = useState<{
+    adminName: string;
+    feedback: string;
+  } | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   // Submitting can be repeated and doesn't lock editing; this only drives the pill and the label.
   const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
@@ -89,6 +97,32 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
   useEffect(() => {
     applyRuntimeSettings(task.runtime);
   }, [task.runtime]);
+
+  // Load feedback when opening an already-approved task. The state update runs
+  // in the request callback, outside the synchronous effect body.
+  useEffect(() => {
+    if (task.reviewStatus !== 'approved') return;
+
+    let cancelled = false;
+    getTaskReview(task.id)
+      .then((review) => {
+        if (cancelled) return;
+        setReviewStatus(review.reviewStatus);
+        const latestReview = review.latestReview;
+        setApprovedSuggestion(
+          latestReview?.decision === 'approved' && latestReview.feedback.trim()
+            ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
+            : null
+        );
+      })
+      .catch(() => {
+        // Best effort: the reconnect refresh can catch a temporary failure.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id, task.reviewStatus]);
 
   const stateRef = useRef(state);
   useEffect(() => {
@@ -175,6 +209,7 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
     const result = await submitTask(task.id);
     setSubmittedAt(new Date(result.submittedAt));
     setReviewStatus(result.reviewStatus);
+    setApprovedSuggestion(null);
     toast.show({
       message: reviewStatus === 'rework' ? 'Task resubmitted' : 'Task submitted',
       variant: 'success',
@@ -186,6 +221,12 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
     try {
       const review = await getTaskReview(task.id);
       setReviewStatus(review.reviewStatus);
+      const latestReview = review.latestReview;
+      setApprovedSuggestion(
+        latestReview?.decision === 'approved' && latestReview.feedback.trim()
+          ? { adminName: latestReview.adminName, feedback: latestReview.feedback }
+          : null
+      );
     } catch {
       // Best effort: the next event or the next page load catches up.
     }
@@ -196,6 +237,11 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
     if (event.type !== 'task.reviewed' || event.taskId !== task.id) return;
 
     setReviewStatus(event.reviewStatus);
+    setApprovedSuggestion(
+      event.reviewStatus === 'approved' && event.feedback.trim()
+        ? { adminName: event.mentorName, feedback: event.feedback }
+        : null
+    );
   });
 
   // After a stream reconnect, catch a review that landed while the stream was down.
@@ -379,7 +425,17 @@ export default function TaskWorkspace({ task }: TaskWorkspaceProps) {
                 onTabChange={(tab) => dispatch({ type: 'sidebarTabChanged', tab })}
                 fileCount={selectFileCount(state)}
                 onCollapse={() => dispatch({ type: 'paneToggled', pane: 'sidebar' })}
-                instructions={<InstructionsPanel markdown={task.instructionsMarkdown} />}
+                instructions={
+                  <>
+                    {approvedSuggestion && (
+                      <MentorSuggestion
+                        adminName={approvedSuggestion.adminName}
+                        feedback={approvedSuggestion.feedback}
+                      />
+                    )}
+                    <InstructionsPanel markdown={task.instructionsMarkdown} />
+                  </>
+                }
                 files={<FilesPanel onRefresh={refreshFiles} />}
               />
             </div>

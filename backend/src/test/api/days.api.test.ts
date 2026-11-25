@@ -4,6 +4,7 @@ import { db } from './helpers/db';
 import {
   DAY,
   TASK,
+  createAdmin,
   freshTrainees,
   markDayCompleted,
   markTaskCompleted,
@@ -158,6 +159,60 @@ describe('GET /api/days/:dayId/tasks', () => {
 
     const res = await api.get(`/api/days/${DAY.html1}/tasks`, a.cookie);
     expect(body<DayTask[]>(res).map((t) => t.status)).toEqual(['completed', 'in_progress']);
+  });
+
+  it('includes a non-empty approved suggestion only for its trainee', async () => {
+    const admin = await createAdmin('Suggestion Mentor');
+    await markTaskCompleted(a.id, TASK.html1Main);
+    await db.task_progress.update({
+      where: { trainee_id_task_id: { trainee_id: a.id, task_id: TASK.html1Main } },
+      data: { review_status: 'approved' },
+    });
+    await db.task_review.create({
+      data: {
+        trainee_id: a.id,
+        task_id: TASK.html1Main,
+        admin_id: admin.id,
+        submission_no: 1,
+        decision: 'approved',
+        feedback: 'Consider adding a footer.',
+      },
+    });
+
+    const forOwner = body<DayTask[]>(await api.get(`/api/days/${DAY.html1}/tasks`, a.cookie));
+    expect(forOwner.find((task) => task.id === TASK.html1Main)?.mentorSuggestion).toEqual({
+      adminName: 'Suggestion Mentor',
+      feedback: 'Consider adding a footer.',
+    });
+
+    const forOtherTrainee = body<DayTask[]>(
+      await api.get(`/api/days/${DAY.html1}/tasks`, b.cookie)
+    );
+    expect(forOtherTrainee.find((task) => task.id === TASK.html1Main)).not.toHaveProperty(
+      'mentorSuggestion'
+    );
+  });
+
+  it('omits an approved suggestion when its feedback is blank', async () => {
+    const admin = await createAdmin('Suggestion Mentor');
+    await markTaskCompleted(a.id, TASK.html1Main);
+    await db.task_progress.update({
+      where: { trainee_id_task_id: { trainee_id: a.id, task_id: TASK.html1Main } },
+      data: { review_status: 'approved' },
+    });
+    await db.task_review.create({
+      data: {
+        trainee_id: a.id,
+        task_id: TASK.html1Main,
+        admin_id: admin.id,
+        submission_no: 1,
+        decision: 'approved',
+        feedback: '   ',
+      },
+    });
+
+    const tasks = body<DayTask[]>(await api.get(`/api/days/${DAY.html1}/tasks`, a.cookie));
+    expect(tasks.find((task) => task.id === TASK.html1Main)).not.toHaveProperty('mentorSuggestion');
   });
 
   it("never shows another trainee's task progress", async () => {

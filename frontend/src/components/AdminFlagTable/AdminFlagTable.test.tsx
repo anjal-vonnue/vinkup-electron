@@ -39,6 +39,23 @@ describe('AdminFlagTable', () => {
     expect(within(row).getByText('05 Oct 2026, 15:30')).toBeInTheDocument();
   });
 
+  it('shows an idle flag neutrally, with its length and start time (IST)', () => {
+    render(
+      <AdminFlagTable
+        dayLabels={dayLabels}
+        // Recorded at 15:30 IST after 18 minutes idle, so it started at 15:12.
+        flags={[flag({ id: 'idle', type: 'IDLE', durationMs: 18 * 60_000 })]}
+      />
+    );
+
+    const row = screen.getAllByRole('row')[1];
+    expect(within(row).getByText('Idle for 18 min (from 15:12)')).toBeInTheDocument();
+    expect(within(row).getByText('Profile page')).toBeInTheDocument();
+    expect(within(row).getByText('Normal')).toBeInTheDocument();
+    expect(screen.getByText(/it can also mean reading or thinking/)).toBeInTheDocument();
+    expect(screen.queryByText(/suspicious/i)).not.toBeInTheDocument();
+  });
+
   it('lists the newest event first, even when the data arrives in another order', () => {
     render(
       <AdminFlagTable

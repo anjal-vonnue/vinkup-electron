@@ -75,6 +75,24 @@ const api: DesktopApi = {
         ipcRenderer.removeListener('window:fullscreen-changed', handler);
       };
     },
+    onOwnWindowActivity: (listener: () => void) => {
+      const handler = (): void => {
+        listener();
+      };
+      ipcRenderer.on('window:own-window-activity', handler);
+      return () => {
+        ipcRenderer.removeListener('window:own-window-activity', handler);
+      };
+    },
+    onScreenLockChange: (listener: (locked: boolean) => void) => {
+      const handler = (_event: IpcRendererEvent, locked: boolean): void => {
+        listener(locked);
+      };
+      ipcRenderer.on('power:screen-lock-changed', handler);
+      return () => {
+        ipcRenderer.removeListener('power:screen-lock-changed', handler);
+      };
+    },
   },
 
   certificate: {

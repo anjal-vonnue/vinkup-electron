@@ -58,6 +58,7 @@ export class DisplayWindowManager {
   private readonly onExitChoice: () => void;
   private readonly overlayUrl: string;
   private readonly onAllowedOverlayFocusChange: (isFocused: boolean) => void;
+  private readonly onOverlayInput: () => void;
   private appDisplayId: number;
   private reconcileTimer: NodeJS.Timeout | null = null;
   private focusWatchdog: NodeJS.Timeout | null = null;
@@ -91,12 +92,14 @@ export class DisplayWindowManager {
     private readonly enabled: boolean,
     initialDisplayId: number | undefined,
     overlayUrl: string,
-    onAllowedOverlayFocusChange: (isFocused: boolean) => void = () => {}
+    onAllowedOverlayFocusChange: (isFocused: boolean) => void = () => {},
+    onOverlayInput: () => void = () => {}
   ) {
     this.mainWindow = mainWindow;
     this.onExitChoice = onExitChoice;
     this.overlayUrl = overlayUrl;
     this.onAllowedOverlayFocusChange = onAllowedOverlayFocusChange;
+    this.onOverlayInput = onOverlayInput;
     this.appDisplayId = initialDisplayId ?? screen.getPrimaryDisplay().id;
   }
 
@@ -873,6 +876,9 @@ export class DisplayWindowManager {
     this.configureWindow(window, true);
     window.on('will-move', (event) => event.preventDefault());
     window.on('move', () => this.placeWindow(window, display.bounds));
+    // Any key, click, scroll or mouse move here, even while the window is not focused
+    // (e.g. scrolling a reference with the wheel). The task page counts it as activity.
+    window.webContents.on('input-event', () => this.onOverlayInput());
     window.on('focus', () => {
       this.focusedOverlayId = display.id;
       this.updateAllowedOverlayFocus();

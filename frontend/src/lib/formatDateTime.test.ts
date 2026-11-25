@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatIstDateTime } from './formatDateTime';
+import { formatIstDateTime, formatIstTime } from './formatDateTime';
 
 describe('formatIstDateTime', () => {
   it('shows the time in Asia/Kolkata, whatever the machine timezone is', () => {
@@ -12,5 +12,15 @@ describe('formatIstDateTime', () => {
 
   it('returns a dash for a value that is not a date', () => {
     expect(formatIstDateTime('not a date')).toBe('—');
+  });
+});
+
+describe('formatIstTime', () => {
+  it('shows only the time, in Asia/Kolkata', () => {
+    expect(formatIstTime('2026-10-22T12:12:00.000Z')).toBe('17:42');
+  });
+
+  it('returns a dash for a value that is not a date', () => {
+    expect(formatIstTime('not a date')).toBe('—');
   });
 });

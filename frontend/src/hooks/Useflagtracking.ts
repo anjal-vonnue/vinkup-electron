@@ -9,6 +9,12 @@ export const LEFT_WORKSPACE_WARNING =
 export const LEFT_WORKSPACE_WINDOW_WARNING =
   'You left the workspace window. This has been noted for your mentor.';
 
+/**
+ * On Linux a lock is noticed up to ~15 s late (the desktop app polls for it), so a blur
+ * that started this shortly before the lock was caused by the lock itself.
+ */
+const LOCK_DETECTION_DELAY_MS = 16_000;
+
 type Options = {
   taskId: string;
   onWarning: (message: string) => void;
@@ -40,6 +46,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
     let isAllowedOverlayContentFocused = false;
     let focusStateVersion = 0;
     let skipNextReturnWarning = false;
+    let isScreenLocked = false;
     function isTrackingFullscreenActive() {
       return desktopWindow ? (nativeFullscreen ?? isFullscreenActive()) : isFullscreenActive();
     }
@@ -71,8 +78,14 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
 
     function handleAllowedOverlayFocusChange(isFocused: boolean) {
       focusStateVersion += 1;
+      const wasFocused = isAllowedOverlayContentFocused;
       isAllowedOverlayContentFocused = isFocused;
-      if (!isFocused) return;
+      if (!isFocused) {
+        // Focus left our second-screen window. Back in this window: nothing happens.
+        // Another app: the normal blur check below flags it.
+        if (wasFocused) handleWindowBlur();
+        return;
+      }
 
       if (activeFlag?.type === 'TAB_SWITCH' || document.visibilityState === 'hidden') {
         skipNextReturnWarning = true;
@@ -167,6 +180,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
         clearTimeout(windowBlurTimeout);
       }
       windowBlurTimeout = setTimeout(() => {
+        if (isScreenLocked) return;
         if (!isTrackingFullscreenActive()) return;
         if (document.visibilityState === 'hidden') return;
         if (isAllowedOverlayContentFocused) return;
@@ -198,6 +212,26 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
         onWarningRef.current(LEFT_WORKSPACE_WINDOW_WARNING);
       }
     }
+    // Desktop app only. A screen lock / sleep is not "leaving": no blur flag, no warning.
+    function handleScreenLockChange(locked: boolean) {
+      isScreenLocked = locked;
+      if (!locked) {
+        // Back from the lock: if focus is not here now, the normal blur check flags it.
+        handleWindowBlur();
+        return;
+      }
+      if (windowBlurTimeout) clearTimeout(windowBlurTimeout);
+      if (activeFlag?.type === 'WINDOW_BLUR') {
+        if (Date.now() - activeFlag.startedAt < LOCK_DETECTION_DELAY_MS) {
+          activeFlag = null; // caused by the lock: drop it
+        } else {
+          endFlag(); // the trainee had already left before the lock: log that part
+        }
+      }
+      isUnfocused = false; // no "you left" warning when the screen is unlocked
+    }
+    const removeScreenLockListener = desktopWindow?.onScreenLockChange?.(handleScreenLockChange);
+
     function handleResize() {
       // F11 can trigger multiple resize events.
       // Wait until the browser finishes resizing before checking fullscreen state.
@@ -228,6 +262,7 @@ export function useFlagTracking({ taskId, onWarning }: Options): void {
       window.removeEventListener('focus', handleWindowFocus); // NEW
       removeAllowedOverlayFocusListener?.();
       removeFullscreenListener?.();
+      removeScreenLockListener?.();
       if (resizeTimeout) {
         clearTimeout(resizeTimeout);
       }

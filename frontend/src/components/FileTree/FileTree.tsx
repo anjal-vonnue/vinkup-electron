@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import type { TreeNode } from '../../lib/buildFileTree';
 import FileTreeRow from '../FileTreeRow';
 import styles from './FileTree.module.css';
@@ -11,6 +11,13 @@ type FileTreeProps = {
   onOpenFile: (path: string) => void;
   onToggleFolder: (path: string) => void;
   onDelete?: (node: TreeNode) => void;
+  renamingPath?: string | null;
+  onStartRename?: (node: TreeNode) => void;
+  onRenameSubmit?: (node: TreeNode, name: string) => string | null;
+  onRenameCancel?: () => void;
+  onNewFile?: (node: TreeNode) => void;
+  onNewFolder?: (node: TreeNode) => void;
+  onMove?: (fromPath: string, targetFolder: string) => void;
 };
 
 type FlatRow = { node: TreeNode; depth: number };
@@ -43,6 +50,13 @@ export default function FileTree({
   onOpenFile,
   onToggleFolder,
   onDelete,
+  renamingPath,
+  onStartRename,
+  onRenameSubmit,
+  onRenameCancel,
+  onNewFile,
+  onNewFolder,
+  onMove,
 }: FileTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rows = flatten(nodes, expandedFolders, 0);
@@ -59,6 +73,52 @@ export default function FileTree({
     (rows.some((row) => row.node.path === activePath) ? activePath : null) ??
     rows[0]?.node.path ??
     null;
+  const [dragPath, setDragPath] = useState<string | null>(null);
+  // The folder a drop would land in; '' is the top level.
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  function targetFolderFor(event: DragEvent<HTMLDivElement>): string {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[role="treeitem"]');
+    const path = row?.dataset.path;
+    const node = path ? rows.find((r) => r.node.path === path)?.node : undefined;
+    if (!node) return '';
+    return node.type === 'folder' ? node.path : (parentPathOf(node.path) ?? '');
+  }
+
+  function handleDragStart(event: DragEvent<HTMLDivElement>) {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[role="treeitem"]');
+    const path = row?.dataset.path;
+    if (!path || !onMove) return;
+    event.dataTransfer.setData('text/plain', path); // Firefox needs data to start a drag
+    event.dataTransfer.effectAllowed = 'move';
+    setDragPath(path);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!dragPath) return; // not a drag that started in this tree
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const target = targetFolderFor(event);
+    setDropTarget((previous) => (previous === target ? previous : target));
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null);
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    if (!dragPath) return;
+    event.preventDefault();
+    const target = targetFolderFor(event);
+    setDragPath(null);
+    setDropTarget(null);
+    onMove?.(dragPath, target);
+  }
+
+  function handleDragEnd() {
+    setDragPath(null);
+    setDropTarget(null);
+  }
 
   function focusRow(path: string | null) {
     if (!path) return;
@@ -141,6 +201,12 @@ export default function FileTree({
         if (last) focusRow(last.node.path);
         break;
       }
+      case 'F2': {
+        if (!onStartRename) break;
+        event.preventDefault();
+        onStartRename(row.node);
+        break;
+      }
       default:
         break;
     }
@@ -150,7 +216,12 @@ export default function FileTree({
     <div
       role="tree"
       aria-label="Files"
-      className={styles.tree}
+      className={dropTarget === '' ? `${styles.tree} ${styles.treeDropRoot}` : styles.tree}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onDragEnd={handleDragEnd}
       ref={containerRef}
       onKeyDown={handleKeyDown}
     >
@@ -172,6 +243,19 @@ export default function FileTree({
             onToggleFolder(row.node.path);
           }}
           onDelete={onDelete ? () => onDelete(row.node) : undefined}
+          isRenaming={row.node.path === renamingPath}
+          onRenameSubmit={
+            row.node.path === renamingPath && onRenameSubmit
+              ? (name) => onRenameSubmit(row.node, name)
+              : undefined
+          }
+          onRenameCancel={row.node.path === renamingPath ? onRenameCancel : undefined}
+          onNewFile={onNewFile ? () => onNewFile(row.node) : undefined}
+          onNewFolder={onNewFolder ? () => onNewFolder(row.node) : undefined}
+          onStartRename={onStartRename ? () => onStartRename(row.node) : undefined}
+          draggable={Boolean(onMove)}
+          isDragging={row.node.path === dragPath}
+          isDropTarget={dropTarget !== null && dropTarget !== '' && row.node.path === dropTarget}
         />
       ))}
     </div>

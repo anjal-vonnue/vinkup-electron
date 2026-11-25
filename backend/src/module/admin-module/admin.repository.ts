@@ -83,10 +83,15 @@ export class AdminRepository {
       select: { trainee_id: true, wpm: true },
     });
 
+  /** "Flags this week" per trainee. Idle flags are left out: they are only shown in the Flags tab. */
   flagCountsSince = (since: Date, traineeIds: string[]) =>
     prisma.flag_event.groupBy({
       by: ['trainee_id'],
-      where: { timestamp: { gte: since }, trainee_id: { in: traineeIds } },
+      where: {
+        timestamp: { gte: since },
+        trainee_id: { in: traineeIds },
+        type: { not: 'IDLE' },
+      },
       _count: { _all: true },
     });
 

@@ -160,7 +160,7 @@ describe('AdminCodePanel', () => {
       expect(screen.getByRole('button', { name: /History/i })).toBeInTheDocument();
     });
 
-    it('approves a task when Approve is clicked', async () => {
+    it('approves a task with an optional mentor suggestion', async () => {
       vi.mocked(approveTask).mockResolvedValue({
         id: 'rev-app-1',
         taskId: 't1',
@@ -177,10 +177,35 @@ describe('AdminCodePanel', () => {
       renderPanel({ code: completedCode, onReviewSuccess });
 
       await user.click(screen.getByRole('button', { name: 'Approve' }));
+      expect(screen.getByRole('dialog', { name: /Approve: Profile page/ })).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Mentor suggestion (optional)'), 'Add a footer.');
+      await user.click(screen.getByRole('button', { name: 'Approve task' }));
 
-      expect(approveTask).toHaveBeenCalledWith('trainee-1', 't1');
+      expect(approveTask).toHaveBeenCalledWith('trainee-1', 't1', 'Add a footer.');
       expect(screen.getByText('Approved')).toBeInTheDocument();
       expect(onReviewSuccess).toHaveBeenCalledWith('t1', 'approved');
+    });
+
+    it('allows approval without a suggestion', async () => {
+      vi.mocked(approveTask).mockResolvedValue({
+        id: 'rev-app-empty',
+        taskId: 't1',
+        adminId: 'a1',
+        adminName: 'Admin',
+        submissionNo: 1,
+        decision: 'approved',
+        feedback: '',
+        reviewedAt: '2026-10-02T15:00:00.000Z',
+      });
+
+      const user = userEvent.setup();
+      renderPanel({ code: completedCode });
+
+      await user.click(screen.getByRole('button', { name: 'Approve' }));
+      await user.click(screen.getByRole('button', { name: 'Approve task' }));
+
+      expect(approveTask).toHaveBeenCalledWith('trainee-1', 't1', '');
+      expect(screen.getByText('Approved')).toBeInTheDocument();
     });
 
     it('opens rework modal, validates feedback, and submits rework request', async () => {
