@@ -518,6 +518,9 @@ export default function CheckpointFormDialog({
       className={styles.dialog}
       aria-labelledby="checkpoint-form-title"
       onCancel={(event) => {
+        // A file picker that the user dismisses fires `cancel` on the <input>, and that
+        // event bubbles up to the dialog. Only the dialog's own Escape should close it.
+        if (event.target !== event.currentTarget) return;
         event.preventDefault();
         if (!saving) onClose();
       }}
