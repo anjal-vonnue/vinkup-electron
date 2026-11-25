@@ -50,6 +50,12 @@ type CertificateRecord = {
   signature_version: string;
 };
 
+/** Live activity numbers derived from task_progress (see repository). */
+type CourseActivity = {
+  startedAt: Date;
+  timeSpentSeconds: number;
+};
+
 function isUniqueConstraintError(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -59,14 +65,19 @@ function isUniqueConstraintError(error: unknown): boolean {
   );
 }
 
-function toCourseCertificate(record: CertificateRecord): CourseCertificate {
+function toCourseCertificate(
+  record: CertificateRecord,
+  activity: CourseActivity
+): CourseCertificate {
   return {
     courseId: record.course_id,
     courseTitle: record.course_title,
     traineeName: record.trainee_name,
     daysCompleted: record.days_completed,
+    startedAt: activity.startedAt.toISOString(),
     completedAt: record.completed_at.toISOString(),
     issuedAt: record.issued_at.toISOString(),
+    timeSpentSeconds: activity.timeSpentSeconds,
     certificateId: record.certificate_id,
     status: record.status,
     signature: record.signature,
@@ -185,6 +196,26 @@ export class CertificateService {
   }
 
   /**
+   * Reads the two derived numbers the certificate sheet shows (start date and
+   * total active time) and maps a persisted certificate row to the response.
+   *
+   * The `startedAt` falls back to `completed_at` when there are no
+   * task_progress rows, which can only happen for a legacy certificate issued
+   * before time tracking existed. `timeSpentSeconds` falls back to 0.
+   */
+  private async describeCertificate(record: CertificateRecord): Promise<CourseCertificate> {
+    const activity = await certificateRepository.findCourseActivity(
+      record.trainee_id,
+      record.course_id
+    );
+
+    return toCourseCertificate(record, {
+      startedAt: activity.startedAt ?? record.completed_at,
+      timeSpentSeconds: activity.timeSpentSeconds,
+    });
+  }
+
+  /**
    * Returns courses eligible for certificates.
    * Every day must be completed and every required task approved.
    */
@@ -205,7 +236,7 @@ export class CertificateService {
       traineeId,
       courseId
     );
-    if (existing) return toCourseCertificate(existing);
+    if (existing) return this.describeCertificate(existing);
 
     const course = await certificateRepository.findCourse(courseId);
     if (!course) {
@@ -271,14 +302,14 @@ export class CertificateService {
           );
         });
 
-        return toCourseCertificate(created);
+        return this.describeCertificate(created);
       } catch (error) {
         if (isUniqueConstraintError(error)) {
           const conflict = await certificateRepository.findCertificateByTraineeAndCourse(
             traineeId,
             courseId
           );
-          if (conflict) return toCourseCertificate(conflict);
+          if (conflict) return this.describeCertificate(conflict);
           // Certificate ID collision is extremely unlikely; retry with a new ID.
           continue;
         }
@@ -359,12 +390,12 @@ export class CertificateService {
       certificateId
     )) as CertificateRecord | null;
     if (!record) throw new NotFoundError('Certificate not found.');
-    if (record.status === 'REVOKED') return toCourseCertificate(record);
+    if (record.status === 'REVOKED') return this.describeCertificate(record);
 
     const revoked = (await certificateRepository.revokeCertificate(
       certificateId,
       new Date()
     )) as CertificateRecord;
-    return toCourseCertificate(revoked);
+    return this.describeCertificate(revoked);
   }
 }
