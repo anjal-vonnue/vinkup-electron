@@ -132,13 +132,25 @@ type StarterFileEditorProps = {
 
 function StarterFileEditor({ files, onChange, disabled }: StarterFileEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const newPathInputRef = useRef<HTMLInputElement>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [newPath, setNewPath] = useState<string | null>(null);
 
-  function addFile() {
-    const name = window.prompt('File path (e.g. index.js, src/app.ts):');
-    if (!name?.trim()) return;
-    onChange([...files, { path: name.trim(), content: '' }]);
-    setEditingIndex(files.length);
+  useEffect(() => {
+    if (newPath !== null) newPathInputRef.current?.focus();
+  }, [newPath]);
+
+  function createFile() {
+    const path = newPath?.trim();
+    if (!path) return;
+    const existing = files.findIndex((file) => file.path === path);
+    if (existing >= 0) {
+      setEditingIndex(existing);
+    } else {
+      onChange([...files, { path, content: '' }]);
+      setEditingIndex(files.length);
+    }
+    setNewPath(null);
   }
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -188,7 +200,7 @@ function StarterFileEditor({ files, onChange, disabled }: StarterFileEditorProps
           <button
             type="button"
             className={styles.uploadButton}
-            onClick={addFile}
+            onClick={() => setNewPath('')}
             disabled={disabled}
           >
             <Plus size={14} aria-hidden="true" />
@@ -203,6 +215,41 @@ function StarterFileEditor({ files, onChange, disabled }: StarterFileEditorProps
           />
         </div>
       </div>
+
+      {newPath !== null && (
+        <div className={styles.newFileRow}>
+          <input
+            ref={newPathInputRef}
+            className={styles.newFilePathInput}
+            value={newPath}
+            onChange={(event) => setNewPath(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                createFile();
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setNewPath(null);
+              }
+            }}
+            placeholder="File path, e.g. src/app.ts"
+            aria-label="New file path"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            className={styles.uploadButton}
+            onClick={createFile}
+            disabled={!newPath.trim()}
+          >
+            Add
+          </button>
+          <button type="button" className={styles.newFileCancel} onClick={() => setNewPath(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       {files.length === 0 ? (
         <p className={styles.muted}>No starter files yet. Add files the trainee will start with.</p>

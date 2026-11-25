@@ -637,6 +637,46 @@
   gap: 6px;
 }
 
+.newFileRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.newFilePathInput {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 7px;
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+
+.newFilePathInput:focus {
+  border-color: var(--color-accent-purple);
+}
+
+.newFileCancel {
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.newFileCancel:hover {
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-primary);
+}
+
 .starterFilesList {
   display: flex;
   flex-direction: column;
