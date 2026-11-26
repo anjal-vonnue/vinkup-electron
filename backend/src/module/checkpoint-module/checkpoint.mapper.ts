@@ -60,18 +60,32 @@ export function isResultVisible(input: {
   );
 }
 
-export function assignedTraineeCount(
-  assignments: Array<{
-    trainee_id: string | null;
-    group: { members: Array<{ trainee_id: string }> } | null;
-  }>
-): number {
+type AssignmentRow = {
+  trainee_id: string | null;
+  group: {
+    members: Array<{ trainee_id: string; trainee: { is_active: boolean } }>;
+  } | null;
+};
+
+/**
+ * Every trainee the checkpoint actually reaches, directly or through a group.
+ * Deactivated group members are skipped: they cannot log in, so they must not
+ * count towards the assignment or block publishing. Reactivating them makes
+ * them count again without touching the group.
+ */
+export function assignedTraineeIds(assignments: AssignmentRow[]): Set<string> {
   const ids = new Set<string>();
   for (const assignment of assignments) {
     if (assignment.trainee_id) ids.add(assignment.trainee_id);
-    for (const member of assignment.group?.members ?? []) ids.add(member.trainee_id);
+    for (const member of assignment.group?.members ?? []) {
+      if (member.trainee.is_active) ids.add(member.trainee_id);
+    }
   }
-  return ids.size;
+  return ids;
+}
+
+export function assignedTraineeCount(assignments: AssignmentRow[]): number {
+  return assignedTraineeIds(assignments).size;
 }
 
 export function toManagerSummary(row: CheckpointSummaryRow): ManagerCheckpointSummary {

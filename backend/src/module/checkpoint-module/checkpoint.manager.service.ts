@@ -13,6 +13,7 @@ import type {
 import { AppError, NotFoundError, ValidationError } from '../../errors/AppError';
 import { parseCheckpointMarkdown } from './checkpoint.markdown';
 import {
+  assignedTraineeIds,
   toManagerAttemptDetail,
   toManagerAttemptSummary,
   toManagerDetail,
@@ -144,7 +145,12 @@ function toGroup(
   return {
     id: row.id,
     name: row.name,
-    members: row.members.map((member) => member.trainee),
+    members: row.members.map((member) => ({
+      id: member.trainee.id,
+      name: member.trainee.name,
+      email: member.trainee.email,
+      isActive: member.trainee.is_active,
+    })),
     createdAt: row.created_at.toISOString(),
   };
 }
@@ -332,16 +338,13 @@ export class CheckpointManagerService {
       ]);
     }
 
-    const assigned = new Set<string>();
-    for (const assignment of existing.assignments) {
-      if (assignment.trainee_id) assigned.add(assignment.trainee_id);
-      for (const member of assignment.group?.members ?? []) assigned.add(member.trainee_id);
-    }
+    const assigned = assignedTraineeIds(existing.assignments);
     if (assigned.size === 0) {
       throw new ValidationError([
         {
           path: ['traineeIds'],
-          message: 'Assign at least one trainee or group before publishing.',
+          message:
+            'Assign at least one active trainee or a group with active members before publishing.',
         },
       ]);
     }

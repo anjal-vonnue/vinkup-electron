@@ -174,6 +174,31 @@ describe('CheckpointManagerService', () => {
     repo.countAttempts.mockResolvedValue(0);
   });
 
+  describe('list', () => {
+    it('counts only active group members as assigned', async () => {
+      repo.listCheckpoints.mockResolvedValue([
+        checkpointRow({
+          assignments: [
+            {
+              trainee_id: null,
+              group_id: 'group-1',
+              group: {
+                members: [
+                  { trainee_id: 't1', trainee: { is_active: true } },
+                  { trainee_id: 't2', trainee: { is_active: false } },
+                ],
+              },
+            },
+          ],
+        }),
+      ]);
+
+      const [summary] = await service.list();
+
+      expect(summary.assignedCount).toBe(1);
+    });
+  });
+
   describe('create', () => {
     it('rejects a paper without any questions', async () => {
       await expect(
@@ -301,7 +326,13 @@ describe('CheckpointManagerService', () => {
         checkpointRow({
           start_at: startAt,
           assignments: [
-            { trainee_id: null, group_id: 'group-1', group: { members: [{ trainee_id: 't1' }] } },
+            {
+              trainee_id: null,
+              group_id: 'group-1',
+              group: {
+                members: [{ trainee_id: 't1', trainee: { is_active: true } }],
+              },
+            },
           ],
         })
       );
@@ -313,6 +344,59 @@ describe('CheckpointManagerService', () => {
 
       expect(published.status).toBe('SCHEDULED');
       expect(repo.publishCheckpoint).toHaveBeenCalledWith(checkpointId, startAt);
+    });
+
+    it('publishes when a group still has at least one active member', async () => {
+      const startAt = new Date(Date.now() + 60_000);
+      repo.findCheckpointDetail.mockResolvedValue(
+        checkpointRow({
+          start_at: startAt,
+          assignments: [
+            {
+              trainee_id: null,
+              group_id: 'group-1',
+              group: {
+                members: [
+                  { trainee_id: 't1', trainee: { is_active: true } },
+                  { trainee_id: 't2', trainee: { is_active: false } },
+                ],
+              },
+            },
+          ],
+        })
+      );
+      repo.publishCheckpoint.mockResolvedValue(
+        checkpointRow({ status: 'SCHEDULED', start_at: startAt })
+      );
+
+      await expect(service.publish(managerId, checkpointId)).resolves.toMatchObject({
+        status: 'SCHEDULED',
+      });
+    });
+
+    it('refuses to publish when every group member is deactivated', async () => {
+      repo.findCheckpointDetail.mockResolvedValue(
+        checkpointRow({
+          start_at: new Date(Date.now() + 60_000),
+          assignments: [
+            {
+              trainee_id: null,
+              group_id: 'group-1',
+              group: {
+                members: [
+                  { trainee_id: 't1', trainee: { is_active: false } },
+                  { trainee_id: 't2', trainee: { is_active: false } },
+                ],
+              },
+            },
+          ],
+        })
+      );
+
+      await expect(service.publish(managerId, checkpointId)).rejects.toBeInstanceOf(
+        ValidationError
+      );
+      expect(repo.publishCheckpoint).not.toHaveBeenCalled();
     });
 
     it('refuses to publish a cancelled checkpoint', async () => {

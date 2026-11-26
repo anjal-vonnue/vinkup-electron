@@ -256,7 +256,7 @@ describe('checkpoint trainee API', () => {
     );
     expect(groupRes.status).toBe(201);
     const group = body<CheckpointGroup>(groupRes);
-    expect(group.members).toEqual([{ id: b.id, name: b.name, email: b.email }]);
+    expect(group.members).toEqual([{ id: b.id, name: b.name, email: b.email, isActive: true }]);
 
     const scheduled = await createScheduledCheckpoint({ traineeIds: [], groupIds: [group.id] });
 
@@ -271,6 +271,57 @@ describe('checkpoint trainee API', () => {
       ),
       409,
       'CHECKPOINT_NOT_AVAILABLE'
+    );
+  });
+
+  it('skips deactivated group members when assigning and publishing', async () => {
+    const groupRes = await api.post(
+      '/api/manager/checkpoint-groups',
+      { name: 'Mixed batch', traineeIds: [a.id, b.id] },
+      manager.cookie
+    );
+    expect(groupRes.status).toBe(201);
+    const group = body<CheckpointGroup>(groupRes);
+
+    const draft = await createCheckpoint({
+      traineeIds: [],
+      groupIds: [group.id],
+    });
+
+    await api.patch(`/api/manager/trainees/${b.id}/status`, { isActive: false }, manager.cookie);
+
+    const list = body<ManagerCheckpointSummary[]>(
+      await api.get('/api/manager/checkpoints', manager.cookie)
+    );
+    expect(list.find((row) => row.id === draft.id)?.assignedCount).toBe(1);
+
+    const groups = body<CheckpointGroup[]>(
+      await api.get('/api/manager/checkpoint-groups', manager.cookie)
+    );
+    expect(groups.find((row) => row.id === group.id)?.members).toEqual([
+      expect.objectContaining({ id: a.id, isActive: true }),
+      expect.objectContaining({ id: b.id, isActive: false }),
+    ]);
+
+    const scheduled = await publish(draft.id);
+    expect(scheduled.status).toBe('SCHEDULED');
+  });
+
+  it('refuses to publish when every group member is deactivated', async () => {
+    const groupRes = await api.post(
+      '/api/manager/checkpoint-groups',
+      { name: 'Deactivated batch', traineeIds: [b.id] },
+      manager.cookie
+    );
+    const group = body<CheckpointGroup>(groupRes);
+    const draft = await createCheckpoint({ traineeIds: [], groupIds: [group.id] });
+
+    await api.patch(`/api/manager/trainees/${b.id}/status`, { isActive: false }, manager.cookie);
+
+    expectError(
+      await api.post(`/api/manager/checkpoints/${draft.id}/publish`, {}, manager.cookie),
+      400,
+      'VALIDATION_FAILED'
     );
   });
 

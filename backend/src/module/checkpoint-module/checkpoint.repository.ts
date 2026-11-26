@@ -14,7 +14,13 @@ const assignmentInclude = {
   select: {
     trainee_id: true,
     group_id: true,
-    group: { select: { members: { select: { trainee_id: true } } } },
+    group: {
+      select: {
+        members: {
+          select: { trainee_id: true, trainee: { select: { is_active: true } } },
+        },
+      },
+    },
   },
 } as const;
 
@@ -243,7 +249,7 @@ export class CheckpointRepository {
       include: {
         members: {
           orderBy: { trainee: { name: 'asc' } },
-          select: { trainee: { select: { id: true, name: true, email: true } } },
+          select: { trainee: { select: { id: true, name: true, email: true, is_active: true } } },
         },
       },
     });
@@ -260,7 +266,7 @@ export class CheckpointRepository {
       include: {
         members: {
           orderBy: { trainee: { name: 'asc' } },
-          select: { trainee: { select: { id: true, name: true, email: true } } },
+          select: { trainee: { select: { id: true, name: true, email: true, is_active: true } } },
         },
       },
     });
@@ -271,7 +277,7 @@ export class CheckpointRepository {
       include: {
         members: {
           orderBy: { trainee: { name: 'asc' } },
-          select: { trainee: { select: { id: true, name: true, email: true } } },
+          select: { trainee: { select: { id: true, name: true, email: true, is_active: true } } },
         },
       },
     });
@@ -296,7 +302,7 @@ export class CheckpointRepository {
         include: {
           members: {
             orderBy: { trainee: { name: 'asc' } },
-            select: { trainee: { select: { id: true, name: true, email: true } } },
+            select: { trainee: { select: { id: true, name: true, email: true, is_active: true } } },
           },
         },
       });

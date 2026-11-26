@@ -139,6 +139,8 @@ export type CheckpointGroupMember = {
   id: string;
   name: string;
   email: string;
+  /** Deactivated members stay in the group but are skipped when assigning. */
+  isActive: boolean;
 };
 
 export type CheckpointGroup = {
