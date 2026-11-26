@@ -20,8 +20,21 @@ vi.mock('../../components/Header', () => ({
   default: () => <header>TraineeHeader</header>,
 }));
 
+const headerProps = vi.hoisted(() => ({
+  navItems: [] as { to: string; label: string }[],
+}));
+
 vi.mock('../../components/AdminHeader', () => ({
-  default: ({ badge }: { badge?: string }) => <header>{badge ? `AdminHeader:${badge}` : 'AdminHeader'}</header>,
+  default: ({
+    badge,
+    navItems = [],
+  }: {
+    badge?: string;
+    navItems?: { to: string; label: string }[];
+  }) => {
+    headerProps.navItems = navItems;
+    return <header>{badge ? `AdminHeader:${badge}` : 'AdminHeader'}</header>;
+  },
 }));
 
 function renderPage() {
@@ -134,7 +147,9 @@ describe('CertificateVerificationPage', () => {
 
   it('handles API failures gracefully', async () => {
     const user = userEvent.setup();
-    vi.mocked(verifyCertificate).mockRejectedValue(new ApiError(429, 'RATE_LIMITED', 'Too many requests.'));
+    vi.mocked(verifyCertificate).mockRejectedValue(
+      new ApiError(429, 'RATE_LIMITED', 'Too many requests.')
+    );
     renderPage();
 
     await user.type(screen.getByLabelText('Certificate ID'), validResult.certificateId);
@@ -158,5 +173,11 @@ describe('CertificateVerificationPage', () => {
     vi.mocked(useAuth).mockReturnValue({ user: { role: 'manager' } } as ReturnType<typeof useAuth>);
     renderPage();
     expect(screen.getByText('AdminHeader:Manager view')).toBeInTheDocument();
+    expect(headerProps.navItems.map((item) => item.label)).toEqual([
+      'Users & assignments',
+      'Checkpoints',
+      'Leave requests',
+      'Verify certificate',
+    ]);
   });
 });

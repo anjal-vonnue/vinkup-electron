@@ -62,8 +62,16 @@ export type TaskResponse = {
   runtime: TaskRuntime;
   /** node only: what Run types into the terminal, e.g. "npm test". null for browser and sql. */
   runCommand: string | null;
-  /** sql only: schema and seed data run on a fresh database when the task opens and on Reset. null = start empty. */
+  /**
+   * SQL tasks and checkpoint SQL questions: schema and seed data. Normal SQL tasks load it
+   * into PGlite; checkpoint SQL questions load it once into the machine's PostgreSQL.
+   */
   setupSql: string | null;
+  /**
+   * Checkpoint SQL only: open the workspace against PostgreSQL installed on the machine,
+   * like the PostgreSQL course tasks, instead of an in-app database.
+   */
+  requiresPostgres?: boolean;
 };
 
 /** GET /api/tasks/:taskId/code */

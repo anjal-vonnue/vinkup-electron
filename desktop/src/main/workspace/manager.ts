@@ -33,7 +33,12 @@ import {
   type WorkspaceProcess,
 } from './process';
 import { openTerminal, type TerminalProcess } from './pty';
-import { requiresPostgres, resolvePostgresEnvironment, type PostgresEnvironment } from './postgres';
+import {
+  applySetupSql,
+  requiresPostgres,
+  resolvePostgresEnvironment,
+  type PostgresEnvironment,
+} from './postgres';
 import { usesTrustedStaticPreview } from './preview';
 import { prepareShellLaunch } from './shellPrompt';
 import { startWorkspaceServer, type WorkspaceStaticServer } from './staticServer';
@@ -155,6 +160,9 @@ export class WorkspaceManager {
         await writeWorkspaceFiles(existing.root, input.files, existing.written);
         if (input.supportFiles) await writeSupportFiles(existing.root, input.supportFiles);
         const host = await resolveHostEnvironment();
+        if (input.requiresPostgres && !existing.database) {
+          existing.database = await resolvePostgresEnvironment(taskId, host.path);
+        }
         return {
           previewUrl: existing.server.url,
           nodeVersion: host.nodeVersion,
@@ -175,11 +183,16 @@ export class WorkspaceManager {
         if (input.supportFiles) await writeSupportFiles(root, input.supportFiles);
 
         // PostgreSQL and Prisma tasks need the machine's server; fail with a clear
-        // message before anything is started when it is not ready.
+        // message before anything is started when it is not ready. Checkpoint SQL
+        // questions ask for the same server through `requiresPostgres`.
         const host = await resolveHostEnvironment();
-        const database = requiresPostgres(taskId, input.files)
-          ? await resolvePostgresEnvironment(taskId, host.path)
-          : null;
+        const database =
+          requiresPostgres(taskId, input.files) || input.requiresPostgres === true
+            ? await resolvePostgresEnvironment(taskId, host.path)
+            : null;
+        if (database && input.setupSql?.trim()) {
+          await applySetupSql(database.url, input.setupSql, host.path);
+        }
 
         const watcher = watchWorkspace(root, written, (change) => {
           this.callbacks.emitEvent({

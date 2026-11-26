@@ -1,9 +1,16 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import Header from './Header';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
 const mockLogout = vi.fn();
+const { mockCheckpointNotifications } = vi.hoisted(() => ({
+  mockCheckpointNotifications: vi.fn<() => { hasUnread: boolean }>(),
+}));
+
+vi.mock('./useCheckpointNotifications', () => ({
+  useCheckpointNotifications: () => mockCheckpointNotifications(),
+}));
 
 vi.mock('../../context/Useauth', () => ({
   useAuth: () => ({
@@ -16,6 +23,10 @@ vi.mock('../../context/Useauth', () => ({
     logout: mockLogout,
   }),
 }));
+
+beforeEach(() => {
+  mockCheckpointNotifications.mockReturnValue({ hasUnread: false });
+});
 
 afterEach(() => {
   cleanup();
@@ -213,6 +224,90 @@ describe('Header', () => {
     }
   });
 
+  it('locks the header nav and highlights Checkpoints during a checkpoint attempt', () => {
+    render(
+      <MemoryRouter initialEntries={['/checkpoints/attempts/a1']}>
+        <Routes>
+          <Route path="/checkpoints/attempts/:attemptId" element={<Header />} />
+          <Route path="/journal" element={<span>Journal page</span>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const checkpointsLink = screen.getByRole('link', { name: 'Checkpoints' });
+    expect(checkpointsLink.className).toMatch(/active/);
+    expect(checkpointsLink.className).toMatch(/workspaceActive/);
+    expect(checkpointsLink).toHaveAttribute('aria-disabled', 'true');
+    expect(checkpointsLink).toHaveAttribute('tabindex', '-1');
+    expect(checkpointsLink.className).toMatch(/linkDisabled/);
+    expect(fireEvent.click(checkpointsLink)).toBe(false);
+
+    for (const label of ['Home', 'Typing Test', 'Journal', 'Leave', 'Resources']) {
+      const link = screen.getByRole('link', { name: label });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(link.className).toMatch(/linkDisabled/);
+      expect(link.className).not.toMatch(/active/);
+      expect(fireEvent.click(link)).toBe(false);
+    }
+
+    const profileLink = screen.getByRole('link', { name: 'Rahul Sharma' });
+    expect(profileLink).toHaveAttribute('aria-disabled', 'true');
+    expect(profileLink).toHaveAttribute('tabindex', '-1');
+    expect(profileLink.className).toMatch(/profileDisabled/);
+    expect(fireEvent.click(profileLink)).toBe(false);
+
+    expect(screen.queryByText('Journal page')).not.toBeInTheDocument();
+  });
+
+  it('does not lock the header on the checkpoint list', () => {
+    render(
+      <MemoryRouter initialEntries={['/checkpoints']}>
+        <Routes>
+          <Route path="/checkpoints" element={<Header />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('link', { name: 'Rahul Sharma' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    const checkpointsLink = screen.getByRole('link', { name: 'Checkpoints' });
+    expect(checkpointsLink.className).toMatch(/active/);
+    expect(checkpointsLink.className).not.toMatch(/workspaceActive/);
+  });
+
+  it('keeps the header locked on the checkpoint list when told to', () => {
+    render(
+      <MemoryRouter initialEntries={['/checkpoints']}>
+        <Routes>
+          <Route path="/checkpoints" element={<Header locked />} />
+          <Route path="/journal" element={<span>Journal page</span>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const checkpointsLink = screen.getByRole('link', { name: 'Checkpoints' });
+    expect(checkpointsLink.className).toMatch(/workspaceActive/);
+    expect(checkpointsLink).toHaveAttribute('aria-disabled', 'true');
+
+    for (const label of ['Home', 'Typing Test', 'Journal', 'Leave', 'Resources']) {
+      const link = screen.getByRole('link', { name: label });
+      expect(link).toHaveAttribute('aria-disabled', 'true');
+      expect(link.className).toMatch(/linkDisabled/);
+      expect(fireEvent.click(link)).toBe(false);
+    }
+
+    const profileLink = screen.getByRole('link', { name: 'Rahul Sharma' });
+    expect(profileLink).toHaveAttribute('aria-disabled', 'true');
+    expect(profileLink.className).toMatch(/profileDisabled/);
+    expect(fireEvent.click(profileLink)).toBe(false);
+
+    expect(screen.queryByText('Journal page')).not.toBeInTheDocument();
+  });
+
   it.each(['/days/js-day-01', '/days/js-day-01/references'])(
     'marks Home active on the day page (%s)',
     (path) => {
@@ -266,5 +361,29 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Journal' }));
     expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/active/);
     expect(screen.getByRole('link', { name: 'Journal' }).className).toMatch(/active/);
+  });
+
+  it('shows an unread dot on the Checkpoints link when there is a new checkpoint or result', () => {
+    mockCheckpointNotifications.mockReturnValue({ hasUnread: true });
+
+    render(
+      <MemoryRouter>
+        <Header />
+      </MemoryRouter>
+    );
+
+    const dot = screen.getByTitle('New checkpoint update');
+    expect(dot).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Checkpoints' })).toContainElement(dot);
+  });
+
+  it('does not show the unread dot when nothing new is available', () => {
+    render(
+      <MemoryRouter>
+        <Header />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByTitle('New checkpoint update')).not.toBeInTheDocument();
   });
 });

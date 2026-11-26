@@ -12,18 +12,25 @@ vi.mock('../../api/leave', () => ({
   reviewLeaveRequest: vi.fn(),
 }));
 
+const headerProps = vi.hoisted(() => ({
+  navItems: [] as { to: string; label: string }[],
+}));
+
 vi.mock('../../components/AdminHeader', () => ({
-  default: ({ navItems }: { navItems: { to: string; label: string }[] }) => (
-    <header>
-      <nav aria-label="Staff navigation">
-        {navItems.map((item) => (
-          <a key={item.to} href={item.to}>
-            {item.label}
-          </a>
-        ))}
-      </nav>
-    </header>
-  ),
+  default: ({ navItems = [] }: { navItems?: { to: string; label: string }[] }) => {
+    headerProps.navItems = navItems;
+    return (
+      <header>
+        <nav aria-label="Staff navigation">
+          {navItems.map((item) => (
+            <a key={item.to} href={item.to}>
+              {item.label}
+            </a>
+          ))}
+        </nav>
+      </header>
+    );
+  },
 }));
 
 const submittedAt = '2026-11-21T10:00:00.000Z';
@@ -127,6 +134,18 @@ describe('StaffLeaveRequestsPage', () => {
       feedback: 'Please choose another date.',
       reviewedAt: '2026-11-21T13:00:00.000Z',
     });
+  });
+
+  it('keeps the checkpoints tab in the manager navigation', async () => {
+    renderPage('manager');
+
+    await screen.findByText('Assigned Trainee');
+    expect(headerProps.navItems.map((item) => item.label)).toEqual([
+      'Users & assignments',
+      'Checkpoints',
+      'Leave requests',
+      'Verify certificate',
+    ]);
   });
 
   it.each([

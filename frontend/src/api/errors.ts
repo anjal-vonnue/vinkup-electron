@@ -4,11 +4,18 @@ import type { ApiErrorResponse, ErrorCode } from '@itp/types';
 export class ApiError extends Error {
   status: number;
   code: ErrorCode | 'NETWORK_ERROR';
+  details?: unknown;
 
-  constructor(status: number, code: ErrorCode | 'NETWORK_ERROR', message: string) {
+  constructor(
+    status: number,
+    code: ErrorCode | 'NETWORK_ERROR',
+    message: string,
+    details?: unknown
+  ) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -25,5 +32,5 @@ export function toApiError(error: unknown): ApiError {
   const code = data?.error?.code ?? 'INTERNAL_ERROR';
   const message = data?.error?.message ?? 'Something went wrong. Please try again.';
 
-  return new ApiError(status, code, message);
+  return new ApiError(status, code, message, data?.error?.details);
 }

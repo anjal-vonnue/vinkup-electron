@@ -37,6 +37,18 @@ apiClient.interceptors.response.use(
       unauthorizedHandler?.();
     }
 
+    // A trainee tried to open another module during an active checkpoint.
+    // The backend is the authority; bring them back to the running attempt.
+    if (
+      apiError.code === 'CHECKPOINT_ACTIVE' &&
+      !window.location.pathname.startsWith('/checkpoints')
+    ) {
+      const details = apiError.details as { attemptId?: string } | undefined;
+      window.location.assign(
+        details?.attemptId ? `/checkpoints/attempts/${details.attemptId}` : '/checkpoints'
+      );
+    }
+
     return Promise.reject(apiError);
   }
 );

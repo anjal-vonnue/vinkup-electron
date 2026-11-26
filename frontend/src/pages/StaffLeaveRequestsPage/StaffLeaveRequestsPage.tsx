@@ -12,6 +12,7 @@ import LoaderOverlay from '../../components/Common/LoadingState';
 import LeaveReviewHistory from '../../components/LeaveReviewHistory';
 import LeaveStatusBadge from '../../components/LeaveStatusBadge/LeaveStatusBadge';
 import { useToast } from '../../components/Toast';
+import { MANAGER_NAV } from '../../constants/managerNav';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import styles from './StaffLeaveRequestsPage.module.css';
 
@@ -157,11 +158,7 @@ export default function StaffLeaveRequestsPage({ area }: StaffLeaveRequestsPageP
   };
 
   const navItems: AdminNavItem[] = isManager
-    ? [
-        { to: '/manager', label: 'Users & assignments', end: true },
-        { to: '/manager/leave-requests', label: 'Leave requests', end: true },
-        { to: '/manager/verify-certificate', label: 'Verify certificate', end: true },
-      ]
+    ? MANAGER_NAV
     : [
         { to: '/admin', label: 'My trainees', end: true },
         { to: '/admin/leave-requests', label: 'Leave requests', end: true },

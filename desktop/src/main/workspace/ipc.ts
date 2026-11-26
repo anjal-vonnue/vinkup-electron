@@ -16,6 +16,8 @@ type ParsedOpen = {
   taskId: string;
   files: Record<string, string>;
   supportFiles: Record<string, string> | undefined;
+  requiresPostgres: boolean;
+  setupSql: string | null;
 };
 
 function parseFileMap(value: unknown, label: string): Record<string, string> {
@@ -54,6 +56,8 @@ function parseOpenInput(value: unknown): ParsedOpen {
       record.supportFiles === undefined
         ? undefined
         : parseFileMap(record.supportFiles, 'workspace support files'),
+    requiresPostgres: record.requiresPostgres === true,
+    setupSql: typeof record.setupSql === 'string' ? record.setupSql : null,
   };
 }
 

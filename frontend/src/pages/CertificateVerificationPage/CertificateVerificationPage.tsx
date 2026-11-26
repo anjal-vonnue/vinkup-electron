@@ -7,13 +7,8 @@ import { verifyCertificate } from '../../api/certificate';
 import { ApiError } from '../../api/errors';
 import { useAuth } from '../../context/Useauth';
 import { formatCertificateDate } from '../../lib/certificate';
+import { MANAGER_NAV } from '../../constants/managerNav';
 import styles from './CertificateVerificationPage.module.css';
-
-const MANAGER_NAV = [
-  { to: '/manager', label: 'Users & assignments', end: true },
-  { to: '/manager/leave-requests', label: 'Leave requests', end: true },
-  { to: '/manager/verify-certificate', label: 'Verify certificate', end: true },
-];
 
 function statusLabel(result: CertificateVerificationResponse): string {
   if (result.valid) return 'Authentic certificate';

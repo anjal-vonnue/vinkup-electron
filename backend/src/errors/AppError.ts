@@ -113,3 +113,48 @@ export class TraineeDomainError extends AppError {
     super(400, 'DOMAIN_NOT_PERMITTED', `Use a company email address ending in @${domain}.`);
   }
 }
+
+// ---------- Checkpoint assessment errors ----------
+
+/** 403: the checkpoint exists but is not assigned to this trainee. */
+export class CheckpointNotAssignedError extends AppError {
+  constructor() {
+    super(403, 'CHECKPOINT_NOT_ASSIGNED', 'This checkpoint is not assigned to you.');
+  }
+}
+
+/** 409: another checkpoint attempt is still running. Includes where to resume. */
+export class CheckpointActiveError extends AppError {
+  constructor(details?: { attemptId?: string; checkpointId?: string }) {
+    super(
+      423,
+      'CHECKPOINT_ACTIVE',
+      'You have a checkpoint attempt in progress. Finish or submit it before opening another module.',
+      details
+    );
+  }
+}
+
+/** 409: the deadline passed; the caller should refresh and show the submitted state. */
+export class CheckpointExpiredError extends AppError {
+  constructor(details?: unknown) {
+    super(
+      409,
+      'CHECKPOINT_EXPIRED',
+      'The checkpoint deadline has passed. Your saved answers were submitted automatically.',
+      details
+    );
+  }
+}
+
+/** 409: the attempt is already finalised and can no longer be edited. */
+export class CheckpointAttemptFinalizedError extends AppError {
+  constructor(details?: unknown) {
+    super(
+      409,
+      'CHECKPOINT_ATTEMPT_FINALIZED',
+      'This attempt has been submitted. Answers can no longer be changed.',
+      details
+    );
+  }
+}

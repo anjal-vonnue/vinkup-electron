@@ -1,0 +1,583 @@
+.page {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 18px 24px 40px;
+}
+
+.pagePractical {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Header on top; the attempt body fills the rest of the screen. */
+.attemptPage {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-page);
+}
+
+.attemptPage > header {
+  margin-bottom: 0;
+}
+
+/* Practical questions mirror the curriculum task workspace: the workspace takes
+   every remaining pixel instead of scrolling. */
+.attemptPageFill {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.practicalContainer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Attempt toolbar (question navigation + timer/submit) ---------- */
+
+.attemptBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 10px;
+  background: var(--color-bg-card);
+}
+
+/* Inside the full-height workspace the bar sits edge to edge under the header. */
+.attemptBarFill {
+  flex-shrink: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--color-border-card);
+}
+
+.questionNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Timer, save status and submit cluster at the right edge of the bar. */
+.attemptBarActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.questionNavLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.questionPosition {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.questionNavTitle {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.practicalPrompt {
+  flex-shrink: 0;
+  max-height: 24vh;
+  overflow-y: auto;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border-card);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.practicalPromptMeta {
+  margin: 0 0 4px;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.questionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---------- Header leading (practical mode) ---------- */
+
+.headerLeading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.headerTitle {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Title and deadline share one line so the header stays the same height as
+   every other page instead of growing with a stacked title block. */
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.timerValue {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.timerLabel {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.timerWarning {
+  border-color: var(--color-status-warning-border, var(--color-border-default));
+  background: var(--color-status-warning-bg);
+}
+
+.timerWarning > svg,
+.timerWarning .timerValue {
+  color: var(--color-status-warning-text);
+}
+
+.timerDanger {
+  border-color: var(--color-status-error-text);
+  background: var(--color-status-error-bg);
+}
+
+.timerDanger > svg,
+.timerDanger .timerValue {
+  color: var(--color-status-error-text);
+}
+
+/* ---------- Inline toolbar items (practical workspace toolbar) ---------- */
+
+.inlineTimer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.inlineTimer > svg {
+  color: var(--color-accent-text);
+  flex-shrink: 0;
+}
+
+.inlineTimer .timerValue {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.inlineTimer .timerLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.inlineTimer.timerWarning {
+  border-color: var(--color-status-warning-border, var(--color-border-default));
+  background: var(--color-status-warning-bg);
+}
+
+.inlineTimer.timerWarning > svg,
+.inlineTimer.timerWarning .timerValue {
+  color: var(--color-status-warning-text);
+}
+
+.inlineTimer.timerDanger {
+  border-color: var(--color-status-error-text);
+  background: var(--color-status-error-bg);
+}
+
+.inlineTimer.timerDanger > svg,
+.inlineTimer.timerDanger .timerValue {
+  color: var(--color-status-error-text);
+}
+
+.inlineSave {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.saveState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.saveSaved {
+  color: var(--color-status-success);
+}
+
+.saveSaving {
+  color: var(--color-text-secondary);
+}
+
+.saveDirty {
+  color: var(--color-status-warning-text);
+}
+
+.saveError {
+  color: var(--color-status-error-text);
+}
+
+.dirtyDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-status-warning);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.answeredSummary {
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.retryButton {
+  margin-left: 4px;
+  padding: 1px 7px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.submitButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border: 1px solid var(--color-accent-purple);
+  border-radius: 9px;
+  background: var(--color-accent-purple);
+  color: var(--color-text-on-accent);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.submitButton:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.submitButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockedBanner,
+.submitError {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lockedBanner {
+  border: 1px solid var(--color-status-error-text);
+  background: var(--color-status-error-bg);
+  color: var(--color-status-error-text);
+}
+
+.submitError {
+  border: 1px solid var(--color-status-error-text);
+  background: var(--color-status-error-bg);
+  color: var(--color-status-error-text);
+}
+
+.submitError span {
+  flex: 1;
+}
+
+.retrySubmit {
+  padding: 5px 10px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.autoSubmitNote {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-bg-surface-1);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.instructions {
+  padding: 11px 14px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 11px;
+  background: var(--color-bg-card);
+  font-size: 13px;
+}
+
+.instructions summary {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.instructions > div {
+  margin-top: 8px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.questionCard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  background: var(--color-bg-card);
+  overflow: hidden;
+}
+
+.questionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--color-border-card);
+}
+
+.questionProgress {
+  margin: 0 0 3px;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.questionHeader h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.marksBadge {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--color-accent-purple-wash);
+  border-radius: 999px;
+  background: var(--color-accent-tint);
+  color: var(--color-accent-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.prompt {
+  padding: 16px 20px 4px;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.answerArea {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 20px 18px;
+}
+
+.answerType {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fileError {
+  margin: 0;
+  color: var(--color-status-error-text);
+  font-size: 12px;
+}
+
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-button-secondary);
+  color: var(--color-text-primary);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--color-bg-surface-3);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .attemptBar {
+    flex-wrap: wrap;
+  }
+
+  .questionNav {
+    flex-wrap: wrap;
+  }
+
+  .questionNavLabel {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .attemptBarActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 620px) {
+  .page {
+    padding: 14px 14px 30px;
+  }
+
+  .attemptBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .questionNav {
+    justify-content: space-between;
+  }
+
+  .attemptBarActions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    margin-left: 0;
+  }
+
+  .inlineTimer,
+  .inlineSave,
+  .submitButton {
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .questionHeader,
+  .prompt,
+  .answerArea {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

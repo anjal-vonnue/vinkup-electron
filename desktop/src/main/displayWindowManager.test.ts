@@ -300,6 +300,40 @@ describe('DisplayWindowManager focus alerts', () => {
     manager.dispose();
   });
 
+  it('shows the checkpoint good-luck state on the secondary display', async () => {
+    const mainWindow = new FakeWindow();
+    const manager = new DisplayWindowManager(
+      mainWindow as unknown as BrowserWindow,
+      vi.fn(),
+      true,
+      1,
+      OVERLAY_URL
+    );
+    manager.setCheckpointActive('Rahul Sharma');
+
+    await manager.start();
+    const overlay = createdWindows.find(({ options }) => options.fullscreen === true);
+    expect(overlay).toBeDefined();
+
+    await vi.waitFor(() =>
+      expect(overlay?.send).toHaveBeenCalledWith('display-overlay:checkpoint-state', {
+        active: true,
+        traineeName: 'Rahul Sharma',
+      })
+    );
+    expect(manager.getCheckpointState()).toEqual({
+      active: true,
+      traineeName: 'Rahul Sharma',
+    });
+
+    manager.setCheckpointActive(null);
+    expect(overlay?.send).toHaveBeenLastCalledWith('display-overlay:checkpoint-state', {
+      active: false,
+      traineeName: null,
+    });
+    manager.dispose();
+  });
+
   it('does not create a fullscreen overlay for a mirrored display', async () => {
     const mainWindow = new FakeWindow();
     const primaryDisplay = {

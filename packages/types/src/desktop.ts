@@ -25,6 +25,16 @@ export type BrowserAvailability = {
   secondaryResourcesActive: boolean;
 };
 
+/**
+ * The secondary display shows a "good luck" screen instead of Resources and
+ * References while the trainee is anywhere in the Checkpoints section.
+ */
+export type CheckpointDisplayState = {
+  active: boolean;
+  /** The trainee's name from their session, or null when it is not known. */
+  traineeName: string | null;
+};
+
 export interface SecondaryDisplayResourcesApi {
   getAllowlist: () => Promise<ResourcesAllowlist>;
   getState: () => Promise<ResourcesBrowserState>;
@@ -101,6 +111,13 @@ export type WorkspaceOpenInput = {
   files: Record<string, string>;
   /** Hidden helpers written under .vinkup/ (Prisma support files). */
   supportFiles?: Record<string, string>;
+  /**
+   * Checkpoint SQL questions run in the terminal against PostgreSQL installed on the machine,
+   * like the PostgreSQL course tasks.
+   */
+  requiresPostgres?: boolean;
+  /** Checkpoint SQL: schema loaded once, the first time the database is opened. */
+  setupSql?: string | null;
 };
 
 export type WorkspaceOpenResult = WorkspaceEnvironment & {
@@ -234,6 +251,16 @@ export interface DesktopApi {
      * Returns an unsubscribe function.
      */
     onScreenLockChange?: (listener: (locked: boolean) => void) => () => void;
+  };
+
+  /**
+   * The secondary display is locked to a good-luck screen while the trainee is
+   * anywhere in the Checkpoints section, so references and resources cannot be
+   * used during a checkpoint.
+   */
+  checkpoint: {
+    /** Shows "Good luck, <name>" on the secondary display, or clears it with null. */
+    setActive: (name: string | null) => void;
   };
 
   certificate: {

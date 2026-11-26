@@ -1,0 +1,341 @@
+.dialog {
+  /* The global reset zeroes the native <dialog>'s margin: auto, so centre it here. */
+  position: fixed;
+  inset: 0;
+  height: fit-content;
+  margin: auto;
+  width: min(920px, calc(100vw - 32px));
+  max-width: 920px;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--color-border-card);
+  border-radius: 14px;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+/* .dialog::backdrop {
+  background: rgba(10, 14, 26, 0.6);
+  backdrop-filter: blur(2px);
+} */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100vh - 32px);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--color-border-card);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface-3);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+
+.editor,
+.listSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 10px;
+  background: var(--color-bg-surface-1);
+}
+
+.editor h3,
+.listSection h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--color-text-primary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field > span {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.field input,
+.search {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.field input:focus,
+.search:focus {
+  border-color: var(--color-accent-purple);
+}
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.memberRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.memberRow:hover {
+  background: var(--color-bg-surface-2);
+}
+
+.memberRow input {
+  margin-top: 2px;
+  accent-color: var(--color-accent-purple);
+}
+
+.memberRow span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.memberRow small {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.selectedCount {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.error {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--color-status-error-soft, var(--color-border-default));
+  border-radius: 8px;
+  background: var(--color-status-error-bg);
+  color: var(--color-status-error-text);
+  font-size: 12px;
+}
+
+.editorActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid var(--color-accent-purple);
+  background: var(--color-accent-purple);
+  color: var(--color-text-on-accent);
+}
+
+.primaryButton:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.secondaryButton {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-button-secondary);
+  color: var(--color-text-primary);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: var(--color-bg-surface-3);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 12px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.empty p {
+  margin: 0;
+}
+
+.groupList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.groupCard {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 9px;
+  background: var(--color-bg-card);
+}
+
+.groupName {
+  margin: 0 0 2px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.groupMembers {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.groupActions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.iconButton,
+.iconButtonDanger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border-card);
+  border-radius: 7px;
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.iconButton:hover {
+  border-color: var(--color-accent-purple);
+  color: var(--color-accent-text);
+}
+
+.iconButtonDanger:hover {
+  border-color: var(--color-status-error-text);
+  color: var(--color-status-error-text);
+}
+
+@media (max-width: 760px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .header,
+  .body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

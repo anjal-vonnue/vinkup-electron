@@ -19,11 +19,16 @@ model admin {
   slack_channel_id     String?         @db.VarChar(32) // Mentor-configured Slack channel for task notifications
   created_at           DateTime        @default(now()) @db.Timestamptz
   last_login_at        DateTime?       @db.Timestamptz
+
   reviews              task_review[]
   leave_reviews        leave_request[] @relation("LeaveReviewer")
   leave_review_history leave_review[]  @relation("LeaveReviewHistory")
   assigned_trainees    trainee[]       @relation("MentorTrainees")
   reviewPrompts        review_prompt[]
+
+  created_checkpoints  checkpoint[]         @relation("CheckpointCreator")
+  graded_attempts      checkpoint_attempt[] @relation("CheckpointGrader")
+  checkpoint_groups    trainee_group[]      @relation("CheckpointGroupCreator")
 }
 
 // ---------- Enums ----------
@@ -109,6 +114,10 @@ model trainee {
   flag_events       flag_event[]
   activity_logs     activity_log[]
   certificates      certificate[]
+
+  checkpoint_group_memberships trainee_group_member[]
+  checkpoint_assignments       checkpoint_assignment[]
+  checkpoint_attempts          checkpoint_attempt[]
 
   @@index([mentor_id])
 }
@@ -388,6 +397,213 @@ model certificate {
 // A short-lived transaction binds one browser OAuth attempt to the Electron
 // process that started it. No Vinkup token is ever placed in a redirect URL;
 // only a one-time handoff code is.
+
+// ---------- Checkpoint assessments ----------
+// A manager authors a checkpoint from an uploaded Markdown paper. The parsed
+// questions and instructions are stored so a paper cannot change after trainees
+// have started an attempt.
+
+enum checkpoint_status {
+  DRAFT
+  SCHEDULED
+  CANCELLED
+}
+
+enum checkpoint_question_type {
+  TEXT
+  LONG_TEXT
+  CODE
+  SQL
+  MULTIPLE_CHOICE
+  FILE
+  PRACTICAL
+}
+
+enum checkpoint_result_visibility {
+  IMMEDIATE
+  AFTER_APPROVAL
+}
+
+enum checkpoint_attempt_status {
+  IN_PROGRESS
+  SUBMITTED
+}
+
+enum checkpoint_submission_reason {
+  MANUAL
+  TIME_EXPIRED
+  CANCELLED
+}
+
+enum checkpoint_mode {
+  MCQ
+  PRACTICAL
+}
+
+model checkpoint {
+  id                  String    @id @default(uuid()) @db.Uuid
+  title               String
+  description         String    @default("")
+  mode                checkpoint_mode @default(MCQ)
+  source_file_name    String?
+  source_markdown     String    @db.Text
+  instructions_markdown String  @db.Text
+  duration_minutes    Int
+  total_marks         Int
+  passing_marks       Int
+  start_at            DateTime? @db.Timestamptz
+  status              checkpoint_status @default(DRAFT)
+  max_attempts        Int       @default(1)
+  allow_early_submission Boolean @default(true)
+  allow_late_entry    Boolean   @default(true)
+  result_visibility   checkpoint_result_visibility @default(AFTER_APPROVAL)
+  results_published_at DateTime? @db.Timestamptz
+  created_by_id       String    @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz
+  updated_at          DateTime  @updatedAt @db.Timestamptz
+
+  created_by admin                 @relation("CheckpointCreator", fields: [created_by_id], references: [id], onDelete: Restrict)
+  questions  checkpoint_question[]
+  assignments checkpoint_assignment[]
+  attempts   checkpoint_attempt[]
+
+  @@index([status, start_at])
+}
+
+model checkpoint_question {
+  id              String   @id @default(uuid()) @db.Uuid
+  checkpoint_id   String   @db.Uuid
+  order_index     Int
+  title           String
+  prompt_markdown String   @db.Text
+  type            checkpoint_question_type
+  marks           Int
+  options         Json?
+  correct_option  String?
+  code_language   String?
+  // Practical questions: how the trainee's workspace runs and what it starts with.
+  runtime         String?
+  run_command     String?
+  setup_sql       String?  @db.Text
+  starter_files   Json?
+
+  checkpoint checkpoint        @relation(fields: [checkpoint_id], references: [id], onDelete: Cascade)
+  answers    checkpoint_answer[]
+
+  @@unique([checkpoint_id, order_index])
+  @@index([checkpoint_id])
+}
+
+// Groups are manager-owned reusable sets of trainees. Assigning a checkpoint to
+// a group does not copy members: membership is resolved at read/start time.
+model trainee_group {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String
+  created_by_id String   @db.Uuid
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  creator     admin                  @relation("CheckpointGroupCreator", fields: [created_by_id], references: [id], onDelete: Restrict)
+  members     trainee_group_member[]
+  assignments checkpoint_assignment[]
+
+  @@unique([created_by_id, name])
+}
+
+model trainee_group_member {
+  group_id   String @db.Uuid
+  trainee_id String @db.Uuid
+
+  group   trainee_group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  trainee trainee       @relation(fields: [trainee_id], references: [id], onDelete: Cascade)
+
+  @@id([group_id, trainee_id])
+  @@index([trainee_id])
+}
+
+// Exactly one of trainee_id / group_id is set (enforced by a CHECK constraint in
+// the migration). A checkpoint can be assigned to a trainee directly and through
+// one of their groups; the service de-duplicates when resolving access.
+model checkpoint_assignment {
+  id            String @id @default(uuid()) @db.Uuid
+  checkpoint_id String @db.Uuid
+  trainee_id    String? @db.Uuid
+  group_id      String? @db.Uuid
+
+  checkpoint checkpoint    @relation(fields: [checkpoint_id], references: [id], onDelete: Cascade)
+  trainee    trainee?      @relation(fields: [trainee_id], references: [id], onDelete: Cascade)
+  group      trainee_group? @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@index([checkpoint_id])
+  @@index([trainee_id])
+  @@index([group_id])
+}
+
+model checkpoint_attempt {
+  id                String   @id @default(uuid()) @db.Uuid
+  checkpoint_id     String   @db.Uuid
+  trainee_id        String   @db.Uuid
+  attempt_number    Int      @default(1)
+  status            checkpoint_attempt_status @default(IN_PROGRESS)
+  session_token     String   @unique
+  started_at        DateTime @db.Timestamptz
+  deadline_at       DateTime @db.Timestamptz
+  submitted_at      DateTime? @db.Timestamptz
+  submission_reason checkpoint_submission_reason?
+  last_seen_at      DateTime @default(now()) @db.Timestamptz
+  total_score       Float?
+  feedback          String?  @db.Text
+  graded_by_id      String?  @db.Uuid
+  graded_at         DateTime? @db.Timestamptz
+  created_at        DateTime @default(now()) @db.Timestamptz
+  updated_at        DateTime @updatedAt @db.Timestamptz
+
+  checkpoint checkpoint @relation(fields: [checkpoint_id], references: [id], onDelete: Cascade)
+  trainee    trainee    @relation(fields: [trainee_id], references: [id], onDelete: Cascade)
+  graded_by  admin?     @relation("CheckpointGrader", fields: [graded_by_id], references: [id], onDelete: SetNull)
+  answers    checkpoint_answer[]
+  events     checkpoint_attempt_event[]
+
+  @@unique([checkpoint_id, trainee_id, attempt_number])
+  @@index([status, deadline_at])
+  @@index([trainee_id, status])
+}
+
+model checkpoint_answer {
+  id             String   @id @default(uuid()) @db.Uuid
+  attempt_id     String   @db.Uuid
+  question_id    String   @db.Uuid
+  answer_text    String?  @db.Text
+  selected_option String?
+  file_name      String?
+  file_mime_type String?
+  file_size      Int?
+  file_data      String?  @db.Text // base64 payload
+  workspace_files Json?   // practical questions: submitted workspace files
+  client_revision Int     @default(0)
+  awarded_marks  Float?
+  feedback       String?  @db.Text
+  saved_at       DateTime @default(now()) @db.Timestamptz
+  updated_at     DateTime @updatedAt @db.Timestamptz
+
+  attempt  checkpoint_attempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  question checkpoint_question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@unique([attempt_id, question_id])
+  @@index([attempt_id])
+}
+
+// Append-only audit trail shown on the manager's submission review.
+model checkpoint_attempt_event {
+  id         String   @id @default(uuid()) @db.Uuid
+  attempt_id String   @db.Uuid
+  type       String
+  message    String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  attempt checkpoint_attempt @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+
+  @@index([attempt_id, created_at])
+}
 
 model desktop_auth_transaction {
   id                    String    @id @default(uuid()) @db.Uuid

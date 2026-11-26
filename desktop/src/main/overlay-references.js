@@ -18,6 +18,8 @@
   const footerNextButton = document.getElementById('reference-footer-next');
   const resourcesTab = document.getElementById('resources-tab');
   const referencesTab = document.getElementById('references-tab');
+  const checkpointScreen = document.getElementById('checkpoint-screen');
+  const checkpointTitle = document.getElementById('checkpoint-title');
   const savedState = readDisplayState();
   let selectedIndex = -1;
   let selectedReferenceId = null;
@@ -25,6 +27,8 @@
   let authenticated = document.body.classList.contains('is-authenticated');
   let mainResourcesActive = false;
   let availabilityRevision = 0;
+  let checkpointActive = false;
+  let checkpointEventReceived = false;
 
   function updateBrowserAvailability(availability) {
     mainResourcesActive = availability.mainResourcesActive;
@@ -70,9 +74,26 @@
     if (authenticated) window.vinkupDisplay?.setReferencesActive(active);
   }
 
+  function applyCheckpointState(state) {
+    checkpointActive = Boolean(state?.active);
+    document.body.classList.toggle('is-checkpoint', checkpointActive);
+    checkpointScreen.setAttribute('aria-hidden', String(!checkpointActive));
+    const name = typeof state?.traineeName === 'string' ? state.traineeName.trim() : '';
+    checkpointTitle.textContent = name ? `Good luck, ${name}!` : 'Good luck!';
+
+    if (!authenticated) return;
+    if (checkpointActive) {
+      setReferencesActive(false);
+      window.vinkupDisplay?.setResourcesActive(false);
+    } else {
+      setReferencesActive(activeTab === 'references');
+      window.vinkupDisplay?.setResourcesActive(activeTab === 'resources');
+    }
+  }
+
   window.vinkupDisplay?.onAuthenticationChange((isAuthenticated) => {
     authenticated = isAuthenticated;
-    if (authenticated) {
+    if (authenticated && !checkpointActive) {
       setReferencesActive(activeTab === 'references');
       window.vinkupDisplay?.setResourcesActive(activeTab === 'resources');
     } else {
@@ -80,6 +101,17 @@
       window.vinkupDisplay?.setResourcesActive(false);
     }
   });
+
+  window.vinkupDisplay?.onCheckpointChange((state) => {
+    checkpointEventReceived = true;
+    applyCheckpointState(state);
+  });
+  void window.vinkupDisplay
+    ?.getCheckpointState()
+    .then((state) => {
+      if (!checkpointEventReceived) applyCheckpointState(state);
+    })
+    .catch((error) => console.error('[display] Could not read the checkpoint state', error));
 
   window.vinkupDisplay?.onBrowserAvailabilityChange((availability) => {
     availabilityRevision += 1;
@@ -133,8 +165,8 @@
     }
 
     activeTab = selectedTab.id === 'references-tab' ? 'references' : 'resources';
-    setReferencesActive(activeTab === 'references');
-    if (notifyActivity && authenticated) {
+    setReferencesActive(!checkpointActive && activeTab === 'references');
+    if (notifyActivity && authenticated && !checkpointActive) {
       window.vinkupDisplay?.setResourcesActive(activeTab === 'resources');
     }
     if (activeTab === 'references') showList();

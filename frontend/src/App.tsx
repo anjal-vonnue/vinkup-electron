@@ -21,6 +21,7 @@ import HelpPage from './pages/HelpPage';
 import ReferencePage from './pages/ReferencePage';
 import { useParams } from 'react-router';
 import { RoleRoute } from './routes/RoleRoute';
+import { CheckpointAttemptGate } from './routes/CheckpointAttemptGate';
 import LoaderOverlay from './components/Common/LoadingState';
 import CertificatePage from './pages/CertificatePage';
 import CertificateVerificationPage from './pages/CertificateVerificationPage/CertificateVerificationPage';
@@ -30,6 +31,14 @@ const AdminTraineesPage = lazy(() => import('./pages/AdminTraineesPage'));
 const AdminTraineePage = lazy(() => import('./pages/AdminTraineePage'));
 const StaffLeaveRequestsPage = lazy(() => import('./pages/StaffLeaveRequestsPage'));
 const ManagerPage = lazy(() => import('./pages/ManagerPage'));
+const ManagerCheckpointsPage = lazy(() => import('./pages/ManagerCheckpointsPage'));
+const ManagerCheckpointResultsPage = lazy(
+  () => import('./pages/ManagerCheckpointsPage/ManagerCheckpointResultsPage')
+);
+const CheckpointsPage = lazy(() => import('./pages/CheckpointsPage'));
+const CheckpointDetailPage = lazy(() => import('./pages/CheckpointsPage/CheckpointDetailPage'));
+const CheckpointAttemptPage = lazy(() => import('./pages/CheckpointsPage/CheckpointAttemptPage'));
+const CheckpointSummaryPage = lazy(() => import('./pages/CheckpointsPage/CheckpointSummaryPage'));
 
 function ReferenceRoute() {
   const { dayId } = useParams();
@@ -50,31 +59,65 @@ export default function App() {
           <Routes>
             <Route element={<ProtectedRoute />}>
               <Route element={<RoleRoute role="trainee" />}>
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/help" element={<HelpPage />}></Route>
-                <Route
-                  path="/"
-                  element={
-                    <WorkspaceAwareHome>
-                      <DashboardPage />
-                    </WorkspaceAwareHome>
-                  }
-                />
-                <Route path="/typing-test" element={<TypingTestPage />} />
-                <Route path="/journal" element={<JournalPage />} />
-                <Route path="/resources" element={<ResourcesPage />} />
-                <Route path="/leave-requests" element={<LeaveRequestsPage />} />
-                <Route path="/certificates/:courseId" element={<CertificatePage />} />
-                <Route
-                  path="/tasks/:taskId"
-                  element={
-                    <Suspense fallback={<TaskPageSkeleton />}>
-                      <TaskPage />
-                    </Suspense>
-                  }
-                />
-                <Route path="/days/:dayId" element={<DayOverviewPage />} />
-                <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
+                <Route element={<CheckpointAttemptGate />}>
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/help" element={<HelpPage />}></Route>
+                  <Route
+                    path="/"
+                    element={
+                      <WorkspaceAwareHome>
+                        <DashboardPage />
+                      </WorkspaceAwareHome>
+                    }
+                  />
+                  <Route path="/typing-test" element={<TypingTestPage />} />
+                  <Route path="/journal" element={<JournalPage />} />
+                  <Route path="/resources" element={<ResourcesPage />} />
+                  <Route path="/leave-requests" element={<LeaveRequestsPage />} />
+                  <Route path="/certificates/:courseId" element={<CertificatePage />} />
+                  <Route
+                    path="/checkpoints"
+                    element={
+                      <Suspense fallback={<LoaderOverlay fullPage />}>
+                        <CheckpointsPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/checkpoints/attempts/:attemptId"
+                    element={
+                      <Suspense fallback={<LoaderOverlay fullPage />}>
+                        <CheckpointAttemptPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/checkpoints/attempts/:attemptId/summary"
+                    element={
+                      <Suspense fallback={<LoaderOverlay fullPage />}>
+                        <CheckpointSummaryPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/checkpoints/:checkpointId"
+                    element={
+                      <Suspense fallback={<LoaderOverlay fullPage />}>
+                        <CheckpointDetailPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/tasks/:taskId"
+                    element={
+                      <Suspense fallback={<TaskPageSkeleton />}>
+                        <TaskPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route path="/days/:dayId" element={<DayOverviewPage />} />
+                  <Route path="/days/:dayId/references" element={<ReferenceRoute />} />
+                </Route>
               </Route>
 
               <Route element={<RoleRoute role="mentor" />}>
@@ -113,6 +156,22 @@ export default function App() {
                   element={
                     <Suspense fallback={<LoaderOverlay fullPage />}>
                       <ManagerPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/manager/checkpoints"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <ManagerCheckpointsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/manager/checkpoints/:checkpointId/results"
+                  element={
+                    <Suspense fallback={<LoaderOverlay fullPage />}>
+                      <ManagerCheckpointResultsPage />
                     </Suspense>
                   }
                 />

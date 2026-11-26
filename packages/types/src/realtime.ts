@@ -76,6 +76,33 @@ export type TraineeReassignedEvent = {
 };
 
 /**
+<<<<<<< HEAD
+ * A manager scheduled a checkpoint, making it visible to its assigned trainees.
+ * Sent to every trainee the checkpoint reaches, so the Checkpoints tab can show
+ * an unread indicator.
+ */
+export type CheckpointPublishedEvent = {
+  type: 'checkpoint.published';
+  checkpointId: string;
+  /** The checkpoint's title, so the notification can name it without another request. */
+  checkpointTitle: string;
+  /** When the checkpoint opens for trainees. */
+  startAt: string;
+  publishedAt: string;
+};
+
+/**
+ * A manager published the results of a checkpoint. Sent to the trainees who
+ * submitted an attempt, so they know their score is now visible.
+ */
+export type CheckpointResultsPublishedEvent = {
+  type: 'checkpoint.results.published';
+  checkpointId: string;
+  checkpointTitle: string;
+  /** When the results became visible to trainees. */
+  publishedAt: string;
+};
+/**
  * A trainee submitted a leave request; sent to their assigned mentor so the
  * Leave requests badge can tick up without a reload.
  */
@@ -105,5 +132,7 @@ export type RealtimeEvent =
   | TaskStartedEvent
   | FlagCreatedEvent
   | TraineeReassignedEvent
+  | CheckpointPublishedEvent
+  | CheckpointResultsPublishedEvent
   | LeaveSubmittedEvent
   | LeaveReviewedEvent;

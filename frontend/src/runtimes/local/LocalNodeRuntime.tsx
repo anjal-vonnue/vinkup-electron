@@ -42,7 +42,10 @@ function runnerFor(
 
 export default function LocalNodeRuntime({ task, isVisible }: LocalNodeRuntimeProps) {
   const state = useWorkspaceState();
-  const workspace = useLocalWorkspace(task.id);
+  const workspace = useLocalWorkspace(task.id, {
+    requiresPostgres: task.requiresPostgres === true,
+    setupSql: task.setupSql,
+  });
   const markWork = useMarkWork();
 
   const [activeTab, setActiveTab] = useState('terminal');

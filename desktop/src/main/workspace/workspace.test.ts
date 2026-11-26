@@ -512,6 +512,49 @@ describe('WorkspaceManager', () => {
     await manager.close(taskId);
   });
 
+  it('runs a checkpoint SQL workspace on the machine database and loads setup once', async () => {
+    if (!postgresReachable()) return;
+    const baseDir = await temporaryRoot();
+    const output: string[] = [];
+    const manager = new WorkspaceManager({
+      baseDir,
+      emitEvent: (event) => {
+        if (event.type === 'run-output') output.push(event.data);
+      },
+      emitTerminalData: () => undefined,
+      emitTerminalExit: () => undefined,
+    });
+    const taskId = 'cp-11111111-1111-1111-1111-111111111111-q1';
+    const databaseUrl = urlFor(databaseNameFor(taskId), baseUrlFor());
+    const setupSql = 'create table customers (id int); insert into customers values (1);';
+    dropDatabases(taskId);
+
+    try {
+      await manager.open({
+        taskId,
+        files: { 'answer.sql': 'select 1;' },
+        requiresPostgres: true,
+        setupSql,
+      });
+      await manager.dev(taskId, `psql '${databaseUrl}' -Atqc "select count(*) from customers"`);
+
+      await vi.waitFor(() => expect(output.join('')).toContain('1'), { timeout: 20_000 });
+
+      await manager.close(taskId);
+
+      // The marker table means reopening must not run CREATE TABLE a second time.
+      await manager.open({
+        taskId,
+        files: { 'answer.sql': 'select 2;' },
+        requiresPostgres: true,
+        setupSql,
+      });
+      await manager.close(taskId);
+    } finally {
+      dropDatabases(taskId);
+    }
+  }, 30_000);
+
   it('writes terminal input to a real shell and streams its output back', async () => {
     const baseDir = await temporaryRoot();
     const output: string[] = [];

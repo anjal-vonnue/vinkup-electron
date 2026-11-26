@@ -6,7 +6,18 @@ export const db = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' }),
 });
 
-const TABLES = [
+const CHECKPOINT_TABLES = [
+  'checkpoint_answer',
+  'checkpoint_attempt_event',
+  'checkpoint_attempt',
+  'checkpoint_assignment',
+  'checkpoint_question',
+  'trainee_group_member',
+  'checkpoint',
+  'trainee_group',
+];
+
+const TRAINEE_TABLES = [
   'certificate',
   'activity_log',
   'flag_event',
@@ -15,6 +26,11 @@ const TABLES = [
   'day_completion',
   'task_review',
   'leave_review',
+];
+
+const TABLES = [
+  ...CHECKPOINT_TABLES,
+  ...TRAINEE_TABLES,
   'leave_request',
   'slack_notification_outbox',
   'task_progress',
@@ -34,19 +50,7 @@ export async function resetDatabase(): Promise<void> {
 
 /** Empties only the trainee tables, keeping the curriculum. */
 export async function resetTraineeData(): Promise<void> {
-  const traineeTables = [
-    'certificate',
-    'activity_log',
-    'flag_event',
-    'typing_test_result',
-    'journal_response',
-    'day_completion',
-    'task_review',
-    'leave_review',
-    'leave_request',
-    'task_progress',
-    'slack_notification_outbox', 'trainee',
-  ];
+  const traineeTables = [...CHECKPOINT_TABLES, ...TRAINEE_TABLES, 'trainee'];
   await db.$executeRawUnsafe(
     `TRUNCATE TABLE ${traineeTables.map((t) => `"${t}"`).join(', ')} CASCADE`
   );

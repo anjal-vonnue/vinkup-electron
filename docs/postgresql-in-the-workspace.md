@@ -118,7 +118,25 @@ schema) and runs Vitest with `DATABASE_URL` pointing at the test database. Queri
 - A plain browser build cannot run this course: it needs a real PostgreSQL server.
 - All days except the assessment share one database, so a change made in day 2 is visible in day 3.
   That is the point; `dropdb`/`createdb` is the reset.
-- The `sql` runtime (PGlite) is still in the codebase but no curriculum task uses it any more.
+- The `sql` runtime (PGlite) is still in the codebase for old tasks, but no curriculum task uses it
+  any more. Checkpoint SQL questions do **not** use it: they open the Node.js terminal against the
+  machine's PostgreSQL, with one database per attempt and question.
+
+## Checkpoint SQL questions
+
+A practical checkpoint question with the `sql` runtime is rendered as a Node.js terminal
+workspace, like the PostgreSQL course tasks:
+
+- The workspace id is `cp-<attemptId>-q<orderIndex>`, so each attempt and question gets its own
+  database named `vinkup_cp_<attempt>_q<order>` (hyphens become underscores).
+- `DATABASE_URL` and `VINKUP_TEST_DATABASE_URL` point at that database, exactly like the
+  PostgreSQL course. The trainee edits `.sql` files and runs them with `psql "$DATABASE_URL" -f`.
+- The question's setup SQL is loaded once, in a transaction, the first time the database is
+  opened. A marker table (`vinkup_checkpoint_setup`) prevents it from running again; a failed
+  setup rolls back and is retried on the next open.
+- The manager can set a Run command for non-SQL questions. Run commands are spawned without a
+  shell, so shell variables such as `$DATABASE_URL` are not expanded; SQL questions normally leave
+  it empty and run `psql "$DATABASE_URL" -f answer.sql` in the terminal.
 
 ## History
 

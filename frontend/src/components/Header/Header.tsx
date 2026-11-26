@@ -7,6 +7,9 @@ import { matchPath, NavLink, useLocation } from 'react-router';
 import { ConfirmPopover } from '../Common/ConfirmDialog';
 import ThemeToggle from '../ThemeToggle';
 import { useWorkspaceSession } from '../../context/WorkspaceSessionContext';
+
+import { useCheckpointNotifications } from './useCheckpointNotifications';
+
 import NotificationBadge from '../NotificationBadge/NotificationBadge';
 import { getUnreadLeaveCount } from '../../api/leave';
 
@@ -15,6 +18,11 @@ type HeaderProps = {
   leading?: ReactNode;
   /** Shown just before the nav links. The task page's session timer goes here later. */
   status?: ReactNode;
+  /**
+   * Keeps the checkpoint lock on even when the route is not the active attempt
+   * (for example, while a multi-attempt checkpoint is still open).
+   */
+  locked?: boolean;
 };
 
 type BrowserAvailability = {
@@ -97,6 +105,26 @@ function ResourcesIcon() {
   );
 }
 
+function CheckpointIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="2.5" width="12" height="13" rx="2" />
+      <path d="M6.5 6.5h5M6.5 9.5h5M6.5 12.5h3" />
+      <path d="m12.5 2.5 1.5-1.5M5.5 2.5 4 1" />
+    </svg>
+  );
+}
+
 function LeaveIcon() {
   return (
     <svg
@@ -152,14 +180,22 @@ function NavLabel({ text }: { text: string }) {
   );
 }
 
-export default function Header({ leading, status }: HeaderProps) {
+export default function Header({ leading, status, locked = false }: HeaderProps) {
   const activity = useActivity();
   const { user, logout } = useAuth();
   const location = useLocation();
   const { exitWorkspace } = useWorkspaceSession();
+  const { hasUnread: hasUnreadCheckpoints } = useCheckpointNotifications();
   // The Home link is shared by every page. Only when it is shown *inside* the
   // workspace is it an intentional exit rather than a return to saved work.
   const isInWorkspace = Boolean(matchPath('/tasks/:taskId', location.pathname));
+  // A live checkpoint attempt locks the app to the attempt, so the other
+  // sections are disabled and Checkpoints takes Home's workspace styling.
+  // Pages between attempts can pass `locked` to keep the same lock while a
+  // multi-attempt checkpoint is still open.
+  const isInCheckpoint =
+    locked || Boolean(matchPath('/checkpoints/attempts/:attemptId', location.pathname));
+  const checkpointLockTitle = 'Finish or submit this checkpoint before leaving';
   // Visually, Home also owns the day flow that leads into a workspace. This is
   // display-only: clicking Home on the day page is still an ordinary navigation.
   const isInHomeFlow =
@@ -275,13 +311,20 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/"
             end
-            onClick={() => {
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : undefined}
+            onClick={(event) => {
+              if (isInCheckpoint) {
+                event.preventDefault();
+                return;
+              }
               if (isInWorkspace) exitWorkspace();
             }}
             className={({ isActive }) =>
               `${styles.link} ${isActive || isInHomeFlow ? styles.active : ''} ${
                 isInWorkspace ? styles.workspaceActive : ''
-              }`
+              } ${isInCheckpoint ? styles.linkDisabled : ''}`
             }
           >
             <HomeIcon />
@@ -290,7 +333,17 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/typing-test"
             end
-            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : undefined}
+            onClick={(event) => {
+              if (isInCheckpoint) event.preventDefault();
+            }}
+            className={({ isActive }) =>
+              `${styles.link} ${isActive ? styles.active : ''} ${
+                isInCheckpoint ? styles.linkDisabled : ''
+              }`
+            }
           >
             <KeyboardIcon />
             <NavLabel text="Typing Test" />
@@ -298,15 +351,64 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/journal"
             end
-            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : undefined}
+            onClick={(event) => {
+              if (isInCheckpoint) event.preventDefault();
+            }}
+            className={({ isActive }) =>
+              `${styles.link} ${isActive ? styles.active : ''} ${
+                isInCheckpoint ? styles.linkDisabled : ''
+              }`
+            }
           >
             <JournalIcon />
             <NavLabel text="Journal" />
           </NavLink>
           <NavLink
+            to="/checkpoints"
+            end
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : undefined}
+            onClick={(event) => {
+              if (isInCheckpoint) event.preventDefault();
+            }}
+            className={({ isActive }) =>
+              `${styles.link} ${isActive ? styles.active : ''} ${
+                location.pathname.startsWith('/checkpoints') ? styles.active : ''
+              } ${isInCheckpoint ? styles.workspaceActive : ''} ${
+                isInCheckpoint ? styles.linkDisabled : ''
+              }`
+            }
+          >
+            <span className={styles.navIcon}>
+              <CheckpointIcon />
+              {hasUnreadCheckpoints && !isInCheckpoint ? (
+                <span
+                  className={styles.notificationDot}
+                  title="New checkpoint update"
+                  aria-hidden="true"
+                />
+              ) : null}
+            </span>
+            <NavLabel text="Checkpoints" />
+          </NavLink>
+          <NavLink
             to="/leave-requests"
             end
-            className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : undefined}
+            onClick={(event) => {
+              if (isInCheckpoint) event.preventDefault();
+            }}
+            className={({ isActive }) =>
+              `${styles.link} ${isActive ? styles.active : ''} ${
+                isInCheckpoint ? styles.linkDisabled : ''
+              }`
+            }
           >
             <LeaveIcon />
             <NavLabel text="Leave" />
@@ -319,19 +421,27 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/resources"
             end
-            aria-disabled={browserAvailability.secondaryResourcesActive}
-            tabIndex={browserAvailability.secondaryResourcesActive ? -1 : undefined}
+            aria-disabled={browserAvailability.secondaryResourcesActive || isInCheckpoint}
+            tabIndex={
+              browserAvailability.secondaryResourcesActive || isInCheckpoint ? -1 : undefined
+            }
             title={
               browserAvailability.secondaryResourcesActive
                 ? 'Resources are active on the secondary display'
-                : undefined
+                : isInCheckpoint
+                  ? checkpointLockTitle
+                  : undefined
             }
             onClick={(event) => {
-              if (browserAvailability.secondaryResourcesActive) event.preventDefault();
+              if (browserAvailability.secondaryResourcesActive || isInCheckpoint) {
+                event.preventDefault();
+              }
             }}
             className={({ isActive }) =>
               `${styles.link} ${isActive ? styles.active : ''} ${
-                browserAvailability.secondaryResourcesActive ? styles.linkDisabled : ''
+                browserAvailability.secondaryResourcesActive || isInCheckpoint
+                  ? styles.linkDisabled
+                  : ''
               }`
             }
           >
@@ -345,9 +455,16 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/profile"
             aria-label={profileLabel}
-            title={profileLabel}
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : profileLabel}
+            onClick={(event) => {
+              if (isInCheckpoint) event.preventDefault();
+            }}
             className={({ isActive }) =>
-              `${styles.profile} ${isActive ? styles.profileActive : ''}`
+              `${styles.profile} ${isActive ? styles.profileActive : ''} ${
+                isInCheckpoint ? styles.profileDisabled : ''
+              }`
             }
           >
             <span className={styles.avatar} aria-hidden="true">
