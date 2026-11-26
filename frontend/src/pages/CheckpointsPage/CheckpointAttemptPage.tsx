@@ -28,6 +28,7 @@ import { useAttemptCountdown } from './useAttemptCountdown';
 import { useCheckpointAutosave, type AnswerSaveSummary } from './useCheckpointAutosave';
 import { useCheckpointDisplayLock } from './useCheckpointDisplayLock';
 import { checkpointWorkspaceId } from './practicalWorkspaceFiles';
+import { lockedMessage } from './checkpointUi';
 import styles from './CheckpointAttemptPage.module.css';
 
 function questionTypeLabel(type: string): string {
@@ -99,6 +100,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   const summaryPath = `/checkpoints/attempts/${attempt.id}/summary`;
 
   const [locked, setLocked] = useState(false);
+  const [expiredSubmit, setExpiredSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -145,6 +147,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
           }
         }
 
+        setExpiredSubmit(source === 'expired');
         setLocked(true);
         await submitCheckpointAttempt(attempt.id);
         goToSummary();
@@ -325,9 +328,7 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
         {locked && (
           <div className={styles.lockedBanner} role="alert">
             <Clock size={16} aria-hidden="true" />
-            {submitError
-              ? 'Time is up. The attempt is locked; submission did not complete.'
-              : 'Time is up. Your attempt is being submitted and can no longer be edited.'}
+            {lockedMessage(expiredSubmit, submitError !== null)}
           </div>
         )}
 

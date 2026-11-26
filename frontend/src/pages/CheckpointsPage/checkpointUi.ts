@@ -67,6 +67,21 @@ export function submissionReasonLabel(reason: CheckpointSubmissionReason | null)
   return 'Not submitted';
 }
 
+/**
+ * The locked banner shows while a submission is in flight. Only blame the clock
+ * when the countdown actually expired; a manual submit keeps its remaining time.
+ */
+export function lockedMessage(expired: boolean, failed: boolean): string {
+  if (failed) {
+    return expired
+      ? 'Time is up. The attempt is locked; submission did not complete.'
+      : 'The attempt is locked; submission did not complete.';
+  }
+  return expired
+    ? 'Time is up. Your attempt is being submitted and can no longer be edited.'
+    : 'Your attempt is being submitted and can no longer be edited.';
+}
+
 export function checkpointQuestionTypeLabel(type: string): string {
   switch (type) {
     case 'MULTIPLE_CHOICE':
