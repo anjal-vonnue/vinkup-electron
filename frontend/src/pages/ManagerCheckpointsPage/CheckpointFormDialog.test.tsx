@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ManagerTrainee } from '@itp/types';
 import CheckpointFormDialog from './CheckpointFormDialog';
 
-function renderDialog() {
+function renderDialog(trainees: ManagerTrainee[] = []) {
   const onClose = vi.fn();
   const onSaved = vi.fn();
   const view = render(
     <CheckpointFormDialog
       target={{ mode: 'create' }}
-      trainees={[]}
+      trainees={trainees}
       groups={[]}
       onClose={onClose}
       onSaved={onSaved}
@@ -70,6 +71,28 @@ describe('CheckpointFormDialog', () => {
 
     expect(screen.getAllByText('index.js')).toHaveLength(1);
     expect(screen.getByText('1 file')).toBeInTheDocument();
+  });
+
+  it('does not list deactivated trainees', () => {
+    renderDialog([
+      {
+        id: 'trainee-active',
+        name: 'Active Trainee',
+        email: 'active@example.com',
+        isActive: true,
+        mentor: null,
+      },
+      {
+        id: 'trainee-inactive',
+        name: 'Inactive Trainee',
+        email: 'inactive@example.com',
+        isActive: false,
+        mentor: null,
+      },
+    ]);
+
+    expect(screen.getByText('Active Trainee')).toBeInTheDocument();
+    expect(screen.queryByText('Inactive Trainee')).not.toBeInTheDocument();
   });
 
   it('cancels the New file row with Escape without adding a file', async () => {
