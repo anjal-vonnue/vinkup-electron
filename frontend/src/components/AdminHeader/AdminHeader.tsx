@@ -4,6 +4,8 @@ import { Link, NavLink } from 'react-router';
 import { useAuth } from '../../context/Useauth';
 import styles from './AdminHeader.module.css';
 import ThemeToggle from '../ThemeToggle';
+import NotificationBadge from '../NotificationBadge/NotificationBadge';
+import { getPendingLeaveCount } from '../../api/leave';
 
 export type AdminNavItem = {
   to: string;
@@ -113,6 +115,14 @@ export default function AdminHeader({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || (user.role !== 'mentor' && user.role !== 'manager')) return;
+    void getPendingLeaveCount(user.role)
+      .then(setPendingLeaveCount)
+      .catch(() => undefined);
+  }, [user]);
 
   // Close the menu on outside click or Escape
   useEffect(() => {
@@ -176,6 +186,15 @@ export default function AdminHeader({
                 <span className={styles.label} data-text={item.label}>
                   {item.label}
                 </span>
+                {item.to.endsWith('/leave-requests') && (
+                  <NotificationBadge
+                    count={pendingLeaveCount}
+                    label={
+                      pendingLeaveCount === 1 ? 'pending leave request' : 'pending leave requests'
+                    }
+                    tone="pending"
+                  />
+                )}
               </NavLink>
             ))}
           </nav>

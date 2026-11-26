@@ -16,6 +16,10 @@ traineeLeaveRequestRoutes.post(
   leaveRequestController.create
 );
 
+// Static paths first — otherwise `/:requestId` swallows them and the UUID
+// validation rejects "unread-count" with a 400.
+traineeLeaveRequestRoutes.get('/unread-count', leaveRequestController.getUnreadCount);
+
 traineeLeaveRequestRoutes.get('/', leaveRequestController.listMine);
 
 traineeLeaveRequestRoutes.get(
@@ -30,6 +34,9 @@ traineeLeaveRequestRoutes.get(
  * assignment scope from the authenticated reviewer.
  */
 export const staffLeaveRequestRoutes = Router();
+
+// Static paths first — same reason as above.
+staffLeaveRequestRoutes.get('/pending-count', leaveRequestController.getPendingCount);
 
 staffLeaveRequestRoutes.get('/', leaveRequestController.listForReviewer);
 

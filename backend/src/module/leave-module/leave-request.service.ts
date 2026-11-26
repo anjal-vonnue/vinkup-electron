@@ -6,6 +6,7 @@ import type {
 } from '@itp/types';
 import { env } from '../../config/env';
 import { ConflictError, NotFoundError } from '../../errors/AppError';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 import { SlackNotificationRepository } from '../slack-module/slack-notification.repository';
 import {
   LeaveRequestRepository,
@@ -91,6 +92,24 @@ export class LeaveRequestService {
     };
     const row = await leaveRequestRepository.create(record);
     await queueSlackNotification(row);
+
+    // Live badge update: the mentor's pending-count should tick up without a reload.
+    const mentorId = row.trainee.mentor?.id;
+    if (mentorId) {
+      try {
+        realtimeBroker.publish(mentorId, {
+          type: 'leave.submitted',
+          traineeId: row.trainee_id,
+          traineeName: row.trainee.name,
+          requestId: row.id,
+          subject: row.subject,
+        });
+      } catch (error) {
+        // Badge latency is not worth failing the request over.
+        console.error('[leave] failed to publish leave.submitted', error);
+      }
+    }
+
     return toLeaveRequest(row);
   };
 
@@ -142,8 +161,34 @@ export class LeaveRequestService {
         'This leave request was already reviewed while you were writing yours.'
       );
     }
+
+    // Live badge update: the trainee's unread-count should tick up without a reload.
+    // A manager override also re-badges the trainee, because `reviewed_at` moves.
+    try {
+      realtimeBroker.publish(outcome.request.trainee_id, {
+        type: 'leave.reviewed',
+        traineeId: outcome.request.trainee_id,
+        requestId: outcome.request.id,
+        decision: outcome.request.status === 'APPROVED' ? 'APPROVED' : 'REJECTED',
+      });
+    } catch (error) {
+      console.error('[leave] failed to publish leave.reviewed', error);
+    }
+
     return toLeaveRequest(outcome.request);
   };
+
+  // ---------- Header badge counts ----------
+
+  /** APPROVED or REJECTED after `since` (null = all time). Trainee badge. */
+  async countDecidedSince(traineeId: string, since: Date | null): Promise<number> {
+    return leaveRequestRepository.countDecidedSince(traineeId, since);
+  }
+
+  /** PENDING requests in the reviewer's scope. Mentor/manager badge. */
+  async countPendingForReviewer(reviewer: LeaveReviewer): Promise<number> {
+    return leaveRequestRepository.countPendingForReviewer(reviewer);
+  }
 }
 
 export const leaveRequestService = new LeaveRequestService();

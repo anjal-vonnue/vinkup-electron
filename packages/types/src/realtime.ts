@@ -75,9 +75,35 @@ export type TraineeReassignedEvent = {
   changedAt: string;
 };
 
+/**
+ * A trainee submitted a leave request; sent to their assigned mentor so the
+ * Leave requests badge can tick up without a reload.
+ */
+export type LeaveSubmittedEvent = {
+  type: 'leave.submitted';
+  traineeId: string;
+  traineeName: string;
+  requestId: string;
+  subject: string;
+};
+
+/**
+ * A mentor or manager approved or rejected a leave request; sent to the
+ * trainee so the Leave badge can tick up without a reload. Manager overrides
+ * re-fire this, because `reviewed_at` moves and the trainee should re-badge.
+ */
+export type LeaveReviewedEvent = {
+  type: 'leave.reviewed';
+  traineeId: string;
+  requestId: string;
+  decision: 'APPROVED' | 'REJECTED';
+};
+
 export type RealtimeEvent =
   | TaskReviewedEvent
   | TaskSubmittedEvent
   | TaskStartedEvent
   | FlagCreatedEvent
-  | TraineeReassignedEvent;
+  | TraineeReassignedEvent
+  | LeaveSubmittedEvent
+  | LeaveReviewedEvent;

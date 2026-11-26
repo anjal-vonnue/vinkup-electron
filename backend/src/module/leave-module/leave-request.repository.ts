@@ -202,6 +202,22 @@ export class LeaveRequestRepository {
       return { ok: true, request } as const;
     });
   };
+
+  /** APPROVED or REJECTED after `since`. Trainee badge. */
+  countDecidedSince = (traineeId: string, since: Date | null) =>
+    prisma.leave_request.count({
+      where: {
+        trainee_id: traineeId,
+        status: { in: [leave_status.APPROVED, leave_status.REJECTED] },
+        ...(since ? { reviewed_at: { gt: since } } : {}),
+      },
+    });
+
+  /** PENDING requests in the reviewer's scope. Mentor/manager badge. */
+  countPendingForReviewer = (reviewer: LeaveReviewer) =>
+    prisma.leave_request.count({
+      where: { ...leaveScopeFor(reviewer), status: leave_status.PENDING },
+    });
 }
 
 export type LeaveRow = Awaited<ReturnType<typeof LeaveRequestRepository.prototype.create>>;
