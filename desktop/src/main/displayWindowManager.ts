@@ -1,5 +1,5 @@
 import { BrowserWindow, screen, type Display, type WebContents } from 'electron';
-import type { BrowserAvailability, UserRole } from '@itp/types';
+import type { BrowserAvailability, CheckpointDisplayState, UserRole } from '@itp/types';
 import path from 'node:path';
 
 const OVERLAY_COLOR = '#10131f';
@@ -84,6 +84,7 @@ export class DisplayWindowManager {
   private displayTheme: 'light' | 'dark' = 'light';
   private mainResourcesActive = false;
   private mainResourcesFocused = false;
+  private checkpointName: string | null = null;
   private lastDisplayMode: 'single' | 'extended' | 'mirrored' | null = null;
 
   constructor(
@@ -262,6 +263,24 @@ export class DisplayWindowManager {
     };
   }
 
+  /**
+   * Replaces the secondary display's Resources/References UI with a good-luck
+   * screen while a checkpoint attempt is running. `null` restores the normal UI.
+   */
+  setCheckpointActive(name: string | null): void {
+    const normalized = typeof name === 'string' && name.trim() ? name.trim() : null;
+    if (this.checkpointName === normalized) return;
+    this.checkpointName = normalized;
+    this.broadcastCheckpointState();
+  }
+
+  getCheckpointState(): CheckpointDisplayState {
+    return {
+      active: this.checkpointName !== null,
+      traineeName: this.checkpointName,
+    };
+  }
+
   isAllowedOverlayContentFocused(): boolean {
     return this.allowedOverlayFocused;
   }
@@ -289,6 +308,7 @@ export class DisplayWindowManager {
 
     if (this.isStaffSession) {
       this.focusLostAt = null;
+      this.checkpointName = null;
       this.clearAlerts();
       this.destroyAllOverlays();
       for (const timer of this.launchFocusTimers) clearTimeout(timer);
@@ -302,6 +322,7 @@ export class DisplayWindowManager {
 
     if (this.isAuthenticationInProgress) {
       this.focusLostAt = null;
+      this.checkpointName = null;
       this.clearAlerts();
       this.destroyAllOverlays();
       if (isAlive(this.mainWindow)) {
@@ -313,6 +334,7 @@ export class DisplayWindowManager {
 
     if (!this.isOverlayAuthenticated) {
       this.focusLostAt = null;
+      this.checkpointName = null;
       this.clearAlerts();
       this.destroyAllOverlays();
       if (isAlive(this.mainWindow)) {
@@ -914,6 +936,7 @@ export class DisplayWindowManager {
       .then(() => this.applyDisplayTheme(window))
       .then(() => this.sendBrowserAvailability(window))
       .then(() => this.sendOverlayAuthenticationState(window, this.animateOverlayAuthentication))
+      .then(() => this.sendCheckpointState(window))
       .catch((error: unknown) => console.error('[desktop] Failed to load display overlay', error));
     return window;
   }
@@ -941,6 +964,11 @@ export class DisplayWindowManager {
     window.webContents.send('browser:availability-changed', this.getBrowserAvailability());
   }
 
+  private sendCheckpointState(window: BrowserWindow): void {
+    if (!isAlive(window) || window.webContents.isDestroyed()) return;
+    window.webContents.send('display-overlay:checkpoint-state', this.getCheckpointState());
+  }
+
   private getOverlayUrl(): string {
     const url = new URL('overlay.html', `${this.overlayUrl.replace(/\/$/, '')}/`);
     url.searchParams.set(
@@ -963,6 +991,10 @@ export class DisplayWindowManager {
       );
     }
     for (const window of this.overlays.values()) this.sendBrowserAvailability(window);
+  }
+
+  private broadcastCheckpointState(): void {
+    for (const window of this.overlays.values()) this.sendCheckpointState(window);
   }
 
   private destroyOverlay(id: number, expectedWindow?: BrowserWindow): void {

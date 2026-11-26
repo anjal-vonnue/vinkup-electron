@@ -25,6 +25,16 @@ export type BrowserAvailability = {
   secondaryResourcesActive: boolean;
 };
 
+/**
+ * The secondary display shows a "good luck" screen instead of Resources and
+ * References while a checkpoint attempt is running.
+ */
+export type CheckpointDisplayState = {
+  active: boolean;
+  /** The trainee's name from their session, or null when it is not known. */
+  traineeName: string | null;
+};
+
 export interface SecondaryDisplayResourcesApi {
   getAllowlist: () => Promise<ResourcesAllowlist>;
   getState: () => Promise<ResourcesBrowserState>;
@@ -241,6 +251,15 @@ export interface DesktopApi {
      * Returns an unsubscribe function.
      */
     onScreenLockChange?: (listener: (locked: boolean) => void) => () => void;
+  };
+
+  /**
+   * The secondary display is locked to a good-luck screen while a checkpoint
+   * attempt is running, so references and resources cannot be used during it.
+   */
+  checkpoint: {
+    /** Shows "Good luck, <name>" on the secondary display, or clears it with null. */
+    setActive: (name: string | null) => void;
   };
 
   certificate: {

@@ -95,6 +95,12 @@ const api: DesktopApi = {
     },
   },
 
+  checkpoint: {
+    setActive: (name: string | null) => {
+      ipcRenderer.send('display-overlay:checkpoint-active', name);
+    },
+  },
+
   certificate: {
     savePdf: (fileName: string) =>
       ipcRenderer.invoke('certificate:save-pdf', fileName) as Promise<{

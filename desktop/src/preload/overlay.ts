@@ -3,6 +3,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type {
   BrowserAvailability,
+  CheckpointDisplayState,
   ResourcesAllowlist,
   ResourcesBrowserBounds,
   ResourcesBrowserState,
@@ -87,6 +88,17 @@ contextBridge.exposeInMainWorld('vinkupDisplay', {
     ipcRenderer.on('display-overlay:auth-state', handler);
     return () => {
       ipcRenderer.removeListener('display-overlay:auth-state', handler);
+    };
+  },
+  getCheckpointState: () =>
+    ipcRenderer.invoke('display-overlay:get-checkpoint-state') as Promise<CheckpointDisplayState>,
+  onCheckpointChange: (listener: (state: CheckpointDisplayState) => void) => {
+    const handler = (_event: IpcRendererEvent, state: CheckpointDisplayState): void => {
+      listener(state);
+    };
+    ipcRenderer.on('display-overlay:checkpoint-state', handler);
+    return () => {
+      ipcRenderer.removeListener('display-overlay:checkpoint-state', handler);
     };
   },
   resources,

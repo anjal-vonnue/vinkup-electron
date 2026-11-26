@@ -15,6 +15,7 @@
   let browserState = null;
   let active = false;
   let authenticated = document.body.classList.contains('is-authenticated');
+  let checkpointActive = false;
   let boundsFrame = 0;
   let findOpen = false;
   let addressDirty = false;
@@ -271,10 +272,23 @@
   });
   window.vinkupDisplay?.onAuthenticationChange((isAuthenticated) => {
     authenticated = isAuthenticated;
-    if (authenticated && resourcesTab.getAttribute('aria-selected') === 'true') {
+    if (
+      authenticated &&
+      !checkpointActive &&
+      resourcesTab.getAttribute('aria-selected') === 'true'
+    ) {
       void activate();
     } else {
       deactivate();
+    }
+  });
+
+  window.vinkupDisplay?.onCheckpointChange((state) => {
+    checkpointActive = Boolean(state?.active);
+    if (checkpointActive) {
+      deactivate();
+    } else if (authenticated && resourcesTab.getAttribute('aria-selected') === 'true') {
+      void activate();
     }
   });
 
@@ -282,7 +296,19 @@
     .then(([allowlist, state]) => {
       renderAllowlist(allowlist);
       renderState(state);
-      if (authenticated && resourcesTab.getAttribute('aria-selected') === 'true') {
+      const checkpointPromise = window.vinkupDisplay?.getCheckpointState
+        ? window.vinkupDisplay.getCheckpointState().catch(() => null)
+        : Promise.resolve(null);
+      return checkpointPromise.then((checkpoint) => {
+        checkpointActive = Boolean(checkpoint?.active);
+      });
+    })
+    .then(() => {
+      if (
+        authenticated &&
+        !checkpointActive &&
+        resourcesTab.getAttribute('aria-selected') === 'true'
+      ) {
         void activate();
       }
     })

@@ -601,6 +601,24 @@ function registerIpcHandlers(): void {
     displayWindowManager?.setOverlayResourcesActive(event.sender, active);
   });
 
+  ipcMain.on('display-overlay:checkpoint-active', (event, name: unknown) => {
+    if (name !== null && typeof name !== 'string') return;
+    if (
+      !mainWindow ||
+      mainWindow.isDestroyed() ||
+      BrowserWindow.fromWebContents(event.sender) !== mainWindow ||
+      event.senderFrame !== event.sender.mainFrame
+    ) {
+      return;
+    }
+    // The secondary display must not keep a Resources browser open over the
+    // good-luck screen, even if its own script has not reacted yet.
+    if (typeof name === 'string' && name.trim()) {
+      for (const browser of secondaryResourcesBrowsers.values()) browser.close();
+    }
+    displayWindowManager?.setCheckpointActive(name);
+  });
+
   ipcMain.on('resources:activity', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.webContents.send('resources:activity');
@@ -619,6 +637,18 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     const availability: BrowserAvailability = manager.getBrowserAvailability();
     return availability;
+  });
+
+  ipcMain.handle('display-overlay:get-checkpoint-state', (event) => {
+    const manager = displayWindowManager;
+    if (!manager) throw new Error('The display window manager is not ready.');
+    if (!manager.ownsOverlaySender(event.sender)) {
+      throw new Error('IPC request is not from the display overlay.');
+    }
+    if (event.senderFrame !== event.sender.mainFrame) {
+      throw new Error('IPC request is not from the display overlay main frame.');
+    }
+    return manager.getCheckpointState();
   });
 
   ipcMain.handle('resources:get-allowlist', (event) => {

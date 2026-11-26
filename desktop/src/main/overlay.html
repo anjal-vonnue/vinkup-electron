@@ -201,6 +201,78 @@
         }
       }
 
+      .checkpoint-screen {
+        position: absolute;
+        z-index: 6;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background:
+          radial-gradient(ellipse at 20% 20%, var(--accent-wash), transparent 42%),
+          radial-gradient(ellipse at 80% 80%, var(--accent-tint), transparent 38%),
+          var(--background);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition:
+          opacity 500ms ease,
+          visibility 0s linear 500ms;
+      }
+
+      .checkpoint-glow {
+        position: absolute;
+        width: min(58vw, 560px);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: var(--accent-wash);
+        filter: blur(90px);
+        opacity: 0.55;
+        animation: welcome-drift 9s ease-in-out infinite alternate;
+      }
+
+      .checkpoint-content {
+        position: relative;
+        width: min(560px, calc(100% - 48px));
+        padding: 56px 44px;
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        background: color-mix(in srgb, var(--surface) 90%, transparent);
+        box-shadow: 0 24px 80px #11112a1c;
+        text-align: center;
+        animation: welcome-rise 700ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
+      }
+
+      .checkpoint-title {
+        margin: 0;
+        color: var(--text);
+        font-size: clamp(2.2rem, 6vw, 3.4rem);
+        font-weight: 750;
+        letter-spacing: -0.05em;
+        line-height: 1.1;
+      }
+
+      .checkpoint-description {
+        max-width: 420px;
+        margin: 18px auto 0;
+        color: var(--text-secondary);
+        font-size: 1.02rem;
+        line-height: 1.7;
+      }
+
+      body.is-authenticated.is-checkpoint .checkpoint-screen {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transition-delay: 0s;
+      }
+
+      body.is-authenticated.is-checkpoint .display-app {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
       body.is-authenticated .display-app {
         opacity: 1;
         visibility: visible;
@@ -1300,6 +1372,17 @@
         <div class="welcome-loading" role="status" aria-label="Waiting for sign in">
           <span></span><span></span><span></span>
         </div>
+      </div>
+    </section>
+    <section id="checkpoint-screen" class="checkpoint-screen" aria-live="polite" aria-hidden="true">
+      <div class="checkpoint-glow" aria-hidden="true"></div>
+      <div class="checkpoint-content">
+        <div class="welcome-mark checkpoint-mark" aria-hidden="true">✦</div>
+        <p class="welcome-eyebrow">Checkpoint in progress</p>
+        <h1 id="checkpoint-title" class="checkpoint-title">Good luck!</h1>
+        <p class="checkpoint-description">
+          Your assessment is open on the main screen. This display stays quiet until you submit.
+        </p>
       </div>
     </section>
     <div id="display-app" class="display-app" inert aria-hidden="true">
