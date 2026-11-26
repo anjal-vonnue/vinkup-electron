@@ -9,10 +9,18 @@ their code and journal, and add new trainees.
 
 **Live:** [vinkup.netlify.app](https://vinkup.netlify.app) · **Version:** v0.2.0 (beta)
 
+The same renderer also ships in an **Electron desktop app**. The main process signs the user in through
+the system browser, keeps refresh tokens out of the renderer, and gives each task a real folder on the
+trainee’s machine with a loopback preview, a terminal and local Node/PostgreSQL runtimes. Application
+data still comes from the REST API. See the [desktop documentation](docs/desktop/README.md).
+
 ## Features
 
 - **Guided curriculum:** HTML, CSS, JavaScript, TypeScript, Node.js, PostgreSQL, Prisma and React;
   54 days and 260 tasks. Days unlock in order.
+- **Electron desktop app:** native window and display control, system-browser sign-in, local task workspaces,
+  a PTY terminal, a resources browser with an allowlist, screen-focus protection and native PDF export.
+  See [desktop docs](docs/desktop/README.md).
 - **Workspace:** Monaco editor with three runtimes. In the desktop app, trainee code runs on the
   trainee's machine, never on the platform's servers:
   - web pages are served from a loopback preview server with native esbuild;
@@ -45,15 +53,16 @@ their code and journal, and add new trainees.
 
 ## Tech stack
 
-| Part          | Technology                                                                            |
-| ------------- | ------------------------------------------------------------------------------------- |
-| Frontend      | React 19, TypeScript, Vite, React Router, Monaco, Axios                               |
-| Code runtimes | Loopback preview server + esbuild, PTY + xterm, local PostgreSQL (PostgreSQL, Prisma) |
-| Backend       | Node.js 22, Express 5, TypeScript, Zod 4, Passport (Google OAuth), JWT in a cookie    |
-| Database      | PostgreSQL (Neon), Prisma 7 with `@prisma/adapter-pg`                                 |
-| Shared types  | `@itp/types` in `packages/types`, used by both frontend and backend                   |
-| Quality       | Vitest, Testing Library, Supertest, ESLint, Prettier, Husky, lint-staged, commitlint  |
-| Hosting       | Netlify (frontend, proxies `/api`), Render (API), Neon (database)                     |
+| Part          | Technology                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------- |
+| Frontend      | React 19, TypeScript, Vite, React Router, Monaco, Axios                                       |
+| Desktop       | Electron 45, TypeScript, `contextBridge` IPC, node-pty, esbuild, Lighthouse, electron-builder |
+| Code runtimes | Loopback preview server + esbuild, PTY + xterm, local PostgreSQL (PostgreSQL, Prisma)         |
+| Backend       | Node.js 22, Express 5, TypeScript, Zod 4, Passport (Google OAuth), JWT in a cookie            |
+| Database      | PostgreSQL (Neon), Prisma 7 with `@prisma/adapter-pg`                                         |
+| Shared types  | `@itp/types` in `packages/types`, used by both frontend and backend                           |
+| Quality       | Vitest, Testing Library, Supertest, ESLint, Prettier, Husky, lint-staged, commitlint          |
+| Hosting       | Netlify (frontend, proxies `/api`), Render (API), Neon (database)                             |
 
 ## Quick start
 
@@ -98,6 +107,11 @@ the backend.
 **Frontend only:** set `VITE_USE_MOCKS=true` in `frontend/.env.local` and run `npm run dev:frontend`.
 The app then runs on sample data in the browser, with no backend or database.
 
+**Desktop:** with the backend running, use `npm run dev:desktop` to start the Vite frontend on port
+5173 and open the Electron shell. The packaged app serves the renderer from a fixed loopback origin and
+uses `VINKUP_API_URL` for REST calls. Full details are in the
+[desktop setup notes](docs/setup-guide.md) and [desktop docs](docs/desktop/README.md).
+
 ## Scripts
 
 Run from the repository root.
@@ -106,6 +120,10 @@ Run from the repository root.
 | -------------------------------------- | ----------------------------------------------------------- |
 | `npm run dev:frontend`                 | Vite dev server on port 5173                                |
 | `npm run dev:backend`                  | API with `tsx watch` on port 3000                           |
+| `npm run dev:desktop`                  | Vite frontend on 5173 plus the Electron shell               |
+| `npm run build:desktop`                | Type-check and build main, preload and renderer             |
+| `npm run start:desktop`                | Start the built Electron app                                |
+| `npm run dist:desktop`                 | Build the frontend and package the Linux desktop app        |
 | `npm test`                             | Unit tests in every workspace                               |
 | `npm run test:api -w backend`          | API contract tests (needs `TEST_DATABASE_URL`)              |
 | `npm run lint`                         | ESLint on the whole repository                              |
@@ -123,8 +141,9 @@ commitlint.
 ```
 Training-platform/
 ├── frontend/          React app: pages, components, API client, runtimes, reference content
+├── desktop/           Electron shell: main process, preload bridge, local workspace and packaging
 ├── backend/           Express API: one folder per feature in src/module/, Prisma schema in prisma/
-├── packages/types/    @itp/types: request and response types shared by both sides
+├── packages/types/    @itp/types: request and response types shared by all three workspaces
 ├── scripts/           export-curriculum.ts (frontend curriculum data → seed file)
 ├── docs/              project documentation (see below)
 └── netlify.toml       frontend build settings and per-environment variables
@@ -137,6 +156,7 @@ Training-platform/
 | [Setup guide](docs/setup-guide.md)                     | Running the project locally, step by step                            |
 | [Conventions](docs/conventions.md)                     | How we write code, commit and review; read before your first PR      |
 | [Architecture overview](docs/architecture-overview.md) | How the system fits together: frontend flow, backend layers, hosting |
+| [Desktop documentation](docs/desktop/README.md)        | Electron architecture, IPC, local runtimes and desktop-specific APIs |
 | [API reference](docs/api-specifications.md)            | Every endpoint, with requests, responses and errors                  |
 | [Database](docs/database.md)                           | ER diagram and data dictionary                                       |
 | [Roles and assignments](docs/roles-and-assignments.md) | Role hierarchy, mentor assignment, authorization, migration strategy |
@@ -145,6 +165,16 @@ Training-platform/
 | [Slack integration](docs/slack-integration.md)         | Mentor channel setup, shared bot, outbox and retry behavior          |
 | [Release notes v0.2.0](docs/release-notes/v0.2.0.md)   | Mentor dashboard, certificates, integrity score and other changes    |
 | [Release notes v0.1.0](docs/release-notes/v0.1.0.md)   | What's in the first beta, known limitations and future scope         |
+
+### Desktop guides
+
+- [Authentication](docs/desktop/auth.md) — desktop OAuth, PKCE, token storage and auth state
+- [Window and display management](docs/desktop/window.md) — fullscreen, overlays, focus and PDFs
+- [Local workspace, preview, terminals and runs](docs/desktop/workspace.md) — `workspace:*`, `terminal:*` and `run:*`
+- [Users, roles and assignments](docs/desktop/users.md) — role guards and admin/manager APIs
+- [Course workflow](docs/desktop/course_workflow.md) — days, tasks, submissions and reviews
+- [Leave requests](docs/desktop/leave_request.md) — requests, decisions and history
+- [Slack integration](docs/desktop/slack.md) — channel setup, outbox and notifications
 
 ## Contributing
 
@@ -159,3 +189,5 @@ Pull requests get a Netlify preview link that runs on sample data.
 ## Team
 
 Built by Hawas Backer, Fathima Fadwah, Aswin Vijayan and Ameesha T, mentored by Musthaq Ahmad.
+
+Restructured by Anjal K Biju, Akshay Antony, Christo Jose, Gauresh P A, Sona Kajal S D and Akshay Kumar P, guided by SHIJIL CG.
