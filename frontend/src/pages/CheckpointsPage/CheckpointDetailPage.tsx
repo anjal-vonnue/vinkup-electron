@@ -129,15 +129,17 @@ export default function CheckpointDetailPage() {
 
   const meta = availabilityMeta(checkpoint.availability);
   const attempt = checkpoint.attempt;
-  const canStart = checkpoint.canStart && checkpoint.availability === 'AVAILABLE';
+  const openAttempt = attempt?.status === 'IN_PROGRESS' ? attempt : null;
+  const canStartNewAttempt = checkpoint.canStart && !openAttempt;
   const remainingAttempts = Math.max(0, checkpoint.maxAttempts - checkpoint.attemptsUsed);
+  const nextAttemptNumber = checkpoint.attemptsUsed + 1;
   const deadline = new Date(
     new Date(checkpoint.startAt).getTime() + checkpoint.durationMinutes * 60_000
   );
 
   return (
     <>
-      <Header />
+      <Header locked={checkpoint.attemptsUsed > 0 && canStartNewAttempt} />
       <main className={styles.page}>
         <Link to="/checkpoints" className={styles.backLink}>
           <ArrowLeft size={14} /> All checkpoints
@@ -285,7 +287,7 @@ export default function CheckpointDetailPage() {
 
             <div
               className={`${styles.notice} ${
-                canStart
+                canStartNewAttempt
                   ? styles.noticeSuccess
                   : checkpoint.availability === 'MISSED' || checkpoint.availability === 'CANCELLED'
                     ? styles.noticeDanger
@@ -298,12 +300,30 @@ export default function CheckpointDetailPage() {
                 <Info size={16} aria-hidden="true" />
               )}
               <div>
-                <strong>{meta.label}</strong>
-                <p>{checkpoint.blockedReason ?? meta.hint}</p>
+                <strong>
+                  {canStartNewAttempt && checkpoint.attemptsUsed > 0
+                    ? 'Another attempt is available'
+                    : meta.label}
+                </strong>
+                <p>
+                  {canStartNewAttempt
+                    ? checkpoint.attemptsUsed > 0
+                      ? `You have ${remainingAttempts} attempt${
+                          remainingAttempts === 1 ? '' : 's'
+                        } left. Start attempt ${nextAttemptNumber} before the entry window closes.`
+                      : `You have ${remainingAttempts} attempt${
+                          remainingAttempts === 1 ? '' : 's'
+                        } available.`
+                    : (checkpoint.blockedReason ?? meta.hint)}
+                </p>
               </div>
             </div>
 
-            {canStart ? (
+            {openAttempt ? (
+              <Link to={`/checkpoints/attempts/${openAttempt.id}`} className={styles.startButton}>
+                <Play size={16} /> Resume attempt
+              </Link>
+            ) : canStartNewAttempt ? (
               <button
                 type="button"
                 className={styles.startButton}
@@ -311,12 +331,12 @@ export default function CheckpointDetailPage() {
                 disabled={starting}
               >
                 <Play size={16} />
-                {starting ? 'Starting…' : 'Start checkpoint'}
+                {starting
+                  ? 'Starting…'
+                  : checkpoint.attemptsUsed > 0
+                    ? `Start attempt ${nextAttemptNumber}`
+                    : 'Start checkpoint'}
               </button>
-            ) : attempt?.status === 'IN_PROGRESS' ? (
-              <Link to={`/checkpoints/attempts/${attempt.id}`} className={styles.startButton}>
-                <Play size={16} /> Resume attempt
-              </Link>
             ) : checkpoint.availability === 'RESULTS_AVAILABLE' && attempt ? (
               <Link
                 to={`/checkpoints/attempts/${attempt.id}/summary`}
@@ -341,8 +361,18 @@ export default function CheckpointDetailPage() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Start the checkpoint now?"
-        confirmLabel={starting ? 'Starting…' : 'Start attempt'}
+        title={
+          checkpoint.attemptsUsed > 0
+            ? `Start attempt ${nextAttemptNumber}?`
+            : 'Start the checkpoint now?'
+        }
+        confirmLabel={
+          starting
+            ? 'Starting…'
+            : checkpoint.attemptsUsed > 0
+              ? `Start attempt ${nextAttemptNumber}`
+              : 'Start attempt'
+        }
         cancelLabel="Not yet"
         isConfirming={starting}
         error={startError}
@@ -354,8 +384,11 @@ export default function CheckpointDetailPage() {
         }}
       >
         <p>
-          You are about to start <strong>{checkpoint.title}</strong>. The timer begins immediately
-          and will run for <strong>{formatDuration(checkpoint.durationMinutes)}</strong>.
+          You are about to start <strong>{checkpoint.title}</strong>
+          {checkpoint.attemptsUsed > 0 &&
+            ` (attempt ${nextAttemptNumber} of ${checkpoint.maxAttempts})`}
+          . The timer begins immediately and will run for{' '}
+          <strong>{formatDuration(checkpoint.durationMinutes)}</strong>.
         </p>
         <p>You cannot pause the timer. Make sure you have a stable connection before starting.</p>
       </ConfirmDialog>

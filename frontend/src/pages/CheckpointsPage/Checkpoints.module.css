@@ -865,6 +865,8 @@
 
 .summaryActions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-content: flex-start;
   margin-top: 16px;
 }

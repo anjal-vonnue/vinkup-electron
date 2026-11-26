@@ -13,6 +13,11 @@ type HeaderProps = {
   leading?: ReactNode;
   /** Shown just before the nav links. The task page's session timer goes here later. */
   status?: ReactNode;
+  /**
+   * Keeps the checkpoint lock on even when the route is not the active attempt
+   * (for example, while a multi-attempt checkpoint is still open).
+   */
+  locked?: boolean;
 };
 
 type BrowserAvailability = {
@@ -170,7 +175,7 @@ function NavLabel({ text }: { text: string }) {
   );
 }
 
-export default function Header({ leading, status }: HeaderProps) {
+export default function Header({ leading, status, locked = false }: HeaderProps) {
   const activity = useActivity();
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -180,7 +185,10 @@ export default function Header({ leading, status }: HeaderProps) {
   const isInWorkspace = Boolean(matchPath('/tasks/:taskId', location.pathname));
   // A live checkpoint attempt locks the app to the attempt, so the other
   // sections are disabled and Checkpoints takes Home's workspace styling.
-  const isInCheckpoint = Boolean(matchPath('/checkpoints/attempts/:attemptId', location.pathname));
+  // Pages between attempts can pass `locked` to keep the same lock while a
+  // multi-attempt checkpoint is still open.
+  const isInCheckpoint =
+    locked || Boolean(matchPath('/checkpoints/attempts/:attemptId', location.pathname));
   const checkpointLockTitle = 'Finish or submit this checkpoint before leaving';
   // Visually, Home also owns the day flow that leads into a workspace. This is
   // display-only: clicking Home on the day page is still an ordinary navigation.

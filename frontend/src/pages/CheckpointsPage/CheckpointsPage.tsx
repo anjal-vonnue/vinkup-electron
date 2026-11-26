@@ -30,6 +30,15 @@ function actionFor(checkpoint: TraineeCheckpointSummary): CardAction {
       primary: true,
     };
   }
+  // A submitted attempt with attempts left is still startable while the entry
+  // window is open, so offer the next attempt before the read-only result.
+  if (checkpoint.canStart && attempt) {
+    return {
+      label: `Start attempt ${attempt.attemptNumber + 1}`,
+      to: `/checkpoints/${checkpoint.id}`,
+      primary: true,
+    };
+  }
   if (checkpoint.availability === 'RESULTS_AVAILABLE' && attempt) {
     return {
       label: 'View result',
@@ -98,9 +107,11 @@ function CheckpointCard({ checkpoint }: { checkpoint: TraineeCheckpointSummary }
       <p className={styles.cardHint}>
         {checkpoint.availability === 'IN_PROGRESS'
           ? 'Your timer is running. Resume to keep answering.'
-          : checkpoint.blockedReason && checkpoint.availability !== 'UPCOMING'
-            ? checkpoint.blockedReason
-            : meta.hint}
+          : checkpoint.canStart && checkpoint.attempt
+            ? `Attempt ${checkpoint.attempt.attemptNumber} submitted. Start the next attempt before the window closes.`
+            : checkpoint.blockedReason && checkpoint.availability !== 'UPCOMING'
+              ? checkpoint.blockedReason
+              : meta.hint}
       </p>
 
       <div className={styles.cardFooter}>
@@ -176,27 +187,34 @@ export default function CheckpointsPage() {
       new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
 
     return {
+      // A submitted attempt with attempts left is still open for another try.
       open: rows
-        .filter(
-          (checkpoint) =>
-            checkpoint.availability === 'AVAILABLE' || checkpoint.availability === 'IN_PROGRESS'
-        )
+        .filter((checkpoint) => checkpoint.canStart || checkpoint.availability === 'IN_PROGRESS')
         .sort(byStart),
       upcoming: rows.filter((checkpoint) => checkpoint.availability === 'UPCOMING').sort(byStart),
       completed: rows
-        .filter((checkpoint) =>
-          ['SUBMITTED', 'AWAITING_RESULTS', 'RESULTS_AVAILABLE', 'MISSED', 'CANCELLED'].includes(
-            checkpoint.availability
-          )
+        .filter(
+          (checkpoint) =>
+            !checkpoint.canStart &&
+            checkpoint.availability !== 'IN_PROGRESS' &&
+            ['SUBMITTED', 'AWAITING_RESULTS', 'RESULTS_AVAILABLE', 'MISSED', 'CANCELLED'].includes(
+              checkpoint.availability
+            )
         )
         .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()),
     };
   }, [checkpoints]);
 
+  // Keep the app locked to the checkpoint section while a previous attempt can
+  // still be followed by another one, until the checkpoint window closes.
+  const navigationLocked = (checkpoints ?? []).some(
+    (checkpoint) => checkpoint.canStart && checkpoint.attempt !== null
+  );
+
   if (error) {
     return (
       <>
-        <Header />
+        <Header locked={navigationLocked} />
         <main className={styles.page}>
           <ErrorState
             fullPage
@@ -212,7 +230,7 @@ export default function CheckpointsPage() {
   if (!checkpoints) {
     return (
       <>
-        <Header />
+        <Header locked={navigationLocked} />
         <main className={styles.page}>
           <LoaderOverlay label="Loading your checkpoints…" />
         </main>
@@ -226,7 +244,7 @@ export default function CheckpointsPage() {
 
   return (
     <>
-      <Header />
+      <Header locked={navigationLocked} />
       <main className={styles.page}>
         <header className={styles.pageHeader}>
           <div>

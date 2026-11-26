@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import type { CheckpointResult, TraineeCheckpointAttempt } from '@itp/types';
+import type {
+  CheckpointResult,
+  TraineeCheckpointAttempt,
+  TraineeCheckpointDetail,
+} from '@itp/types';
 import {
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Clock3,
   FileText,
@@ -15,10 +20,11 @@ import Header from '../../components/Header';
 import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
 import { formatIstDateTime } from '../../lib/formatDateTime';
-import { getCheckpointAttempt, getCheckpointResult } from '../../api/checkpoints';
+import { getCheckpointAttempt, getCheckpointResult, getMyCheckpoint } from '../../api/checkpoints';
 import { ApiError } from '../../api/errors';
 import { checkpointQuestionTypeLabel, submissionReasonLabel } from './checkpointUi';
 import WorkspaceFilesViewer from './WorkspaceFilesViewer';
+import { useCheckpointRefreshAt } from './useCheckpointRefreshAt';
 import styles from './Checkpoints.module.css';
 
 export default function CheckpointSummaryPage() {
@@ -26,12 +32,15 @@ export default function CheckpointSummaryPage() {
   const navigate = useNavigate();
 
   const [attempt, setAttempt] = useState<TraineeCheckpointAttempt | null>(null);
+  const [checkpointDetail, setCheckpointDetail] = useState<TraineeCheckpointDetail | null>(null);
   const [result, setResult] = useState<CheckpointResult | null>(null);
   const [resultPending, setResultPending] = useState(false);
   const [resultLoading, setResultLoading] = useState(true);
   const [resultError, setResultError] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const reload = useCallback(() => setReloadKey((value) => value + 1), []);
 
   useEffect(() => {
     if (!attemptId) return;
@@ -78,6 +87,38 @@ export default function CheckpointSummaryPage() {
     };
   }, [attemptId, navigate, reloadKey]);
 
+  // A multi-attempt checkpoint stays open after submitting, so the summary needs
+  // the checkpoint state to offer the next attempt and keep the header locked.
+  useEffect(() => {
+    const checkpointId = attempt?.checkpointId;
+    if (!checkpointId) return;
+
+    let cancelled = false;
+    getMyCheckpoint(checkpointId)
+      .then((detail) => {
+        if (!cancelled) setCheckpointDetail(detail);
+      })
+      .catch(() => {
+        // The submission is still readable even if the checkpoint cannot refresh.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt?.checkpointId, reloadKey]);
+
+  // After a submission the checkpoint can still accept another attempt while
+  // its entry window is open. Keep the app locked to the checkpoint until then.
+  const canStartAnother = checkpointDetail?.canStart === true && checkpointDetail.attemptsUsed > 0;
+  const entryWindowClosesAt =
+    checkpointDetail && canStartAnother
+      ? new Date(checkpointDetail.startAt).getTime() + checkpointDetail.durationMinutes * 60_000
+      : null;
+
+  // Re-fetch at the entry-window boundary so the header unlocks and the next
+  // attempt disappears exactly when the window closes.
+  useCheckpointRefreshAt(entryWindowClosesAt, checkpointDetail?.serverNow, reload);
+
   if (error) {
     return (
       <>
@@ -107,10 +148,11 @@ export default function CheckpointSummaryPage() {
 
   const passed = result?.passed === true;
   const canShowResult = Boolean(result?.visible);
+  const nextAttemptNumber = (checkpointDetail?.attemptsUsed ?? attempt.attemptNumber) + 1;
 
   return (
     <>
-      <Header />
+      <Header locked={canStartAnother} />
       <main className={styles.page}>
         <Link to="/checkpoints" className={styles.backLink}>
           <ArrowLeft size={14} /> All checkpoints
@@ -291,14 +333,24 @@ export default function CheckpointSummaryPage() {
                     : 'The score will appear here once grading is complete.'}
               </p>
               <p className={styles.muted}>
-                You can leave this page. Return to checkpoints later to see the result.
+                {canStartAnother
+                  ? `You have another attempt available. Start attempt ${nextAttemptNumber} before the checkpoint window closes.`
+                  : 'You can leave this page. Return to checkpoints later to see the result.'}
               </p>
             </div>
           </section>
         )}
 
         <div className={styles.summaryActions}>
-          <Link to="/checkpoints" className={styles.primaryButton}>
+          {canStartAnother && (
+            <Link to={`/checkpoints/${attempt.checkpointId}`} className={styles.primaryButton}>
+              Start attempt {nextAttemptNumber} <ArrowRight size={14} />
+            </Link>
+          )}
+          <Link
+            to="/checkpoints"
+            className={canStartAnother ? styles.secondaryButton : styles.primaryButton}
+          >
             <ArrowLeft size={14} /> Back to checkpoints
           </Link>
         </div>
