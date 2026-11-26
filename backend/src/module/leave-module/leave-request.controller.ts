@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { LeaveRequest } from '@itp/types';
+import type { LeaveRequest, LeaveCountResponse } from '@itp/types';
 import { ForbiddenError } from '../../errors/AppError';
 import type { AuthenticatedRequest } from '../../types/auth.types';
 import type { LeaveReviewer } from './leave-request.repository';
@@ -82,6 +82,29 @@ class LeaveRequestController {
         req.body as ReviewLeaveRequestBody
       );
       res.status(200).json(reviewed);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getUnreadCount = async (req: Request, res: Response<LeaveCountResponse>, next: NextFunction) => {
+    try {
+      const traineeId = (req as AuthenticatedRequest).user.id;
+      // `?since=<ISO>` — the client sends the last time it opened the leave list.
+      const sinceParam = req.query.since;
+      const since =
+        typeof sinceParam === 'string' && sinceParam !== '' ? new Date(sinceParam) : null;
+      const count = await leaveRequestService.countDecidedSince(traineeId, since);
+      res.status(200).json({ count });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getPendingCount = async (req: Request, res: Response<LeaveCountResponse>, next: NextFunction) => {
+    try {
+      const count = await leaveRequestService.countPendingForReviewer(reviewerFrom(req));
+      res.status(200).json({ count });
     } catch (error) {
       next(error);
     }

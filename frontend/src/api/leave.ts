@@ -1,4 +1,9 @@
-import type { CreateLeaveRequestInput, LeaveRequest, ReviewLeaveRequestInput } from '@itp/types';
+import type {
+  CreateLeaveRequestInput,
+  LeaveRequest,
+  ReviewLeaveRequestInput,
+  LeaveCountResponse,
+} from '@itp/types';
 import { apiClient } from './client';
 
 /** Staff paths differ only by the role guard already applied on the server. */
@@ -44,4 +49,21 @@ export async function reviewLeaveRequest(
     body
   );
   return res.data;
+}
+
+export async function getUnreadLeaveCount(since: string | null): Promise<number> {
+  const params = since ? { since } : undefined;
+  const { data } = await apiClient.get<LeaveCountResponse>('/leave-requests/unread-count', {
+    params,
+  });
+  return data.count;
+}
+
+export async function getPendingLeaveCount(role: 'mentor' | 'manager'): Promise<number> {
+  const path =
+    role === 'manager'
+      ? '/manager/leave-requests/pending-count'
+      : '/admin/leave-requests/pending-count';
+  const { data } = await apiClient.get<LeaveCountResponse>(path);
+  return data.count;
 }

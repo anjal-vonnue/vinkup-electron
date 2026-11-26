@@ -4,10 +4,14 @@ import { useAuth } from '../../context/Useauth';
 import styles from './Header.module.css';
 import { useActivity } from '../../context/useActivity';
 import { matchPath, NavLink, useLocation } from 'react-router';
-import { ConfirmPopover } from '../Common/ConfirmDialog'; // adjust path if needed
+import { ConfirmPopover } from '../Common/ConfirmDialog';
 import ThemeToggle from '../ThemeToggle';
 import { useWorkspaceSession } from '../../context/WorkspaceSessionContext';
+
 import { useCheckpointNotifications } from './useCheckpointNotifications';
+
+import NotificationBadge from '../NotificationBadge/NotificationBadge';
+import { getUnreadLeaveCount } from '../../api/leave';
 
 type HeaderProps = {
   /** Replaces the app name on the left. The task page puts its breadcrumb here. */
@@ -206,6 +210,34 @@ export default function Header({ leading, status, locked = false }: HeaderProps)
     secondaryResourcesActive: false,
   });
 
+  const [unreadLeaveCount, setUnreadLeaveCount] = useState(0);
+
+  const isOnLeavePage = location.pathname.startsWith('/leave-requests');
+  // Derived: on the leave page, everything visible is already "seen".
+  const displayedLeaveCount = isOnLeavePage ? 0 : unreadLeaveCount;
+
+  useEffect(() => {
+    if (!user || user.role !== 'trainee') return;
+
+    if (isOnLeavePage) {
+      // Side effect only. The rendered count is derived above, so no setState here.
+      localStorage.setItem('vinkup.leave.lastSeen', new Date().toISOString());
+      return;
+    }
+
+    let cancelled = false;
+    const since = localStorage.getItem('vinkup.leave.lastSeen');
+    void getUnreadLeaveCount(since)
+      .then((count) => {
+        if (!cancelled) setUnreadLeaveCount(count);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnLeavePage, user]);
+
   useEffect(() => {
     const desktopWindow = window.desktop?.window;
     if (!desktopWindow) return;
@@ -380,6 +412,11 @@ export default function Header({ leading, status, locked = false }: HeaderProps)
           >
             <LeaveIcon />
             <NavLabel text="Leave" />
+            <NotificationBadge
+              count={displayedLeaveCount}
+              label={displayedLeaveCount === 1 ? 'unread leave decision' : 'unread leave decisions'}
+              tone="attention"
+            />
           </NavLink>
           <NavLink
             to="/resources"

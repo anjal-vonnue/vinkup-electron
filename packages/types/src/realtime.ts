@@ -76,6 +76,7 @@ export type TraineeReassignedEvent = {
 };
 
 /**
+<<<<<<< HEAD
  * A manager scheduled a checkpoint, making it visible to its assigned trainees.
  * Sent to every trainee the checkpoint reaches, so the Checkpoints tab can show
  * an unread indicator.
@@ -101,6 +102,29 @@ export type CheckpointResultsPublishedEvent = {
   /** When the results became visible to trainees. */
   publishedAt: string;
 };
+/**
+ * A trainee submitted a leave request; sent to their assigned mentor so the
+ * Leave requests badge can tick up without a reload.
+ */
+export type LeaveSubmittedEvent = {
+  type: 'leave.submitted';
+  traineeId: string;
+  traineeName: string;
+  requestId: string;
+  subject: string;
+};
+
+/**
+ * A mentor or manager approved or rejected a leave request; sent to the
+ * trainee so the Leave badge can tick up without a reload. Manager overrides
+ * re-fire this, because `reviewed_at` moves and the trainee should re-badge.
+ */
+export type LeaveReviewedEvent = {
+  type: 'leave.reviewed';
+  traineeId: string;
+  requestId: string;
+  decision: 'APPROVED' | 'REJECTED';
+};
 
 export type RealtimeEvent =
   | TaskReviewedEvent
@@ -109,4 +133,6 @@ export type RealtimeEvent =
   | FlagCreatedEvent
   | TraineeReassignedEvent
   | CheckpointPublishedEvent
-  | CheckpointResultsPublishedEvent;
+  | CheckpointResultsPublishedEvent
+  | LeaveSubmittedEvent
+  | LeaveReviewedEvent;
