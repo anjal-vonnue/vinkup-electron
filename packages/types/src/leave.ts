@@ -55,3 +55,7 @@ export type ReviewLeaveRequestInput = {
   decision: LeaveDecision;
   feedback?: string;
 };
+
+export interface LeaveCountResponse {
+  count: number;
+}

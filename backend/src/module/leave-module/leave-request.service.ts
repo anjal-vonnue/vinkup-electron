@@ -6,6 +6,8 @@ import type {
 } from '@itp/types';
 import { env } from '../../config/env';
 import { ConflictError, NotFoundError } from '../../errors/AppError';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
+import type { RealtimeEvent } from '@itp/types';
 import { SlackNotificationRepository } from '../slack-module/slack-notification.repository';
 import {
   LeaveRequestRepository,
@@ -39,7 +41,6 @@ function toLeaveRequest(row: LeaveRow): LeaveRequest {
       reviewerId: review.reviewer_id,
       reviewerName: review.reviewer_name,
       reviewerRole: review.reviewer_role,
-      // The leave_review decision_is_final CHECK excludes PENDING.
       decision: review.decision as LeaveDecision,
       feedback: review.feedback,
       reviewedAt: review.reviewed_at.toISOString(),
@@ -80,17 +81,40 @@ async function queueSlackNotification(row: LeaveRow): Promise<void> {
   }
 }
 
+/**
+ * Fire-and-forget realtime publish. A badge that lags a second is fine;
+ * failing the request because the SSE broker hiccupped is not.
+ */
+function publishBadgeUpdate(userId: string | null | undefined, event: RealtimeEvent): void {
+  if (!userId) return;
+  try {
+    realtimeBroker.publish(userId, event);
+  } catch (error) {
+    console.error('[leave] failed to publish badge update', { userId, event, error });
+  }
+}
+
 export class LeaveRequestService {
   // ---------- Trainee actions ----------
 
   create = async (traineeId: string, input: CreateLeaveRequestInput): Promise<LeaveRequest> => {
     const record: CreateLeaveRequestRecord = {
-      traineeId, // always the authenticated trainee, never a body value
+      traineeId,
       subject: input.subject.trim(),
       reason: input.reason.trim(),
     };
     const row = await leaveRequestRepository.create(record);
     await queueSlackNotification(row);
+
+    // Mentor's pending badge ticks up.
+    publishBadgeUpdate(row.trainee.mentor?.id, {
+      type: 'leave.submitted',
+      traineeId: row.trainee_id,
+      traineeName: row.trainee.name,
+      requestId: row.id,
+      subject: row.subject,
+    });
+
     return toLeaveRequest(row);
   };
 
@@ -142,8 +166,39 @@ export class LeaveRequestService {
         'This leave request was already reviewed while you were writing yours.'
       );
     }
+
+    const event: RealtimeEvent = {
+      type: 'leave.reviewed',
+      traineeId: outcome.request.trainee_id,
+      requestId: outcome.request.id,
+      decision: outcome.request.status === 'APPROVED' ? 'APPROVED' : 'REJECTED',
+    };
+
+    // Trainee — their Leave badge reflects "decision is ready to read".
+    publishBadgeUpdate(outcome.request.trainee_id, event);
+
+    // Reviewer — their own pending badge should drop by one.
+    publishBadgeUpdate(reviewer.id, event);
+
+    // Trainee's assigned mentor — when a manager overrides, the mentor's badge
+    // should also drop. Skip if it's the same person (already covered above).
+    const mentorId = outcome.request.trainee.mentor?.id;
+    if (mentorId && mentorId !== reviewer.id) {
+      publishBadgeUpdate(mentorId, event);
+    }
+
     return toLeaveRequest(outcome.request);
   };
+
+  // ---------- Header badge counts ----------
+
+  async countDecidedSince(traineeId: string, since: Date | null): Promise<number> {
+    return leaveRequestRepository.countDecidedSince(traineeId, since);
+  }
+
+  async countPendingForReviewer(reviewer: LeaveReviewer): Promise<number> {
+    return leaveRequestRepository.countPendingForReviewer(reviewer);
+  }
 }
 
 export const leaveRequestService = new LeaveRequestService();

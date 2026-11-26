@@ -1,0 +1,25 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.attention {
+  color: var(--color-status-error-text);
+  background-color: var(--color-status-error-tint);
+  border: 1px solid var(--color-status-error-border, rgba(248, 113, 113, 0.4));
+}
+
+.pending {
+  color: var(--color-status-warning);
+  background-color: var(--color-status-warning-bg);
+  border: 1px solid var(--color-status-warning-border);
+}
