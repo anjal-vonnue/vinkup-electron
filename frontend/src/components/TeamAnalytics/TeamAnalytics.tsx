@@ -1,12 +1,19 @@
 import { useEffect, useId, useState } from 'react';
 import type { AdminAnalytics, AdminTraineeSummary } from '@itp/types';
 import { getAdminAnalytics } from '../../api/admin';
-import { ANALYTICS_PERIODS, DEFAULT_PERIOD_DAYS, periodRange } from '../../lib/analyticsRange';
+import {
+  ANALYTICS_PERIODS,
+  CUSTOM_PERIOD,
+  DEFAULT_PERIOD_DAYS,
+  customRangeError,
+  periodRange,
+} from '../../lib/analyticsRange';
 import { formatDurationHM } from '../../lib/formatTime';
 import { INTEGRITY_MID_MIN } from '../../lib/Integrityband';
+import { todayKey } from '../../lib/platformDate';
 import LoaderOverlay from '../Common/LoadingState';
 import { ErrorState } from '../Common/ErrorState';
-import { formatLongDate } from './chartFormat';
+import { formatDateRange } from './chartFormat';
 import ProgressTrendChart from './ProgressTrendChart';
 import TraineeComparisonChart from './TraineeComparisonChart';
 import TaskStatusChart from './TaskStatusChart';
@@ -27,19 +34,38 @@ type Result =
 /** Team analytics between the summary cards and the trainee table on /admin. */
 export default function TeamAnalytics({ trainees, attentionReasons }: TeamAnalyticsProps) {
   const titleId = useId();
-  const [periodDays, setPeriodDays] = useState<number>(DEFAULT_PERIOD_DAYS);
+  const rangeErrorId = useId();
+  // A preset's number of days as text ('30'), or CUSTOM_PERIOD.
+  const [period, setPeriod] = useState(String(DEFAULT_PERIOD_DAYS));
+  const [customFrom, setCustomFrom] = useState(''); // 'YYYY-MM-DD'
+  const [customTo, setCustomTo] = useState('');
   const [traineeId, setTraineeId] = useState(''); // '' = whole team
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
 
+  const isCustom = period === CUSTOM_PERIOD;
+  const today = todayKey();
+  const { from, to } = isCustom ? { from: customFrom, to: customTo } : periodRange(Number(period));
+  // While the custom range breaks a rule, nothing is sent and the last charts stay.
+  const rangeError = isCustom ? customRangeError(customFrom, customTo, today) : null;
+
   // A different key means the filters changed, so the shown result is out of date.
-  const requestKey = `${periodDays}|${traineeId}|${attempt}`;
-  const isLoading = result?.key !== requestKey;
+  const requestKey = `${from}|${to}|${traineeId}|${attempt}`;
+  const isLoading = rangeError === null && result?.key !== requestKey;
+
+  function changePeriod(value: string) {
+    // Start a custom range from the dates of the period shown so far.
+    if (value === CUSTOM_PERIOD && !isCustom) {
+      setCustomFrom(from);
+      setCustomTo(to);
+    }
+    setPeriod(value);
+  }
 
   useEffect(() => {
+    if (rangeError !== null) return;
     // Ignore an answer that arrives after the filters changed again.
     let isCancelled = false;
-    const { from, to } = periodRange(periodDays);
 
     getAdminAnalytics({ from, to, traineeId: traineeId || undefined })
       .then((data) => {
@@ -53,7 +79,7 @@ export default function TeamAnalytics({ trainees, attentionReasons }: TeamAnalyt
     return () => {
       isCancelled = true;
     };
-  }, [periodDays, traineeId, attempt, requestKey]);
+  }, [from, to, traineeId, rangeError, requestKey]);
 
   const analytics = result?.data ?? null;
   const selectedName = trainees.find((trainee) => trainee.id === traineeId)?.name;
@@ -67,7 +93,7 @@ export default function TeamAnalytics({ trainees, attentionReasons }: TeamAnalyt
           </h2>
           <p className={styles.subtitle}>
             {selectedName ?? 'Whole team'}
-            {analytics && ` · ${formatLongDate(analytics.from)} – ${formatLongDate(analytics.to)}`}
+            {analytics && ` · ${formatDateRange(analytics.from, analytics.to)}`}
           </p>
         </div>
 
@@ -95,17 +121,52 @@ export default function TeamAnalytics({ trainees, attentionReasons }: TeamAnalyt
             <span className={styles.selectBox}>
               <select
                 className={styles.select}
-                value={periodDays}
-                onChange={(event) => setPeriodDays(Number(event.target.value))}
+                value={period}
+                onChange={(event) => changePeriod(event.target.value)}
               >
-                {ANALYTICS_PERIODS.map((period) => (
-                  <option key={period.days} value={period.days}>
-                    {period.label}
+                {ANALYTICS_PERIODS.map((preset) => (
+                  <option key={preset.days} value={String(preset.days)}>
+                    {preset.label}
                   </option>
                 ))}
+                <option value={CUSTOM_PERIOD}>Custom range</option>
               </select>
             </span>
           </label>
+
+          {isCustom && (
+            <>
+              <label className={styles.filterLabel}>
+                From
+                <input
+                  type="date"
+                  className={styles.dateInput}
+                  value={customFrom}
+                  max={today}
+                  onChange={(event) => setCustomFrom(event.target.value)}
+                  aria-invalid={rangeError !== null}
+                  aria-describedby={rangeError ? rangeErrorId : undefined}
+                />
+              </label>
+              <label className={styles.filterLabel}>
+                To
+                <input
+                  type="date"
+                  className={styles.dateInput}
+                  value={customTo}
+                  max={today}
+                  onChange={(event) => setCustomTo(event.target.value)}
+                  aria-invalid={rangeError !== null}
+                  aria-describedby={rangeError ? rangeErrorId : undefined}
+                />
+              </label>
+              {rangeError && (
+                <p id={rangeErrorId} role="alert" className={styles.rangeError}>
+                  {rangeError}
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
 

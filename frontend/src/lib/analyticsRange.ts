@@ -10,7 +10,36 @@ export const ANALYTICS_PERIODS = [
 
 export const DEFAULT_PERIOD_DAYS = 30;
 
+/** The "Custom range" option: the mentor picks From and To. */
+export const CUSTOM_PERIOD = 'custom';
+
+/** The longest range the backend accepts, in days (both ends included). */
+export const MAX_RANGE_DAYS = 366;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Number of calendar days from `from` to `to`, both included (same formula as the backend). */
+function daysInRange(from: string, to: string): number {
+  return (Date.parse(to) - Date.parse(from)) / DAY_MS + 1;
+}
+
+/**
+ * Why a custom range can't be used, or null when it is fine. Same rules as the backend.
+ * Dates are 'YYYY-MM-DD'; `today` is today in India time.
+ */
+export function customRangeError(
+  from: string,
+  to: string,
+  today: string = todayKey()
+): string | null {
+  if (!from || !to) return 'Choose both dates.';
+  if (to > today) return '“To” can’t be after today.';
+  if (from > to) return '“From” must be on or before “To”.';
+  if (daysInRange(from, to) > MAX_RANGE_DAYS) {
+    return `Choose a range of at most ${MAX_RANGE_DAYS} days.`;
+  }
+  return null;
+}
 
 /**
  * The last `days` calendar days in India time, today included, as the API's `from` and `to`.
