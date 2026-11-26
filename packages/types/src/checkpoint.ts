@@ -237,6 +237,8 @@ export type TraineeCheckpointSummary = {
   serverNow: string;
   canStart: boolean;
   blockedReason: string | null;
+  /** When a manager published the results, or null while they are private. */
+  resultsPublishedAt: string | null;
   attempt: TraineeCheckpointAttemptSummary | null;
 };
 
@@ -247,7 +249,6 @@ export type TraineeCheckpointDetail = TraineeCheckpointSummary & {
   maxAttempts: number;
   attemptsUsed: number;
   resultVisibility: CheckpointResultVisibility;
-  resultsPublishedAt: string | null;
 };
 
 export type TraineeCheckpointAnswer = {

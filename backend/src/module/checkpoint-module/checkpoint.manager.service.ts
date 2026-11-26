@@ -11,6 +11,7 @@ import type {
   ParsedCheckpointQuestion,
 } from '@itp/types';
 import { AppError, NotFoundError, ValidationError } from '../../errors/AppError';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
 import { parseCheckpointMarkdown } from './checkpoint.markdown';
 import {
   assignedTraineeIds,
@@ -351,6 +352,19 @@ export class CheckpointManagerService {
 
     const published = await repository.publishCheckpoint(checkpointId, existing.start_at);
     console.info(`[checkpoint] ${managerId} scheduled checkpoint ${checkpointId}`);
+
+    // Let every assigned trainee's Checkpoints tab show the new assessment
+    // without a reload. The REST list remains the source of truth.
+    const publishedAt = new Date().toISOString();
+    const event = {
+      type: 'checkpoint.published' as const,
+      checkpointId,
+      checkpointTitle: published.title,
+      startAt: (published.start_at ?? existing.start_at).toISOString(),
+      publishedAt,
+    };
+    for (const traineeId of assigned) realtimeBroker.publish(traineeId, event);
+
     return toManagerDetail(published);
   };
 
@@ -372,6 +386,18 @@ export class CheckpointManagerService {
     if (!existing) throw new NotFoundError('Checkpoint not found.');
     const updated = await repository.publishResults(checkpointId, new Date());
     console.info(`[checkpoint] ${managerId} published results for checkpoint ${checkpointId}`);
+
+    // Only trainees who actually attempted the checkpoint have a result to see.
+    const attempts = (await repository.listAttemptsForCheckpoint(checkpointId)) ?? [];
+    const recipients = new Set(attempts.map((attempt) => attempt.trainee_id));
+    const event = {
+      type: 'checkpoint.results.published' as const,
+      checkpointId,
+      checkpointTitle: updated.title,
+      publishedAt: (updated.results_published_at ?? new Date()).toISOString(),
+    };
+    for (const traineeId of recipients) realtimeBroker.publish(traineeId, event);
+
     return toManagerDetail(updated);
   };
 

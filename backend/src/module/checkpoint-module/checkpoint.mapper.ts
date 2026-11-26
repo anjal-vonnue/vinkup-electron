@@ -329,6 +329,7 @@ export function toTraineeSummary(row: TraineeListRow, now: Date): TraineeCheckpo
     serverNow: now.toISOString(),
     canStart,
     blockedReason,
+    resultsPublishedAt: iso(row.results_published_at),
     attempt: latest
       ? attemptSummary(latest, {
           total_marks: row.total_marks,
@@ -358,7 +359,6 @@ export function toTraineeDetail(row: TraineeDetailRow, now: Date): TraineeCheckp
     maxAttempts: row.max_attempts,
     attemptsUsed: row.attempts.length,
     resultVisibility: row.result_visibility,
-    resultsPublishedAt: iso(row.results_published_at),
     canStart: latest?.status === 'IN_PROGRESS' ? true : base.canStart,
     blockedReason:
       latest?.status === 'IN_PROGRESS' ? 'Resume your open attempt.' : base.blockedReason,

@@ -7,6 +7,7 @@ import { matchPath, NavLink, useLocation } from 'react-router';
 import { ConfirmPopover } from '../Common/ConfirmDialog'; // adjust path if needed
 import ThemeToggle from '../ThemeToggle';
 import { useWorkspaceSession } from '../../context/WorkspaceSessionContext';
+import { useCheckpointNotifications } from './useCheckpointNotifications';
 
 type HeaderProps = {
   /** Replaces the app name on the left. The task page puts its breadcrumb here. */
@@ -180,6 +181,7 @@ export default function Header({ leading, status, locked = false }: HeaderProps)
   const { user, logout } = useAuth();
   const location = useLocation();
   const { exitWorkspace } = useWorkspaceSession();
+  const { hasUnread: hasUnreadCheckpoints } = useCheckpointNotifications();
   // The Home link is shared by every page. Only when it is shown *inside* the
   // workspace is it an intentional exit rather than a return to saved work.
   const isInWorkspace = Boolean(matchPath('/tasks/:taskId', location.pathname));
@@ -349,7 +351,16 @@ export default function Header({ leading, status, locked = false }: HeaderProps)
               }`
             }
           >
-            <CheckpointIcon />
+            <span className={styles.navIcon}>
+              <CheckpointIcon />
+              {hasUnreadCheckpoints && !isInCheckpoint ? (
+                <span
+                  className={styles.notificationDot}
+                  title="New checkpoint update"
+                  aria-hidden="true"
+                />
+              ) : null}
+            </span>
             <NavLabel text="Checkpoints" />
           </NavLink>
           <NavLink

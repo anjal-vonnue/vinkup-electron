@@ -1,9 +1,16 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import Header from './Header';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
 const mockLogout = vi.fn();
+const { mockCheckpointNotifications } = vi.hoisted(() => ({
+  mockCheckpointNotifications: vi.fn<() => { hasUnread: boolean }>(),
+}));
+
+vi.mock('./useCheckpointNotifications', () => ({
+  useCheckpointNotifications: () => mockCheckpointNotifications(),
+}));
 
 vi.mock('../../context/Useauth', () => ({
   useAuth: () => ({
@@ -16,6 +23,10 @@ vi.mock('../../context/Useauth', () => ({
     logout: mockLogout,
   }),
 }));
+
+beforeEach(() => {
+  mockCheckpointNotifications.mockReturnValue({ hasUnread: false });
+});
 
 afterEach(() => {
   cleanup();
@@ -335,5 +346,29 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Journal' }));
     expect(screen.getByRole('link', { name: 'Home' }).className).not.toMatch(/active/);
     expect(screen.getByRole('link', { name: 'Journal' }).className).toMatch(/active/);
+  });
+
+  it('shows an unread dot on the Checkpoints link when there is a new checkpoint or result', () => {
+    mockCheckpointNotifications.mockReturnValue({ hasUnread: true });
+
+    render(
+      <MemoryRouter>
+        <Header />
+      </MemoryRouter>
+    );
+
+    const dot = screen.getByTitle('New checkpoint update');
+    expect(dot).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Checkpoints' })).toContainElement(dot);
+  });
+
+  it('does not show the unread dot when nothing new is available', () => {
+    render(
+      <MemoryRouter>
+        <Header />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByTitle('New checkpoint update')).not.toBeInTheDocument();
   });
 });

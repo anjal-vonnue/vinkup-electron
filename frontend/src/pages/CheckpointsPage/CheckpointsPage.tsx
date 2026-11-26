@@ -15,6 +15,7 @@ import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import { getMyCheckpoints } from '../../api/checkpoints';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import { availabilityMeta, formatDuration } from './checkpointUi';
 import { useCheckpointRefreshAt } from './useCheckpointRefreshAt';
 import styles from './Checkpoints.module.css';
@@ -143,6 +144,15 @@ export default function CheckpointsPage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  // A checkpoint published or results released while the list is open should
+  // appear without the trainee pressing Refresh.
+  useRealtimeEvent((event) => {
+    if (event.type === 'checkpoint.published' || event.type === 'checkpoint.results.published') {
+      reload();
+    }
+  });
+  useRealtimeRefresh(reload);
 
   useEffect(() => {
     let cancelled = false;

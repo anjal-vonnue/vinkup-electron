@@ -64,6 +64,38 @@
   flex-shrink: 0;
 }
 
+/* Wraps the Checkpoints icon so the unread dot can sit on its corner. */
+.navIcon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notificationDot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-accent-purple);
+  box-shadow: 0 0 0 2px var(--color-bg-panel);
+  animation: notificationPulse 2s ease-in-out infinite;
+}
+
+@keyframes notificationPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.75;
+  }
+}
+
 .link:hover {
   color: var(--color-text-primary);
 }

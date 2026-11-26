@@ -52,6 +52,9 @@ vi.mock('./checkpoint.repository', () => ({
 }));
 
 import { CheckpointManagerService } from './checkpoint.manager.service';
+import { realtimeBroker } from '../realtime-module/realtime.broker';
+
+const publishSpy = vi.spyOn(realtimeBroker, 'publish');
 
 const managerId = 'manager-1';
 const checkpointId = 'checkpoint-1';
@@ -344,6 +347,10 @@ describe('CheckpointManagerService', () => {
 
       expect(published.status).toBe('SCHEDULED');
       expect(repo.publishCheckpoint).toHaveBeenCalledWith(checkpointId, startAt);
+      expect(publishSpy).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ type: 'checkpoint.published', checkpointId })
+      );
     });
 
     it('publishes when a group still has at least one active member', async () => {
@@ -570,11 +577,16 @@ describe('CheckpointManagerService', () => {
     it('stamps the publication time', async () => {
       repo.findCheckpointDetail.mockResolvedValue(checkpointRow());
       repo.publishResults.mockResolvedValue(checkpointRow({ results_published_at: new Date() }));
+      repo.listAttemptsForCheckpoint.mockResolvedValue([attemptRow()]);
 
       const updated = await service.publishResults(managerId, checkpointId);
 
       expect(updated.resultsPublishedAt).not.toBeNull();
       expect(repo.publishResults).toHaveBeenCalledWith(checkpointId, expect.any(Date));
+      expect(publishSpy).toHaveBeenCalledWith(
+        'trainee-1',
+        expect.objectContaining({ type: 'checkpoint.results.published', checkpointId })
+      );
     });
   });
 });
