@@ -415,6 +415,13 @@ function createMainWindow(): BrowserWindow {
     openExternal(url);
   });
 
+  window.webContents.on('will-prevent-unload', (event) => {
+    // A checkpoint attempt keeps a beforeunload guard in the renderer. That
+    // guard must not win once the app is really quitting, otherwise "Exit app"
+    // only closes the secondary display while the main window stays open.
+    if (isQuitReady) event.preventDefault();
+  });
+
   window.webContents.on('before-input-event', (event, input) => {
     const key = input.key.toLowerCase();
     const moveToNextDisplay =
