@@ -57,7 +57,8 @@ export default function ProgressTrendChart({ points, isOneTrainee }: ProgressTre
             dataKey="averageDaysCompleted"
             stroke="var(--color-accent-purple)"
             strokeWidth={2}
-            dot={false}
+            // One day has no line to draw, so show its point instead.
+            dot={points.length === 1 ? { r: 4 } : false}
             activeDot={{ r: 4 }}
             animationDuration={800}
           />

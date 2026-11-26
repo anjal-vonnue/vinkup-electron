@@ -9,7 +9,7 @@ import {
   YAxis,
 } from 'recharts';
 import ChartCard from './ChartCard';
-import { axisTick, formatLongDate, formatShortDate, tooltipStyle } from './chartFormat';
+import { axisTick, formatLongDate, formatShortDate, timeAxis, tooltipStyle } from './chartFormat';
 
 /** One day with data. Days without data are simply missing (never shown as 0). */
 export type TrendPoint = { date: string; value: number; count: number };
@@ -52,6 +52,7 @@ export default function TrendLineChart({
   const first = points[0];
   const last = points[points.length - 1];
   const change = first && last ? last.value - first.value : 0;
+  const axis = timeAxis(from, to);
 
   return (
     <ChartCard
@@ -72,7 +73,8 @@ export default function TrendLineChart({
             dataKey="time"
             type="number"
             scale="time"
-            domain={[toTime(from), toTime(to)]}
+            domain={axis.domain}
+            ticks={axis.ticks}
             tickFormatter={(time: number) => formatShortDate(toDate(time))}
             tick={axisTick}
             minTickGap={24}

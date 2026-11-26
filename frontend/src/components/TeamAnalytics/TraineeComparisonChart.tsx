@@ -120,7 +120,15 @@ export default function TraineeComparisonChart({
                 : [formatDurationHM(row.codingSeconds), 'Coding time'];
             }}
           />
-          <Bar dataKey="value" barSize={16} radius={[0, 4, 4, 0]} animationDuration={800}>
+          {/* The Bar's own fill is the colour the tooltip uses for the value, like the other
+              charts' line colour; the Cells below still draw each bar. */}
+          <Bar
+            dataKey="value"
+            fill="var(--color-accent-purple)"
+            barSize={16}
+            radius={[0, 4, 4, 0]}
+            animationDuration={800}
+          >
             {bars.map((bar) => (
               <Cell
                 key={bar.traineeId}

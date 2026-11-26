@@ -92,6 +92,37 @@
   outline-offset: 2px;
 }
 
+/* Native date picker, styled like the dropdowns. Its calendar follows the theme's color-scheme. */
+.dateInput {
+  height: 36px;
+  padding: 0 10px;
+
+  font: inherit;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+}
+
+.dateInput:focus-visible {
+  outline: 2px solid var(--color-accent-purple);
+  outline-offset: 2px;
+}
+
+.dateInput[aria-invalid='true'] {
+  border-color: var(--color-status-error-text);
+}
+
+/* Full width under the filters. */
+.rangeError {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-status-error-text);
+}
+
 /* Positioned, so the loading overlay covers only this area. */
 .body {
   position: relative;
@@ -156,7 +187,8 @@
   .filters,
   .filterLabel,
   .selectBox,
-  .select {
+  .select,
+  .dateInput {
     width: 100%;
   }
 

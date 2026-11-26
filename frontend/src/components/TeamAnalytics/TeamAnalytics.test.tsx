@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminAnalytics, AdminAnalyticsQuery } from '@itp/types';
@@ -126,6 +126,154 @@ describe('TeamAnalytics: loading and filters', () => {
 
     expect(screen.queryByText('999')).not.toBeInTheDocument();
     expect(screen.getByText(new RegExp(`^${trainees[0].name} ·`))).toBeInTheDocument();
+  });
+});
+
+describe('TeamAnalytics: custom range', () => {
+  /** Opens "Custom range" after the first load. */
+  async function openCustomRange() {
+    const user = userEvent.setup();
+    renderAnalytics();
+    await screen.findByText('Days completed');
+    await user.selectOptions(screen.getByLabelText('Period'), 'custom');
+    return user;
+  }
+
+  /** Native date inputs: set the value the way the browser's picker does. */
+  function pickDates(from: string, to: string) {
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: from } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: to } });
+  }
+
+  it('shows From and To, filled in with the period shown so far', async () => {
+    await openCustomRange();
+
+    const last30 = periodRange(30);
+    expect(screen.getByLabelText('From')).toHaveValue(last30.from);
+    expect(screen.getByLabelText('To')).toHaveValue(last30.to);
+    expect(screen.getByLabelText('To')).toHaveAttribute('max', todayKey());
+    // Same dates as before, so no new request.
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for the chosen range and names it in the subtitle', async () => {
+    await openCustomRange();
+
+    pickDates('2026-11-01', '2026-11-15');
+
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenLastCalledWith({
+        from: '2026-11-01',
+        to: '2026-11-15',
+        traineeId: undefined,
+      })
+    );
+    expect(await screen.findByText('Whole team · 1 Nov – 15 Nov 2026')).toBeInTheDocument();
+  });
+
+  it('accepts a single day', async () => {
+    await openCustomRange();
+
+    pickDates('2026-11-13', '2026-11-13');
+
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenLastCalledWith({
+        from: '2026-11-13',
+        to: '2026-11-13',
+        traineeId: undefined,
+      })
+    );
+    expect(await screen.findByText('Whole team · 13 Nov 2026')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  /** Changes one date only, so no valid in-between range is sent first. */
+  function pick(label: 'From' | 'To', value: string) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+
+  it('shows a message, sends nothing and keeps the last charts when From is after To', async () => {
+    await openCustomRange();
+    const callsBefore = mockedGet.mock.calls.length;
+
+    // The day before the current From (the 30-day period's first day).
+    pick('To', periodRange(31).from);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('“From” must be on or before “To”.');
+    expect(screen.getByLabelText('From')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('From')).toHaveAccessibleDescription(
+      '“From” must be on or before “To”.'
+    );
+    expect(mockedGet).toHaveBeenCalledTimes(callsBefore);
+    // The last loaded analytics stay, without a loader.
+    expect(screen.getByText('Days completed')).toBeInTheDocument();
+    expect(screen.queryByText('Loading analytics…')).not.toBeInTheDocument();
+  });
+
+  it('does not send a range that ends in the future', async () => {
+    await openCustomRange();
+    const callsBefore = mockedGet.mock.calls.length;
+
+    pick('To', '2999-01-01');
+
+    expect(screen.getByRole('alert')).toHaveTextContent('“To” can’t be after today.');
+    expect(mockedGet).toHaveBeenCalledTimes(callsBefore);
+  });
+
+  it('does not send a range longer than 366 days', async () => {
+    await openCustomRange();
+    const callsBefore = mockedGet.mock.calls.length;
+
+    pick('From', periodRange(400).from); // To stays today
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose a range of at most 366 days.');
+    expect(mockedGet).toHaveBeenCalledTimes(callsBefore);
+  });
+
+  it('sends the range again once it is fixed', async () => {
+    await openCustomRange();
+    pick('From', periodRange(400).from); // too long
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    pick('From', periodRange(10).from);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenLastCalledWith({ ...periodRange(10), traineeId: undefined })
+    );
+  });
+
+  it('works together with the trainee filter', async () => {
+    const user = await openCustomRange();
+    pickDates('2026-11-01', '2026-11-15');
+
+    await user.selectOptions(screen.getByLabelText('Trainee'), trainees[0].id);
+
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenLastCalledWith({
+        from: '2026-11-01',
+        to: '2026-11-15',
+        traineeId: trainees[0].id,
+      })
+    );
+    expect(
+      await screen.findByText(`${trainees[0].name} · 1 Nov – 15 Nov 2026`)
+    ).toBeInTheDocument();
+  });
+
+  it('goes back to a preset: hides the dates and its message, and asks for the preset', async () => {
+    const user = await openCustomRange();
+    pick('To', '2999-01-01');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Period'), '7');
+
+    expect(screen.queryByLabelText('From')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('To')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenLastCalledWith({ ...periodRange(7), traineeId: undefined })
+    );
   });
 });
 
