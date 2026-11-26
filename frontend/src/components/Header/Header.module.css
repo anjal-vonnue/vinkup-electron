@@ -187,6 +187,15 @@
   font-weight: 600;
 }
 
+/* A live checkpoint attempt locks the profile page like the other sections. */
+.profileDisabled,
+.profileDisabled:hover {
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .avatar {
   display: inline-flex;
   align-items: center;

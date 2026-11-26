@@ -455,9 +455,16 @@ export default function Header({ leading, status, locked = false }: HeaderProps)
           <NavLink
             to="/profile"
             aria-label={profileLabel}
-            title={profileLabel}
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : profileLabel}
+            onClick={(event) => {
+              if (isInCheckpoint) event.preventDefault();
+            }}
             className={({ isActive }) =>
-              `${styles.profile} ${isActive ? styles.profileActive : ''}`
+              `${styles.profile} ${isActive ? styles.profileActive : ''} ${
+                isInCheckpoint ? styles.profileDisabled : ''
+              }`
             }
           >
             <span className={styles.avatar} aria-hidden="true">

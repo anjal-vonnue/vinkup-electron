@@ -251,6 +251,12 @@ describe('Header', () => {
       expect(fireEvent.click(link)).toBe(false);
     }
 
+    const profileLink = screen.getByRole('link', { name: 'Rahul Sharma' });
+    expect(profileLink).toHaveAttribute('aria-disabled', 'true');
+    expect(profileLink).toHaveAttribute('tabindex', '-1');
+    expect(profileLink.className).toMatch(/profileDisabled/);
+    expect(fireEvent.click(profileLink)).toBe(false);
+
     expect(screen.queryByText('Journal page')).not.toBeInTheDocument();
   });
 
@@ -264,6 +270,10 @@ describe('Header', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('link', { name: 'Rahul Sharma' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
     const checkpointsLink = screen.getByRole('link', { name: 'Checkpoints' });
     expect(checkpointsLink.className).toMatch(/active/);
     expect(checkpointsLink.className).not.toMatch(/workspaceActive/);
@@ -289,6 +299,11 @@ describe('Header', () => {
       expect(link.className).toMatch(/linkDisabled/);
       expect(fireEvent.click(link)).toBe(false);
     }
+
+    const profileLink = screen.getByRole('link', { name: 'Rahul Sharma' });
+    expect(profileLink).toHaveAttribute('aria-disabled', 'true');
+    expect(profileLink.className).toMatch(/profileDisabled/);
+    expect(fireEvent.click(profileLink)).toBe(false);
 
     expect(screen.queryByText('Journal page')).not.toBeInTheDocument();
   });
