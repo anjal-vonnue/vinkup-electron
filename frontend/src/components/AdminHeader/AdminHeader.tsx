@@ -6,6 +6,7 @@ import styles from './AdminHeader.module.css';
 import ThemeToggle from '../ThemeToggle';
 import NotificationBadge from '../NotificationBadge/NotificationBadge';
 import { getPendingLeaveCount } from '../../api/leave';
+import { useRealtimeEvent } from '../../context/useRealtime';
 
 export type AdminNavItem = {
   to: string;
@@ -157,6 +158,14 @@ export default function AdminHeader({
       setIsLoggingOut(false);
     }
   };
+
+  useRealtimeEvent((event) => {
+    if (event.type !== 'leave.reviewed' && event.type !== 'leave.submitted') return;
+    if (!user || (user.role !== 'mentor' && user.role !== 'manager')) return;
+    void getPendingLeaveCount(user.role)
+      .then(setPendingLeaveCount)
+      .catch(() => undefined);
+  });
 
   return (
     <header className={styles.header}>
