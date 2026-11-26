@@ -153,16 +153,19 @@ export default function CheckpointDetailPage() {
 
         <div className={styles.detailLayout}>
           <section className={styles.detailMain}>
-            <div className={styles.panel}>
-              <h2 className={styles.panelTitle}>Instructions</h2>
-              <div className={styles.instructionBody}>
-                {checkpoint.instructionsMarkdown.trim() ? (
-                  <MarkdownRenderer markdown={checkpoint.instructionsMarkdown} />
-                ) : (
-                  <p className={styles.muted}>No additional instructions were provided.</p>
-                )}
+            {/* The checkpoint instructions stay hidden until the checkpoint opens. */}
+            {checkpoint.availability !== 'UPCOMING' && (
+              <div className={styles.panel}>
+                <h2 className={styles.panelTitle}>Instructions</h2>
+                <div className={styles.instructionBody}>
+                  {checkpoint.instructionsMarkdown.trim() ? (
+                    <MarkdownRenderer markdown={checkpoint.instructionsMarkdown} />
+                  ) : (
+                    <p className={styles.muted}>No additional instructions were provided.</p>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className={styles.panel}>
               <h2 className={styles.panelTitle}>Assessment details</h2>

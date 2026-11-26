@@ -49,8 +49,6 @@ type PracticalWorkspaceProps = {
   submittedFiles?: CheckpointWorkspaceFile[] | null;
   workspaceId: string;
   disabled: boolean;
-  /** Checkpoint-level instructions for the sidebar's Instructions tab. */
-  instructionsMarkdown?: string;
   onFilesChange: (files: CheckpointWorkspaceFile[]) => void;
   onSave: () => void;
   /** Slot rendered after the Run button (timer, save status, submit). */
@@ -65,15 +63,11 @@ function runtimeLabel(runtime: CheckpointQuestion['runtime']): string {
   return 'Node workspace';
 }
 
-function taskFor(
-  question: CheckpointQuestion,
-  workspaceId: string,
-  instructionsMarkdown?: string
-): TaskResponse {
+function taskFor(question: CheckpointQuestion, workspaceId: string): TaskResponse {
   return {
     id: workspaceId,
     title: question.title,
-    instructionsMarkdown: instructionsMarkdown ?? question.promptMarkdown,
+    instructionsMarkdown: question.promptMarkdown,
     isStretchGoal: false,
     sequenceOrder: question.orderIndex,
     estimatedMinutes: null,
@@ -362,7 +356,6 @@ export default function PracticalWorkspace({
   submittedFiles = null,
   workspaceId,
   disabled,
-  instructionsMarkdown,
   onFilesChange,
   onSave,
   toolbarTrailing,
@@ -371,7 +364,7 @@ export default function PracticalWorkspace({
     files: initialFiles.map((file) => ({ path: file.path, content: file.content })),
     updatedAt: null,
   }));
-  const [task] = useState<TaskResponse>(() => taskFor(question, workspaceId, instructionsMarkdown));
+  const [task] = useState<TaskResponse>(() => taskFor(question, workspaceId));
 
   if (disabled) {
     return (

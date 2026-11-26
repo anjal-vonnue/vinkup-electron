@@ -101,7 +101,6 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [instructionsOpen, setInstructionsOpen] = useState(true);
 
   const submitInFlightRef = useRef(false);
 
@@ -388,7 +387,6 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
                 <p className={styles.practicalPromptMeta}>
                   {questionTypeLabel(currentQuestion.type)} · {currentQuestion.marks} marks
                 </p>
-                <MarkdownRenderer markdown={currentQuestion.promptMarkdown} />
               </div>
             )}
             <AnswerEditor
@@ -396,7 +394,6 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
               draft={currentDraft}
               disabled={disabled}
               workspaceId={checkpointWorkspaceId(attempt.id, currentQuestion.orderIndex)}
-              instructionsMarkdown={attempt.instructionsMarkdown}
               onChangeText={(text) => {
                 setFileError(null);
                 autosave.updateText(currentQuestion.id, text);
@@ -425,16 +422,12 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
           </div>
         ) : (
           <div className={styles.questionContent}>
-            <details
-              className={styles.instructions}
-              open={instructionsOpen}
-              onToggle={(event) => setInstructionsOpen(event.currentTarget.open)}
-            >
+            <details key={currentQuestion?.id ?? currentIndex} className={styles.instructions} open>
               <summary>Instructions</summary>
-              {attempt.instructionsMarkdown.trim() ? (
-                <MarkdownRenderer markdown={attempt.instructionsMarkdown} />
+              {currentQuestion?.promptMarkdown.trim() ? (
+                <MarkdownRenderer markdown={currentQuestion.promptMarkdown} />
               ) : (
-                <p className={styles.muted}>No extra instructions were provided.</p>
+                <p className={styles.muted}>No instructions were provided for this question.</p>
               )}
             </details>
 
@@ -449,10 +442,6 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
                   </div>
                   <span className={styles.marksBadge}>{currentQuestion.marks} marks</span>
                 </header>
-
-                <div className={styles.prompt}>
-                  <MarkdownRenderer markdown={currentQuestion.promptMarkdown} />
-                </div>
 
                 <div className={styles.answerArea}>
                   <p className={styles.answerType}>
