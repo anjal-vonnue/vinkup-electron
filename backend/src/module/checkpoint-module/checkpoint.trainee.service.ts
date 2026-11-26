@@ -153,6 +153,7 @@ export class CheckpointTraineeService {
     }
     if (
       !checkpoint.allow_late_entry &&
+      checkpoint.attempts.length === 0 &&
       now.getTime() > checkpoint.start_at.getTime() + LATE_ENTRY_GRACE_MS
     ) {
       throw new AppError(

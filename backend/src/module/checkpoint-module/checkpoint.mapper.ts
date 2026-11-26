@@ -34,7 +34,11 @@ type AttemptWithCheckpointRow = NonNullable<
   Awaited<ReturnType<CheckpointRepository['findAttemptWithCheckpoint']>>
 >;
 
-/** How long after the scheduled start a trainee may still enter when late entry is off. */
+/**
+ * How long after the scheduled start a trainee may still enter when late entry
+ * is off. It only gates the first attempt: once a trainee has entered in time,
+ * the remaining attempts can be used until the checkpoint window closes.
+ */
 export const LATE_ENTRY_GRACE_MS = 10 * 60 * 1000;
 
 function iso(value: Date | null | undefined): string | null {
@@ -183,6 +187,7 @@ function isEntryWindowOpen(input: {
   startAt: Date | null;
   durationMinutes: number;
   allowLateEntry: boolean;
+  hasStarted: boolean;
   now: Date;
 }): boolean {
   if (!input.startAt) return false;
@@ -190,7 +195,11 @@ function isEntryWindowOpen(input: {
   const current = input.now.getTime();
   if (current < start) return false;
   if (current >= start + input.durationMinutes * 60_000) return false;
-  if (!input.allowLateEntry && current > start + LATE_ENTRY_GRACE_MS) return false;
+  // Late entry only restricts the first attempt. A trainee who already entered
+  // during the allowed window keeps access to their remaining attempts.
+  if (!input.allowLateEntry && !input.hasStarted && current > start + LATE_ENTRY_GRACE_MS) {
+    return false;
+  }
   return true;
 }
 
@@ -303,6 +312,7 @@ export function toTraineeSummary(row: TraineeListRow, now: Date): TraineeCheckpo
       startAt: row.start_at,
       durationMinutes: row.duration_minutes,
       allowLateEntry: row.allow_late_entry,
+      hasStarted: attemptsUsed > 0,
       now,
     });
 

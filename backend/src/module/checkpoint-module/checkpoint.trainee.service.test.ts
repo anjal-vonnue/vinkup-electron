@@ -179,6 +179,64 @@ describe('CheckpointTraineeService', () => {
     repo.finalizeAttempt.mockResolvedValue(summaryRow());
   });
 
+  describe('listMine', () => {
+    function listAttempt(overrides: Record<string, unknown> = {}) {
+      const now = Date.now();
+      return {
+        id: attemptId,
+        attempt_number: 1,
+        status: 'SUBMITTED',
+        started_at: new Date(now - 15 * 60_000),
+        deadline_at: new Date(now + 45 * 60_000),
+        submitted_at: new Date(now - 10 * 60_000),
+        submission_reason: 'MANUAL',
+        total_score: 7,
+        graded_at: null,
+        ...overrides,
+      };
+    }
+
+    it('offers another attempt past the late-entry cutoff when the trainee already started', async () => {
+      repo.listTraineeCheckpoints.mockResolvedValue([
+        checkpointRow({
+          start_at: new Date(Date.now() - 20 * 60_000),
+          duration_minutes: 60,
+          max_attempts: 5,
+          allow_late_entry: false,
+          attempts: [listAttempt()],
+        }),
+      ]);
+
+      const [summary] = await service.listMine(traineeId);
+
+      expect(summary).toMatchObject({
+        canStart: true,
+        blockedReason: null,
+        attempt: { id: attemptId, attemptNumber: 1 },
+      });
+    });
+
+    it('keeps the late-entry cutoff for a trainee who has not started', async () => {
+      repo.listTraineeCheckpoints.mockResolvedValue([
+        checkpointRow({
+          start_at: new Date(Date.now() - 20 * 60_000),
+          duration_minutes: 60,
+          max_attempts: 5,
+          allow_late_entry: false,
+          attempts: [],
+        }),
+      ]);
+
+      const [summary] = await service.listMine(traineeId);
+
+      expect(summary).toMatchObject({
+        canStart: false,
+        availability: 'MISSED',
+        blockedReason: 'The entry window for this checkpoint has closed.',
+      });
+    });
+  });
+
   describe('start', () => {
     it('resumes an in-progress attempt instead of creating another', async () => {
       repo.findTraineeCheckpoint.mockResolvedValue(
@@ -226,6 +284,29 @@ describe('CheckpointTraineeService', () => {
       await expect(service.start(traineeId, checkpointId)).rejects.toMatchObject({
         code: 'CHECKPOINT_NOT_AVAILABLE',
       });
+    });
+
+    it('allows another attempt after the late-entry cutoff when the trainee already started', async () => {
+      repo.findTraineeCheckpoint.mockResolvedValue(
+        checkpointRow({
+          start_at: new Date(Date.now() - 20 * 60_000),
+          duration_minutes: 60,
+          max_attempts: 5,
+          allow_late_entry: false,
+          attempts: [
+            {
+              status: 'SUBMITTED',
+              deadline_at: new Date(Date.now() - 5 * 60_000),
+            },
+          ],
+        })
+      );
+      repo.startAttempt.mockResolvedValue(attemptRow({ attempt_number: 2 }));
+
+      const attempt = await service.start(traineeId, checkpointId);
+
+      expect(attempt.attemptNumber).toBe(2);
+      expect(repo.startAttempt).toHaveBeenCalledTimes(1);
     });
 
     it('rejects a checkpoint whose entry window has closed', async () => {
