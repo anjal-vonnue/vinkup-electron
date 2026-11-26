@@ -145,7 +145,10 @@ function inferType(metadata: Metadata, hasChoices: boolean): CheckpointQuestionT
   return 'TEXT';
 }
 
-function resolveCorrectOption(correct: string | undefined, choices: string[]): string | null {
+export function resolveCorrectOption(
+  correct: string | undefined,
+  choices: string[]
+): string | null {
   if (!correct) return null;
   const trimmed = correct.trim();
   if (choices.length === 0) return trimmed;

@@ -41,6 +41,17 @@ Marks: 5
 Explain a closure in your own words.
 `;
 
+const MCQ_PAPER = `# MCQ checkpoint
+
+## Question 1: Choose the clause
+Type: multiple_choice
+Marks: 5
+Choices: WHERE | ORDER BY | GROUP BY
+Correct: B
+
+Which clause sorts a result set?
+`;
+
 let a: TestTrainee;
 let b: TestTrainee;
 let manager: TestAdmin;
@@ -58,6 +69,8 @@ type CheckpointOverrides = {
   title?: string;
   startAt?: string;
   durationMinutes?: number;
+  totalMarks?: number;
+  passingMarks?: number;
   allowEarlySubmission?: boolean;
   allowLateEntry?: boolean;
   resultVisibility?: 'IMMEDIATE' | 'AFTER_APPROVAL';
@@ -76,8 +89,8 @@ async function createCheckpoint(
       title: overrides.title ?? 'JavaScript checkpoint',
       description: 'A short assessment',
       durationMinutes: overrides.durationMinutes ?? 60,
-      totalMarks: 10,
-      passingMarks: 5,
+      totalMarks: overrides.totalMarks ?? 10,
+      passingMarks: overrides.passingMarks ?? 5,
       startAt: overrides.startAt ?? new Date(Date.now() - 60_000).toISOString(),
       maxAttempts: overrides.maxAttempts ?? 1,
       allowEarlySubmission: overrides.allowEarlySubmission ?? true,
@@ -391,6 +404,7 @@ describe('checkpoint trainee API', () => {
     expect(body<SubmitCheckpointAttemptResponse>(submit)).toMatchObject({
       status: 'SUBMITTED',
       submissionReason: 'MANUAL',
+      totalScore: null,
       resultVisible: false,
     });
 
@@ -426,7 +440,12 @@ describe('checkpoint trainee API', () => {
     const detail = body<ManagerCheckpointAttemptDetail>(detailRes);
     expect(detail.answers.find((answer) => answer.questionId === mcqId)).toMatchObject({
       selectedOption: 'ORDER BY',
+      // The multiple-choice answer is scored on submission, but the paper still
+      // waits for a manager because the written answer needs review.
+      awardedMarks: 5,
     });
+    expect(detail.totalScore).toBeNull();
+    expect(detail.gradedAt).toBeNull();
 
     const gradeRes = await api.post(
       `/api/manager/checkpoints/attempts/${attempt.id}/grade`,
@@ -467,6 +486,80 @@ describe('checkpoint trainee API', () => {
       visible: true,
     });
     expect(result.answers).toHaveLength(2);
+  });
+
+  it('auto-grades an all-multiple-choice attempt on submission', async () => {
+    const scheduled = await createScheduledCheckpoint({
+      markdown: MCQ_PAPER,
+      totalMarks: 5,
+      passingMarks: 3,
+      resultVisibility: 'IMMEDIATE',
+    });
+    const attempt = await startAttempt(a, scheduled.id);
+    const [questionId] = questionIds(attempt);
+
+    await api.put(
+      `/api/checkpoints/attempts/${attempt.id}/answers/${questionId}`,
+      { clientRevision: 1, selectedOption: 'ORDER BY' },
+      a.cookie
+    );
+
+    const submit = await api.post(`/api/checkpoints/attempts/${attempt.id}/submit`, {}, a.cookie);
+    expect(submit.status).toBe(200);
+    const submitted = body<SubmitCheckpointAttemptResponse>(submit);
+    expect(submitted).toMatchObject({
+      status: 'SUBMITTED',
+      totalScore: 5,
+      percentage: 100,
+      passed: true,
+      resultVisible: true,
+    });
+    expect(submitted.gradedAt).not.toBeNull();
+
+    const result = body<CheckpointResult>(
+      await api.get(`/api/checkpoints/attempts/${attempt.id}/result`, a.cookie)
+    );
+    expect(result).toMatchObject({
+      score: 5,
+      totalMarks: 5,
+      percentage: 100,
+      passed: true,
+      visible: true,
+    });
+    expect(result.answers[0]).toMatchObject({
+      selectedOption: 'ORDER BY',
+      awardedMarks: 5,
+    });
+  });
+
+  it('awards no marks for an incorrect multiple-choice answer', async () => {
+    const scheduled = await createScheduledCheckpoint({
+      markdown: MCQ_PAPER,
+      totalMarks: 5,
+      passingMarks: 3,
+      resultVisibility: 'IMMEDIATE',
+    });
+    const attempt = await startAttempt(a, scheduled.id);
+    const [questionId] = questionIds(attempt);
+
+    await api.put(
+      `/api/checkpoints/attempts/${attempt.id}/answers/${questionId}`,
+      { clientRevision: 1, selectedOption: 'WHERE' },
+      a.cookie
+    );
+
+    const submit = await api.post(`/api/checkpoints/attempts/${attempt.id}/submit`, {}, a.cookie);
+    expect(body<SubmitCheckpointAttemptResponse>(submit)).toMatchObject({
+      totalScore: 0,
+      percentage: 0,
+      passed: false,
+      resultVisible: true,
+    });
+
+    const result = body<CheckpointResult>(
+      await api.get(`/api/checkpoints/attempts/${attempt.id}/result`, a.cookie)
+    );
+    expect(result.answers[0]).toMatchObject({ awardedMarks: 0 });
   });
 
   it('stores practical workspace files and returns them to the manager and result', async () => {

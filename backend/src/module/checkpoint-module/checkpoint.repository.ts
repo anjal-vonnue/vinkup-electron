@@ -9,6 +9,7 @@ import type {
 } from '@itp/types';
 import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../lib/prisma';
+import { resolveCorrectOption } from './checkpoint.markdown';
 
 const assignmentInclude = {
   select: {
@@ -87,6 +88,77 @@ function isUniqueViolation(error: unknown): boolean {
   return (
     typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
   );
+}
+
+type AutoGradableAttempt = {
+  id: string;
+  answers: Array<{ id: string; question_id: string; selected_option: string | null }>;
+  checkpoint: {
+    total_marks: number;
+    questions: Array<{
+      id: string;
+      type: string;
+      marks: number;
+      options: unknown;
+      correct_option: string | null;
+    }>;
+  };
+};
+
+/**
+ * Score the multiple-choice answers of a freshly submitted attempt.
+ *
+ * An exact match with the question's correct option earns the question's full
+ * marks; anything else earns none. When every question is multiple choice the
+ * attempt is marked graded, so an immediate-result checkpoint needs no manager
+ * action. On a mixed paper the MCQ marks are only pre-filled; the attempt stays
+ * ungraded until a manager scores the written answers.
+ */
+async function autoGradeAttempt(
+  tx: Prisma.TransactionClient,
+  attempt: AutoGradableAttempt,
+  now: Date
+): Promise<void> {
+  const answersByQuestion = new Map(attempt.answers.map((answer) => [answer.question_id, answer]));
+  let allAutoGradable = attempt.checkpoint.questions.length > 0;
+  let total = 0;
+
+  for (const question of attempt.checkpoint.questions) {
+    const options = Array.isArray(question.options)
+      ? question.options.filter((option): option is string => typeof option === 'string')
+      : [];
+    const correctOption = resolveCorrectOption(question.correct_option ?? undefined, options);
+
+    if (question.type !== 'MULTIPLE_CHOICE' || correctOption === null) {
+      allAutoGradable = false;
+      continue;
+    }
+
+    const answer = answersByQuestion.get(question.id);
+    const awarded = answer?.selected_option === correctOption ? question.marks : 0;
+    total += awarded;
+
+    if (answer) {
+      await tx.checkpoint_answer.update({
+        where: { id: answer.id },
+        data: { awarded_marks: awarded },
+      });
+    }
+  }
+
+  if (!allAutoGradable) return;
+
+  await tx.checkpoint_attempt.update({
+    where: { id: attempt.id },
+    data: { total_score: total, graded_at: now },
+  });
+  await tx.checkpoint_attempt_event.create({
+    data: {
+      attempt_id: attempt.id,
+      type: 'GRADED',
+      message: `Auto-graded ${total} of ${attempt.checkpoint.total_marks} marks from multiple-choice answers.`,
+    },
+  });
 }
 
 async function writeQuestions(
@@ -600,7 +672,26 @@ export class CheckpointRepository {
   ): Promise<AttemptSummaryRow | null> => {
     const attempt = await prisma.checkpoint_attempt.findUnique({
       where: { id: attemptId },
-      select: { id: true, status: true, deadline_at: true },
+      select: {
+        id: true,
+        status: true,
+        deadline_at: true,
+        answers: { select: { id: true, question_id: true, selected_option: true } },
+        checkpoint: {
+          select: {
+            total_marks: true,
+            questions: {
+              select: {
+                id: true,
+                type: true,
+                marks: true,
+                options: true,
+                correct_option: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!attempt) return null;
     if (attempt.status === 'SUBMITTED') {
@@ -615,17 +706,19 @@ export class CheckpointRepository {
         ? new Date(Math.min(now.getTime(), attempt.deadline_at.getTime()))
         : now;
 
-    const updated = await prisma.checkpoint_attempt.updateMany({
-      where: { id: attemptId, status: 'IN_PROGRESS' },
-      data: {
-        status: 'SUBMITTED',
-        submitted_at: submittedAt,
-        submission_reason: reason,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.checkpoint_attempt.updateMany({
+        where: { id: attemptId, status: 'IN_PROGRESS' },
+        data: {
+          status: 'SUBMITTED',
+          submitted_at: submittedAt,
+          submission_reason: reason,
+        },
+      });
+      // A concurrent request already finalised this attempt.
+      if (updated.count === 0) return;
 
-    if (updated.count > 0) {
-      await prisma.checkpoint_attempt_event.create({
+      await tx.checkpoint_attempt_event.create({
         data: {
           attempt_id: attemptId,
           type: reason === 'TIME_EXPIRED' ? 'TIME_EXPIRED' : reason,
@@ -637,7 +730,9 @@ export class CheckpointRepository {
                 : 'Finalised because the checkpoint was cancelled.',
         },
       });
-    }
+
+      await autoGradeAttempt(tx, attempt, now);
+    });
 
     return prisma.checkpoint_attempt.findUnique({
       where: { id: attemptId },
