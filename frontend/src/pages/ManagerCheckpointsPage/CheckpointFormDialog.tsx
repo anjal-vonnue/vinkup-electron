@@ -405,14 +405,17 @@ export default function CheckpointFormDialog({
     return () => clearTimeout(timer);
   }, [form.sourceMarkdown, form.checkpointMode]);
 
+  // Deactivated trainees cannot be assigned new work, so keep them out of the picker.
+  const activeTrainees = useMemo(() => trainees.filter((trainee) => trainee.isActive), [trainees]);
+
   const filteredTrainees = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return trainees;
-    return trainees.filter(
+    if (!query) return activeTrainees;
+    return activeTrainees.filter(
       (trainee) =>
         trainee.name.toLowerCase().includes(query) || trainee.email.toLowerCase().includes(query)
     );
-  }, [trainees, search]);
+  }, [activeTrainees, search]);
 
   const selectedTraineeCount = useMemo(() => {
     const ids = new Set(form.traineeIds);
