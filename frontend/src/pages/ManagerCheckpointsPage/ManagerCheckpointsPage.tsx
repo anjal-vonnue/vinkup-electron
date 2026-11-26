@@ -27,6 +27,7 @@ import {
 import { getManagerTrainees } from '../../api/manager';
 import CheckpointFormDialog from './CheckpointFormDialog';
 import CheckpointGroupsDialog from './CheckpointGroupsDialog';
+import { canCancelCheckpoint } from './managerCheckpointUi';
 import styles from './ManagerCheckpointsPage.module.css';
 
 type EditorTarget = { mode: 'create' } | { mode: 'edit'; checkpointId: string } | null;
@@ -385,7 +386,7 @@ export default function ManagerCheckpointsPage() {
                               <ChevronRight size={16} />
                             </button>
                           )}
-                          {checkpoint.status === 'SCHEDULED' && (
+                          {canCancelCheckpoint(checkpoint) && (
                             <button
                               type="button"
                               className={styles.iconButtonDanger}
