@@ -34,14 +34,18 @@ export default function CheckpointGroupsDialog({ trainees, groups, onClose, onCh
     dialogRef.current?.showModal();
   }, []);
 
+  // Deactivated trainees cannot be added to a group, but keep any already in it
+  // visible so the manager can remove them.
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return trainees;
-    return trainees.filter(
-      (trainee) =>
+    return trainees.filter((trainee) => {
+      if (!trainee.isActive && !selectedIds.includes(trainee.id)) return false;
+      if (!query) return true;
+      return (
         trainee.name.toLowerCase().includes(query) || trainee.email.toLowerCase().includes(query)
-    );
-  }, [trainees, search]);
+      );
+    });
+  }, [trainees, selectedIds, search]);
 
   function resetForm() {
     setEditingId(null);
@@ -169,7 +173,7 @@ export default function CheckpointGroupsDialog({ trainees, groups, onClose, onCh
                         }
                       />
                       <span>
-                        {trainee.name}
+                        {trainee.isActive ? trainee.name : `${trainee.name} (inactive)`}
                         <small>{trainee.email}</small>
                       </span>
                     </label>
@@ -219,7 +223,11 @@ export default function CheckpointGroupsDialog({ trainees, groups, onClose, onCh
                         <p className={styles.groupMembers}>
                           {group.members.length === 0
                             ? 'No members'
-                            : group.members.map((member) => member.name).join(', ')}
+                            : group.members
+                                .map((member) =>
+                                  member.isActive ? member.name : `${member.name} (inactive)`
+                                )
+                                .join(', ')}
                         </p>
                       </div>
                       <div className={styles.groupActions}>

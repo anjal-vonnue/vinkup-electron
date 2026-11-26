@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ManagerTrainee } from '@itp/types';
+import type { CheckpointGroup, ManagerTrainee } from '@itp/types';
 import CheckpointFormDialog from './CheckpointFormDialog';
 
-function renderDialog(trainees: ManagerTrainee[] = []) {
+function renderDialog(trainees: ManagerTrainee[] = [], groups: CheckpointGroup[] = []) {
   const onClose = vi.fn();
   const onSaved = vi.fn();
   const view = render(
     <CheckpointFormDialog
       target={{ mode: 'create' }}
       trainees={trainees}
-      groups={[]}
+      groups={groups}
       onClose={onClose}
       onSaved={onSaved}
     />
@@ -93,6 +93,30 @@ describe('CheckpointFormDialog', () => {
 
     expect(screen.getByText('Active Trainee')).toBeInTheDocument();
     expect(screen.queryByText('Inactive Trainee')).not.toBeInTheDocument();
+  });
+
+  it('shows active and inactive group members and counts only active ones', async () => {
+    const user = userEvent.setup();
+    renderDialog(
+      [],
+      [
+        {
+          id: 'group-1',
+          name: 'Batch A',
+          createdAt: new Date().toISOString(),
+          members: [
+            { id: 't1', name: 'Active One', email: 'active@example.com', isActive: true },
+            { id: 't2', name: 'Inactive Two', email: 'inactive@example.com', isActive: false },
+          ],
+        },
+      ]
+    );
+
+    expect(screen.getByText('1 active · 1 inactive')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: /Batch A/ }));
+
+    expect(screen.getByText('1 trainee(s) covered')).toBeInTheDocument();
   });
 
   it('cancels the New file row with Escape without adding a file', async () => {

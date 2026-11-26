@@ -418,13 +418,16 @@ export default function CheckpointFormDialog({
   }, [activeTrainees, search]);
 
   const selectedTraineeCount = useMemo(() => {
-    const ids = new Set(form.traineeIds);
+    const activeIds = new Set(activeTrainees.map((trainee) => trainee.id));
+    const ids = new Set(form.traineeIds.filter((id) => activeIds.has(id)));
     for (const group of groups) {
       if (!form.groupIds.includes(group.id)) continue;
-      for (const member of group.members) ids.add(member.id);
+      for (const member of group.members) {
+        if (member.isActive) ids.add(member.id);
+      }
     }
     return ids.size;
-  }, [form.traineeIds, form.groupIds, groups]);
+  }, [activeTrainees, form.traineeIds, form.groupIds, groups]);
 
   // The preview belongs to the current Markdown. Clearing the textarea must not
   // leave an old parsed paper on screen while the request state is cleaned up.
@@ -913,19 +916,29 @@ export default function CheckpointFormDialog({
                 {groups.length > 0 && (
                   <div className={styles.groupList}>
                     <p className={styles.groupHeading}>Groups</p>
-                    {groups.map((group) => (
-                      <label key={group.id} className={styles.assignmentRow}>
-                        <input
-                          type="checkbox"
-                          checked={form.groupIds.includes(group.id)}
-                          onChange={() => toggleGroup(group.id)}
-                        />
-                        <span>
-                          {group.name}
-                          <small>{group.members.length} member(s)</small>
-                        </span>
-                      </label>
-                    ))}
+                    {groups.map((group) => {
+                      const activeCount = group.members.filter((member) => member.isActive).length;
+                      const inactiveCount = group.members.length - activeCount;
+                      return (
+                        <label key={group.id} className={styles.assignmentRow}>
+                          <input
+                            type="checkbox"
+                            checked={form.groupIds.includes(group.id)}
+                            onChange={() => toggleGroup(group.id)}
+                          />
+                          <span>
+                            {group.name}
+                            <small>
+                              {group.members.length === 0
+                                ? 'No members'
+                                : `${activeCount} active${
+                                    inactiveCount > 0 ? ` · ${inactiveCount} inactive` : ''
+                                  }`}
+                            </small>
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
 
