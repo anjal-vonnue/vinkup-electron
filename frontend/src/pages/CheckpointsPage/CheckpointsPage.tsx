@@ -16,6 +16,7 @@ import { ErrorState } from '../../components/Common/ErrorState';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import { getMyCheckpoints } from '../../api/checkpoints';
 import { availabilityMeta, formatDuration } from './checkpointUi';
+import { useCheckpointRefreshAt } from './useCheckpointRefreshAt';
 import styles from './Checkpoints.module.css';
 
 type CardAction = { label: string; to: string; primary: boolean };
@@ -155,6 +156,19 @@ export default function CheckpointsPage() {
       cancelled = true;
     };
   }, [navigate, reloadKey]);
+
+  // Reload when the next upcoming checkpoint opens so it moves into "Open now"
+  // without the trainee pressing Refresh.
+  const nextStartAt = useMemo(() => {
+    if (!checkpoints) return null;
+    const starts = checkpoints
+      .filter((checkpoint) => checkpoint.availability === 'UPCOMING')
+      .map((checkpoint) => new Date(checkpoint.startAt).getTime())
+      .filter((time) => !Number.isNaN(time));
+    return starts.length > 0 ? Math.min(...starts) : null;
+  }, [checkpoints]);
+
+  useCheckpointRefreshAt(nextStartAt, checkpoints?.[0]?.serverNow, reload);
 
   const groups = useMemo(() => {
     const rows = checkpoints ?? [];

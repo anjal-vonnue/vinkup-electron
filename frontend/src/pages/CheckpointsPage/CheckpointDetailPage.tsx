@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { TraineeCheckpointDetail } from '@itp/types';
 import {
@@ -22,7 +22,11 @@ import { formatIstDateTime } from '../../lib/formatDateTime';
 import { getMyCheckpoint, startCheckpoint } from '../../api/checkpoints';
 import { ApiError } from '../../api/errors';
 import { availabilityMeta, formatDuration, submissionReasonLabel } from './checkpointUi';
+import { useCheckpointRefreshAt } from './useCheckpointRefreshAt';
 import styles from './Checkpoints.module.css';
+
+/** Mirrors the backend: late entry closes 10 minutes after the scheduled start. */
+const LATE_ENTRY_GRACE_MS = 10 * 60 * 1000;
 
 export default function CheckpointDetailPage() {
   const { checkpointId } = useParams<{ checkpointId: string }>();
@@ -36,6 +40,23 @@ export default function CheckpointDetailPage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  // Re-fetch when this checkpoint opens, and again when its entry window closes,
+  // so the button and badge change without the trainee leaving the page.
+  const refreshAt = useMemo(() => {
+    if (!checkpoint) return null;
+    const start = new Date(checkpoint.startAt).getTime();
+    if (Number.isNaN(start)) return null;
+    if (checkpoint.availability === 'UPCOMING') return start;
+    if (checkpoint.availability === 'AVAILABLE') {
+      const windowEnd = start + checkpoint.durationMinutes * 60_000;
+      const lateEntryEnd = start + LATE_ENTRY_GRACE_MS;
+      return checkpoint.allowLateEntry ? windowEnd : Math.min(windowEnd, lateEntryEnd);
+    }
+    return null;
+  }, [checkpoint]);
+
+  useCheckpointRefreshAt(refreshAt, checkpoint?.serverNow, reload);
 
   useEffect(() => {
     if (!checkpointId) return;
