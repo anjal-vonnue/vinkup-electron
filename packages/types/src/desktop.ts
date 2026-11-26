@@ -27,7 +27,7 @@ export type BrowserAvailability = {
 
 /**
  * The secondary display shows a "good luck" screen instead of Resources and
- * References while a checkpoint attempt is running.
+ * References while the trainee is anywhere in the Checkpoints section.
  */
 export type CheckpointDisplayState = {
   active: boolean;
@@ -254,8 +254,9 @@ export interface DesktopApi {
   };
 
   /**
-   * The secondary display is locked to a good-luck screen while a checkpoint
-   * attempt is running, so references and resources cannot be used during it.
+   * The secondary display is locked to a good-luck screen while the trainee is
+   * anywhere in the Checkpoints section, so references and resources cannot be
+   * used during a checkpoint.
    */
   checkpoint: {
     /** Shows "Good luck, <name>" on the secondary display, or clears it with null. */

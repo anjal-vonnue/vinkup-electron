@@ -18,7 +18,6 @@ import { ErrorState } from '../../components/Common/ErrorState';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import MarkdownRenderer from '../../components/MarkdownRenderer';
 import { useToast } from '../../components/Toast';
-import { useAuth } from '../../context/Useauth';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import { getCheckpointAttempt, submitCheckpointAttempt } from '../../api/checkpoints';
 import { ApiError } from '../../api/errors';
@@ -26,7 +25,6 @@ import AnswerEditor from './AnswerEditor';
 import { isAnswerProvided } from './answerUtils';
 import { useAttemptCountdown } from './useAttemptCountdown';
 import { useCheckpointAutosave, type AnswerSaveSummary } from './useCheckpointAutosave';
-import { useCheckpointDisplayLock } from './useCheckpointDisplayLock';
 import { checkpointWorkspaceId } from './practicalWorkspaceFiles';
 import { lockedMessage } from './checkpointUi';
 import styles from './CheckpointAttemptPage.module.css';
@@ -96,7 +94,6 @@ function SaveSummary({ summary, onRetry }: { summary: AnswerSaveSummary; onRetry
 function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const { user } = useAuth();
   const summaryPath = `/checkpoints/attempts/${attempt.id}/summary`;
 
   const [locked, setLocked] = useState(false);
@@ -108,10 +105,6 @@ function AttemptWorkspace({ attempt }: { attempt: TraineeCheckpointAttempt }) {
   const [fileError, setFileError] = useState<string | null>(null);
 
   const submitInFlightRef = useRef(false);
-
-  // The second screen shows a good-luck message for the whole attempt so
-  // references and resources cannot be used while the checkpoint is running.
-  useCheckpointDisplayLock(user?.name);
 
   const goToSummary = useCallback(() => {
     void navigate(summaryPath, { replace: true });

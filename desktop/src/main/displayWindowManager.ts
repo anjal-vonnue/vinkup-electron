@@ -265,7 +265,8 @@ export class DisplayWindowManager {
 
   /**
    * Replaces the secondary display's Resources/References UI with a good-luck
-   * screen while a checkpoint attempt is running. `null` restores the normal UI.
+   * screen while the trainee is in the Checkpoints section. `null` restores the
+   * normal UI.
    */
   setCheckpointActive(name: string | null): void {
     const normalized = typeof name === 'string' && name.trim() ? name.trim() : null;
