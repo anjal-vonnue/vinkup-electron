@@ -327,10 +327,18 @@ export default function Header({ leading, status }: HeaderProps) {
           <NavLink
             to="/checkpoints"
             end
+            aria-disabled={isInCheckpoint}
+            tabIndex={isInCheckpoint ? -1 : undefined}
+            title={isInCheckpoint ? checkpointLockTitle : undefined}
+            onClick={(event) => {
+              if (isInCheckpoint) event.preventDefault();
+            }}
             className={({ isActive }) =>
               `${styles.link} ${isActive ? styles.active : ''} ${
                 location.pathname.startsWith('/checkpoints') ? styles.active : ''
-              } ${isInCheckpoint ? styles.workspaceActive : ''}`
+              } ${isInCheckpoint ? styles.workspaceActive : ''} ${
+                isInCheckpoint ? styles.linkDisabled : ''
+              }`
             }
           >
             <CheckpointIcon />

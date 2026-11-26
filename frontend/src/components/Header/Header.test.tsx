@@ -213,7 +213,7 @@ describe('Header', () => {
     }
   });
 
-  it('locks the other nav links and highlights Checkpoints during a checkpoint attempt', () => {
+  it('locks the header nav and highlights Checkpoints during a checkpoint attempt', () => {
     render(
       <MemoryRouter initialEntries={['/checkpoints/attempts/a1']}>
         <Routes>
@@ -226,6 +226,10 @@ describe('Header', () => {
     const checkpointsLink = screen.getByRole('link', { name: 'Checkpoints' });
     expect(checkpointsLink.className).toMatch(/active/);
     expect(checkpointsLink.className).toMatch(/workspaceActive/);
+    expect(checkpointsLink).toHaveAttribute('aria-disabled', 'true');
+    expect(checkpointsLink).toHaveAttribute('tabindex', '-1');
+    expect(checkpointsLink.className).toMatch(/linkDisabled/);
+    expect(fireEvent.click(checkpointsLink)).toBe(false);
 
     for (const label of ['Home', 'Typing Test', 'Journal', 'Leave', 'Resources']) {
       const link = screen.getByRole('link', { name: label });
