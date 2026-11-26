@@ -179,6 +179,21 @@ export function toManagerDetail(row: CheckpointDetailRow): ManagerCheckpointDeta
   };
 }
 
+function isEntryWindowOpen(input: {
+  startAt: Date | null;
+  durationMinutes: number;
+  allowLateEntry: boolean;
+  now: Date;
+}): boolean {
+  if (!input.startAt) return false;
+  const start = input.startAt.getTime();
+  const current = input.now.getTime();
+  if (current < start) return false;
+  if (current >= start + input.durationMinutes * 60_000) return false;
+  if (!input.allowLateEntry && current > start + LATE_ENTRY_GRACE_MS) return false;
+  return true;
+}
+
 function availabilityFor(input: {
   startAt: Date | null;
   durationMinutes: number;
@@ -279,8 +294,17 @@ export function toTraineeSummary(row: TraineeListRow, now: Date): TraineeCheckpo
   const attemptsUsed = row.attempts.length;
   const activeAttempt =
     latest?.status === 'IN_PROGRESS' && latest.deadline_at.getTime() > now.getTime();
+  // Another attempt is possible while the entry window is still open and the
+  // trainee has attempts left, even if the latest attempt was submitted.
   const canStart =
-    availability === 'AVAILABLE' && attemptsUsed < row.max_attempts && Boolean(row.start_at);
+    !activeAttempt &&
+    attemptsUsed < row.max_attempts &&
+    isEntryWindowOpen({
+      startAt: row.start_at,
+      durationMinutes: row.duration_minutes,
+      allowLateEntry: row.allow_late_entry,
+      now,
+    });
 
   let blockedReason: string | null = null;
   if (availability === 'UPCOMING')

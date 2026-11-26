@@ -562,6 +562,42 @@ describe('checkpoint trainee API', () => {
     expect(result.answers[0]).toMatchObject({ awardedMarks: 0 });
   });
 
+  it('allows another attempt until the maximum is reached', async () => {
+    const scheduled = await createScheduledCheckpoint({ maxAttempts: 3 });
+
+    const first = await startAttempt(a, scheduled.id);
+    expect(first.attemptNumber).toBe(1);
+    await api.post(`/api/checkpoints/attempts/${first.id}/submit`, {}, a.cookie);
+
+    const afterFirst = body<TraineeCheckpointDetail>(
+      await api.get(`/api/checkpoints/${scheduled.id}`, a.cookie)
+    );
+    expect(afterFirst).toMatchObject({
+      canStart: true,
+      attemptsUsed: 1,
+      maxAttempts: 3,
+    });
+
+    const second = await startAttempt(a, scheduled.id);
+    expect(second.attemptNumber).toBe(2);
+    await api.post(`/api/checkpoints/attempts/${second.id}/submit`, {}, a.cookie);
+
+    const third = await startAttempt(a, scheduled.id);
+    expect(third.attemptNumber).toBe(3);
+    await api.post(`/api/checkpoints/attempts/${third.id}/submit`, {}, a.cookie);
+
+    const exhausted = body<TraineeCheckpointDetail>(
+      await api.get(`/api/checkpoints/${scheduled.id}`, a.cookie)
+    );
+    expect(exhausted).toMatchObject({ canStart: false, attemptsUsed: 3 });
+
+    expectError(
+      await api.post(`/api/checkpoints/${scheduled.id}/start`, {}, a.cookie),
+      409,
+      'CHECKPOINT_ATTEMPT_LIMIT_REACHED'
+    );
+  });
+
   it('stores practical workspace files and returns them to the manager and result', async () => {
     const practicalPaper = `# Practical checkpoint
 
