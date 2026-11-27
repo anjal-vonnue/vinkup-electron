@@ -92,7 +92,10 @@ describe('DesktopAuthRepository atomic exchange', () => {
   };
 
   function mockTransaction(client: {
-    desktop_auth_transaction: { updateMany: ReturnType<typeof vi.fn> };
+    desktop_auth_transaction: {
+      updateMany: ReturnType<typeof vi.fn>;
+      deleteMany: ReturnType<typeof vi.fn>;
+    };
     desktop_session: { create: ReturnType<typeof vi.fn> };
   }) {
     prisma.$transaction.mockImplementation((callback: (tx: typeof client) => unknown) =>
@@ -100,19 +103,25 @@ describe('DesktopAuthRepository atomic exchange', () => {
     );
   }
 
-  it('consumes the handoff and creates the session inside one transaction', async () => {
+  it('consumes the handoff, creates the session and deletes the transaction atomically', async () => {
     const client = {
-      desktop_auth_transaction: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      desktop_auth_transaction: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
       desktop_session: { create: vi.fn().mockResolvedValue({ id: 'session-1' }) },
     };
     mockTransaction(client);
 
     await expect(
-      new DesktopAuthRepository().consumeHandoffAndCreateSession(exchangeData)
+      new DesktopAuthRepository().exchangeHandoffAndCreateSession(exchangeData)
     ).resolves.toEqual({ id: 'session-1' });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(client.desktop_auth_transaction.updateMany).toHaveBeenCalledTimes(1);
+    expect(client.desktop_auth_transaction.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'transaction-1' },
+    });
     expect(client.desktop_session.create).toHaveBeenCalledWith({
       data: {
         id: 'session-1',
@@ -127,28 +136,53 @@ describe('DesktopAuthRepository atomic exchange', () => {
     });
   });
 
-  it('does not create a session when the handoff was already consumed', async () => {
+  it('does not write anything when the handoff was already consumed', async () => {
     const client = {
-      desktop_auth_transaction: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      desktop_auth_transaction: {
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        deleteMany: vi.fn(),
+      },
       desktop_session: { create: vi.fn() },
     };
     mockTransaction(client);
 
     await expect(
-      new DesktopAuthRepository().consumeHandoffAndCreateSession(exchangeData)
+      new DesktopAuthRepository().exchangeHandoffAndCreateSession(exchangeData)
     ).resolves.toBeNull();
     expect(client.desktop_session.create).not.toHaveBeenCalled();
+    expect(client.desktop_auth_transaction.deleteMany).not.toHaveBeenCalled();
   });
 
   it('propagates a session creation failure so the transaction rolls back', async () => {
     const client = {
-      desktop_auth_transaction: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      desktop_auth_transaction: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: vi.fn(),
+      },
       desktop_session: { create: vi.fn().mockRejectedValue(new Error('insert failed')) },
     };
     mockTransaction(client);
 
     await expect(
-      new DesktopAuthRepository().consumeHandoffAndCreateSession(exchangeData)
+      new DesktopAuthRepository().exchangeHandoffAndCreateSession(exchangeData)
     ).rejects.toThrow('insert failed');
+    expect(client.desktop_auth_transaction.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('propagates a deletion failure so the session and handoff consumption roll back', async () => {
+    const client = {
+      desktop_auth_transaction: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: vi.fn().mockRejectedValue(new Error('delete failed')),
+      },
+      desktop_session: { create: vi.fn().mockResolvedValue({ id: 'session-1' }) },
+    };
+    mockTransaction(client);
+
+    await expect(
+      new DesktopAuthRepository().exchangeHandoffAndCreateSession(exchangeData)
+    ).rejects.toThrow('delete failed');
+    expect(client.desktop_auth_transaction.updateMany).toHaveBeenCalledTimes(1);
+    expect(client.desktop_session.create).toHaveBeenCalledTimes(1);
   });
 });

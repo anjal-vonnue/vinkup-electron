@@ -194,7 +194,7 @@ const store = vi.hoisted(() => {
       return count(Boolean(deleted));
     };
 
-    consumeHandoffAndCreateSession = (data: {
+    exchangeHandoffAndCreateSession = (data: {
       transactionId: string;
       sessionId: string;
       user: Snapshot;
@@ -209,13 +209,16 @@ const store = vi.hoisted(() => {
         const consumed = this.consumeHandoff(data.transactionId, data.now);
         if (consumed.count !== 1) return null;
         if (failSessionCreation) throw new Error('session insert failed');
-        return this.createSession({
+        const session = this.createSession({
           id: data.sessionId,
           user: data.user,
           refreshTokenHash: data.refreshTokenHash,
           expiresAt: data.expiresAt,
           now: data.now,
         });
+        const deleted = this.deleteTransaction(data.transactionId);
+        if (deleted.count !== 1) throw new Error('transaction delete failed');
+        return session;
       } catch (error) {
         transactions.clear();
         sessions.clear();
@@ -601,6 +604,55 @@ describe('POST /api/auth/desktop/exchange', () => {
     expect(payload.sid).toBeTruthy();
   });
 
+  it('deletes the transaction after a successful exchange', async () => {
+    const { redirect, transaction } = await beginLogin();
+    expect(store.transactions.has(transaction.transactionId)).toBe(true);
+
+    await request(app)
+      .post(`${BASE}/exchange`)
+      .send({ code: handoffCode(redirect), codeVerifier: CODE_VERIFIER })
+      .expect(200);
+
+    expect(store.transactions.has(transaction.transactionId)).toBe(false);
+    expect(store.sessions.size).toBe(1);
+  });
+
+  it('never deletes an unrelated transaction', async () => {
+    const first = await beginLogin();
+    const second = await beginLogin();
+
+    await request(app)
+      .post(`${BASE}/exchange`)
+      .send({ code: handoffCode(first.redirect), codeVerifier: CODE_VERIFIER })
+      .expect(200);
+
+    expect(store.transactions.has(first.transaction.transactionId)).toBe(false);
+    const untouched = store.transactions.get(second.transaction.transactionId);
+    expect(untouched?.status).toBe('authenticated');
+    expect(untouched?.handoff_code_hash).toBeTruthy();
+  });
+
+  it('keeps the session and handoff unconsumed when transaction deletion fails', async () => {
+    const { redirect, transaction } = await beginLogin();
+    store.setFailTransactionDeletion(true);
+
+    const failed = await request(app)
+      .post(`${BASE}/exchange`)
+      .send({ code: handoffCode(redirect), codeVerifier: CODE_VERIFIER });
+    expect(failed.status).toBe(500);
+    store.setFailTransactionDeletion(false);
+
+    const row = store.transactions.get(transaction.transactionId);
+    expect(row?.status).toBe('authenticated');
+    expect(row?.handoff_consumed_at).toBeNull();
+    expect(store.sessions.size).toBe(0);
+
+    await request(app)
+      .post(`${BASE}/exchange`)
+      .send({ code: handoffCode(redirect), codeVerifier: CODE_VERIFIER })
+      .expect(200);
+  });
+
   it('rejects a wrong PKCE verifier without consuming the code', async () => {
     const { redirect } = await beginLogin();
 
@@ -629,13 +681,18 @@ describe('POST /api/auth/desktop/exchange', () => {
     );
   });
 
-  it('rejects a replayed handoff code', async () => {
+  it('rejects a replayed handoff code without issuing a second session', async () => {
     const { redirect } = await beginLogin();
     const body = { code: handoffCode(redirect), codeVerifier: CODE_VERIFIER };
 
     await request(app).post(`${BASE}/exchange`).send(body).expect(200);
-    const replay = await request(app).post(`${BASE}/exchange`).send(body).expect(409);
-    expect((replay.body as { error: { code: string } }).error.code).toBe('DESKTOP_AUTH_CODE_USED');
+    // The transaction is removed on success, so a replay looks like any other
+    // unknown code. It must still be rejected and must not create a session.
+    const replay = await request(app).post(`${BASE}/exchange`).send(body).expect(400);
+    expect((replay.body as { error: { code: string } }).error.code).toBe(
+      'DESKTOP_AUTH_INVALID_CODE'
+    );
+    expect(store.sessions.size).toBe(1);
   });
 
   it('rejects an expired handoff code', async () => {

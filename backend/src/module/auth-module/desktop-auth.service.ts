@@ -230,7 +230,7 @@ export class DesktopAuthService {
     const refreshToken = base64url(randomBytes(48));
     const expiresAt = new Date(now.getTime() + DESKTOP_REFRESH_TOKEN_TTL_MS);
 
-    const session = await this.repository.consumeHandoffAndCreateSession({
+    const session = await this.repository.exchangeHandoffAndCreateSession({
       transactionId: transaction.id,
       sessionId,
       user,

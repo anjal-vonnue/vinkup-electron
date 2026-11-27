@@ -87,11 +87,11 @@ export class DesktopAuthRepository {
     });
 
   /**
-   * Consumes the one-time handoff and opens a session in a single database
-   * transaction. A losing concurrent exchange returns `null`; any write error
-   * rejects and rolls both writes back.
+   * Consumes the one-time handoff, opens a session and removes the no-longer-
+   * needed transaction in a single database transaction. A losing concurrent
+   * exchange returns `null`; any write error rejects and rolls every write back.
    */
-  consumeHandoffAndCreateSession = (data: {
+  exchangeHandoffAndCreateSession = (data: {
     transactionId: string;
     sessionId: string;
     user: DesktopUserSnapshot;
@@ -103,7 +103,7 @@ export class DesktopAuthRepository {
       const consumed = await this.consumeHandoff(data.transactionId, data.now, tx);
       if (consumed.count !== 1) return null;
 
-      return this.createSession(
+      const session = await this.createSession(
         {
           id: data.sessionId,
           user: data.user,
@@ -113,6 +113,12 @@ export class DesktopAuthRepository {
         },
         tx
       );
+
+      const deleted = await this.deleteTransaction(data.transactionId, tx);
+      if (deleted.count !== 1) {
+        throw new Error(`Desktop auth transaction ${data.transactionId} could not be deleted.`);
+      }
+      return session;
     });
 
   createSession = (
