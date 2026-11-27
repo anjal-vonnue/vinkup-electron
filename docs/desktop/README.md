@@ -25,7 +25,7 @@ prose: the authoritative API types are in `packages/types/src/desktop.ts`, the b
 
 | Document                                               | Why desktop readers need it                                                                             |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| [Setup guide](../setup-guide.md)                       | Environment variables, database and desktop dev/build commands                                          |
+| [Setup guide](../setup-guide.md)                       | Environment variables, database and desktop OAuth configuration                                         |
 | [Architecture overview](../architecture-overview.md)   | Frontend/backend layers and hosting                                                                     |
 | [API reference](../api-specifications.md)              | Every REST endpoint, request and response                                                               |
 | [Database](../database.md)                             | Schema and data dictionary                                                                              |
@@ -72,7 +72,7 @@ flowchart TB
 | `VINKUP_API_URL` — production `https://vinkup-electron.onrender.com`, development `http://localhost:3000` | REST API target                                                                                                                                      |
 | `VINKUP_DESKTOP_PORT` — `43110`                                                                           | Fixed origin for the packaged app’s loopback renderer server (`http://127.0.0.1:43110`); development uses the Vite server on `http://localhost:5173` |
 | `VINKUP_RESOURCES_ALLOWLIST_URL` — `<api>/api/resources/allowlist`                                        | Override the resources allowlist URL; see [workspace](workspace.md#resources-browser-and-allowlist)                                                  |
-| `VINKUP_DISABLE_SCREEN_PROTECTION` — exact `true` or `false`                                              | Development-only protection override; other values are ignored                                                                                       |
+| `VINKUP_DISABLE_SCREEN_PROTECTION` — unset/blank or `true`/`false`                                        | Development-only override: trimmed, case-insensitive `true` disables protection; `false`, blank or unset keeps it enabled; other values fail startup |
 
 Desktop source layout:
 
@@ -90,9 +90,9 @@ Run from the repository root:
 
 ```bash
 npm run dev:desktop      # Vite dev server + Electron in development
-npm run build:desktop    # type-check and build the desktop app
-npm run start:desktop    # start the built app
-npm run dist:desktop     # produce distributable packages
+npm run build:desktop    # build the desktop main and preload code
+npm run start:desktop    # build and start the Electron app (production API unless VINKUP_API_URL is set)
+npm run dist:desktop     # build the frontend and produce distributable packages
 ```
 
 See the [setup guide](../setup-guide.md) for prerequisites and environment files.
@@ -104,6 +104,6 @@ See the [setup guide](../setup-guide.md) for prerequisites and environment files
 - Native fullscreen events are exposed through IPC, but the renderer still uses browser fullscreen
   tracking for focus behavior.
 - Time spent on a task is sent as capped heartbeats; there is no activity-time flush on app quit.
-- Mentor/admin UI routes are hidden by `RoleRoute`, but server guards remain the security boundary.
+- Mentor/manager UI routes are hidden by `RoleRoute`, but server guards remain the security boundary.
 - Local Node and PostgreSQL runtimes require the desktop app. The browser build keeps the in-browser
   runtimes.

@@ -60,7 +60,7 @@ data still comes from the REST API. See the [desktop documentation](docs/desktop
 | Code runtimes | Loopback preview server + esbuild, PTY + xterm, local PostgreSQL (PostgreSQL, Prisma)         |
 | Backend       | Node.js 22, Express 5, TypeScript, Zod 4, Passport (Google OAuth), JWT in a cookie            |
 | Database      | PostgreSQL (Neon), Prisma 7 with `@prisma/adapter-pg`                                         |
-| Shared types  | `@itp/types` in `packages/types`, used by both frontend and backend                           |
+| Shared types  | `@itp/types` in `packages/types`, used by frontend, backend and desktop                       |
 | Quality       | Vitest, Testing Library, Supertest, ESLint, Prettier, Husky, lint-staged, commitlint          |
 | Hosting       | Netlify (frontend, proxies `/api`), Render (API), Neon (database)                             |
 
@@ -108,30 +108,33 @@ the backend.
 The app then runs on sample data in the browser, with no backend or database.
 
 **Desktop:** with the backend running, use `npm run dev:desktop` to start the Vite frontend on port
-5173 and open the Electron shell. The packaged app serves the renderer from a fixed loopback origin and
-uses `VINKUP_API_URL` for REST calls. Full details are in the
-[desktop setup notes](docs/setup-guide.md) and [desktop docs](docs/desktop/README.md).
+5173 and open the Electron shell. The packaged app serves the renderer from a fixed loopback origin
+and calls the production API (`https://vinkup-electron.onrender.com`) by default; `VINKUP_API_URL`
+optionally overrides it (development default: `http://localhost:3000`). Full desktop run/build
+details are in the [desktop docs](docs/desktop/README.md#desktop-commands); the
+[setup guide](docs/setup-guide.md#52-configure-the-backend) covers the desktop OAuth callback and
+token TTL settings.
 
 ## Scripts
 
 Run from the repository root.
 
-| Command                                | What it does                                                |
-| -------------------------------------- | ----------------------------------------------------------- |
-| `npm run dev:frontend`                 | Vite dev server on port 5173                                |
-| `npm run dev:backend`                  | API with `tsx watch` on port 3000                           |
-| `npm run dev:desktop`                  | Vite frontend on 5173 plus the Electron shell               |
-| `npm run build:desktop`                | Type-check and build main, preload and renderer             |
-| `npm run start:desktop`                | Start the built Electron app                                |
-| `npm run dist:desktop`                 | Build the frontend and package the Linux desktop app        |
-| `npm test`                             | Unit tests in every workspace                               |
-| `npm run test:api -w backend`          | API contract tests (needs `TEST_DATABASE_URL`)              |
-| `npm run lint`                         | ESLint on the whole repository                              |
-| `npm run format`                       | Prettier on the whole repository                            |
-| `npm run build -w frontend`            | Type-check and build the frontend to `frontend/dist`        |
-| `npm run build -w backend`             | Compile the backend to `backend/dist`                       |
-| `npm run db:seed -w backend`           | Load staff, trainees and the curriculum (safe to run again) |
-| `npx tsx scripts/export-curriculum.ts` | Rebuild the seed's `curriculum.json` from the frontend data |
+| Command                                | What it does                                                                     |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| `npm run dev:frontend`                 | Vite dev server on port 5173                                                     |
+| `npm run dev:backend`                  | API with `tsx watch` on port 3000                                                |
+| `npm run dev:desktop`                  | Vite frontend on 5173 plus the Electron shell                                    |
+| `npm run build:desktop`                | Build the desktop main and preload code                                          |
+| `npm run start:desktop`                | Build and start the Electron app (production API unless `VINKUP_API_URL` is set) |
+| `npm run dist:desktop`                 | Build the frontend and package the Linux desktop app                             |
+| `npm test`                             | Unit tests in every workspace                                                    |
+| `npm run test:api -w backend`          | API contract tests (needs `TEST_DATABASE_URL`)                                   |
+| `npm run lint`                         | ESLint on the whole repository                                                   |
+| `npm run format`                       | Prettier on the whole repository                                                 |
+| `npm run build -w frontend`            | Type-check and build the frontend to `frontend/dist`                             |
+| `npm run build -w backend`             | Compile the backend to `backend/dist`                                            |
+| `npm run db:seed -w backend`           | Load staff, trainees and the curriculum (safe to run again)                      |
+| `npx tsx scripts/export-curriculum.ts` | Rebuild the seed's `curriculum.json` from the frontend data                      |
 
 Every commit runs lint-staged, type checks and the unit tests, and checks the message with
 commitlint.
