@@ -11,6 +11,13 @@ export type DesktopUserSnapshot = {
   role: 'trainee' | 'mentor' | 'manager';
 };
 
+/** Cutoffs computed by the service from the status-specific retention rules. */
+export type DesktopTransactionCleanupCutoffs = {
+  expiredBefore: Date;
+  failedBefore: Date;
+  consumedBefore: Date;
+};
+
 export class DesktopAuthRepository {
   createTransaction = (data: {
     state: string;
@@ -146,6 +153,25 @@ export class DesktopAuthRepository {
 
   deleteTransaction = (id: string, client: DesktopAuthDbClient = prisma) =>
     client.desktop_auth_transaction.deleteMany({ where: { id } });
+
+  /**
+   * One set-based delete for every abandoned status. Each branch mirrors the
+   * read-side guard, so a transaction that can still be completed is preserved.
+   */
+  deleteExpiredTransactions = (cutoffs: DesktopTransactionCleanupCutoffs) =>
+    prisma.desktop_auth_transaction.deleteMany({
+      where: {
+        OR: [
+          {
+            status: { in: ['pending', 'processing'] },
+            expires_at: { lte: cutoffs.expiredBefore },
+          },
+          { status: 'authenticated', handoff_expires_at: { lte: cutoffs.expiredBefore } },
+          { status: 'failed', consumed_at: { lte: cutoffs.failedBefore } },
+          { status: 'consumed', consumed_at: { lte: cutoffs.consumedBefore } },
+        ],
+      },
+    });
 
   findSessionByTokenHash = (refreshTokenHash: string) =>
     prisma.desktop_session.findUnique({ where: { refresh_token_hash: refreshTokenHash } });

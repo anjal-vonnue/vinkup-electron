@@ -186,3 +186,31 @@ describe('DesktopAuthRepository atomic exchange', () => {
     expect(client.desktop_session.create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('DesktopAuthRepository cleanup', () => {
+  it('deletes abandoned transactions with one indexed, set-based query', async () => {
+    prisma.desktop_auth_transaction.deleteMany.mockResolvedValue({ count: 7 });
+    const cutoffs = {
+      expiredBefore: now,
+      failedBefore: new Date(now.getTime() - 3_600_000),
+      consumedBefore: new Date(now.getTime() - 3_600_000),
+    };
+
+    await expect(new DesktopAuthRepository().deleteExpiredTransactions(cutoffs)).resolves.toEqual({
+      count: 7,
+    });
+    expect(prisma.desktop_auth_transaction.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          {
+            status: { in: ['pending', 'processing'] },
+            expires_at: { lte: now },
+          },
+          { status: 'authenticated', handoff_expires_at: { lte: now } },
+          { status: 'failed', consumed_at: { lte: cutoffs.failedBefore } },
+          { status: 'consumed', consumed_at: { lte: cutoffs.consumedBefore } },
+        ],
+      },
+    });
+  });
+});
