@@ -81,19 +81,23 @@ sequenceDiagram
   alt Active staff row
     API->>DB: update last_login_at
     API-->>U: role mentor or manager
+    API-->>U: auth_token cookie, 7 days
   else Provisioned trainee
     API-->>U: role trainee
-  else No row or inactive staff
-    API-->>U: 403 NOT_PROVISIONED
+    API-->>U: auth_token cookie, 7 days
+  else No active staff and no active trainee
+    API-->>U: 302 /login?error=NOT_PROVISIONED&email=...
   end
-  API-->>U: auth_token cookie, 7 days
 ```
 
 - The Google email must end in `@${ALLOWED_EMAIL_DOMAIN}`; otherwise sign-in fails with
   `DOMAIN_NOT_PERMITTED`.
 - An active `admin` row wins over a trainee row with the same email. Its `staff_role` maps to the
   `MENTOR` or `MANAGER` JWT role.
-- A trainee must already exist in the `trainee` table; otherwise sign-in fails with `NOT_PROVISIONED`.
+- An inactive staff row does not block sign-in: an active trainee with the same email still signs in
+  as a trainee. Without either an active staff row or an active trainee row, sign-in fails.
+- The web flow redirects failures to `/login?error=<code>&email=<encoded email>` and sets no auth
+  cookie. Codes are `NOT_PROVISIONED`, `DOMAIN_NOT_PERMITTED`, `UNAUTHENTICATED` and `LOGIN_FAILED`.
 - The web flow sets the cookie in `/api/auth/google/callback`. The Electron flow exchanges a one-time
   handoff code and stores refresh tokens in the main process; see [authentication](auth.md).
 - `GET /api/auth/me` (any authenticated role) returns the current `MeResponse`:
@@ -200,7 +204,9 @@ Rules implemented by `AdminService`:
   rejects duplicates, and assigns the new trainee to that mentor immediately.
 - `GET /api/admin/analytics` accepts `from`/`to` as `YYYY-MM-DD`, `from <= to`, `to` not in the future
   (Asia/Kolkata calendar date) and a maximum span of 366 inclusive days. Omitting `traineeId` covers the
-  mentor’s whole team; specifying it still uses `requireAssignedTrainee`.
+  mentor’s whole team. With `traineeId`, `AdminService` checks it against the mentor’s assigned
+  trainees and returns `404 NOT_FOUND` for an unknown or unassigned id; there is no
+  `requireAssignedTrainee` middleware on this route.
 - `AdminFlagEvent` records are mentor-only; the corresponding raw flags are never served to trainees.
 - Slack channel configuration is per mentor. The API stores and returns a channel **ID**, not a bot
   token; see [Slack](slack.md).
@@ -265,8 +271,11 @@ Validation and business rules from `manager.schema.ts` and `manager.service.ts`:
 - A manager cannot deactivate their own account or change their own role to mentor.
 - Promoting a mentor to manager, or deactivating a mentor, is rejected with `STAFF_HAS_TRAINEES` while
   they still have assigned trainees. Reassign or unassign them first.
-- A mentor passed to create/assign must be an active `MENTOR`; an invalid target returns
-  `INVALID_MENTOR` (400). Assigning the same mentor twice returns `ALREADY_ASSIGNED` (409).
+- `POST /api/manager/trainees` requires an active `MENTOR`; a nonexistent, inactive or non-mentor
+  target returns `INVALID_MENTOR` (400).
+- `PATCH /api/manager/trainees/:traineeId/mentor` returns `404 NOT_FOUND` for a nonexistent mentor
+  target and `400 INVALID_MENTOR` for an inactive account or a non-mentor. Assigning the same mentor
+  twice returns `ALREADY_ASSIGNED` (409).
 - Reassigning emits a silent `trainee.reassigned` real-time event to the previous and new mentor.
   Each mentor’s list re-reads REST data; no toast is sent.
 - Duplicate staff/trainee emails and cross-type collisions return `TRAINEE_EXISTS`, `STAFF_EXISTS` or
@@ -290,7 +299,8 @@ only; the server guards above are the security boundary.
 | `/manager/verify-certificate` | manager | Certificate verification                          |
 
 In Electron, `window.desktop.auth.getState()` supplies the renderer with
-`DesktopAuthState.status`, `DesktopAuthState.user: MeResponse | null` and a `persistent` flag. Tokens
+`DesktopAuthState.status`, `DesktopAuthState.user: MeResponse | null`,
+`DesktopAuthState.error: DesktopAuthErrorCode | null` and a `persistent` flag. Tokens
 remain in the main process, so user-management pages still call the REST API with `withCredentials`
 through the `/api` proxy; see [authentication](auth.md) and
 [workspace](workspace.md).
@@ -302,12 +312,13 @@ erDiagram
   admin ||--o{ trainee : "mentor_id, onDelete SetNull"
   admin ||--o{ task_review : "admin_id"
   admin ||--o{ review_prompt : "admin_id"
+  admin ||--o{ leave_request : "reviewer_id, LeaveReviewer"
+  admin ||--o{ leave_review : "reviewer_id, LeaveReviewHistory"
+  leave_request ||--o{ leave_review : "leave_request_id"
   trainee ||--o{ task_progress : "trainee_id"
   trainee ||--o{ leave_request : "trainee_id"
   trainee ||--o{ certificate : "trainee_id"
   trainee ||--o{ activity_log : "trainee_id"
-  desktop_session ||--o| admin : "user_id, string UUID"
-  desktop_session ||--o| trainee : "user_id, string UUID"
 ```
 
 - `admin.id` is a UUID primary key; `admin.email` is unique and stored lower-case.
@@ -318,7 +329,8 @@ erDiagram
   `false` prevents sign-in.
 - `desktop_session` stores only a SHA-256 hash of the desktop refresh token plus a snapshot of
   `user_id`, `user_role`, `user_email` and `user_name`. It has no Prisma relation to `admin` or
-  `trainee`; `user_id` is a plain UUID string. A database read cannot be replayed as a session.
+  `trainee`; `user_id` is a plain, indexed UUID string with no unique constraint, so a user can have
+  many sessions. A database read cannot be replayed as a session.
 - `task_progress` is unique on `(trainee_id, task_id)`; `task_review` is unique on
   `(trainee_id, task_id, submission_no)`; `certificate` is unique on `(trainee_id, course_id)`.
 
