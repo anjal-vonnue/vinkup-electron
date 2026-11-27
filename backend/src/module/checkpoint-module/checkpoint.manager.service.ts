@@ -13,6 +13,7 @@ import type {
 import { AppError, NotFoundError, ValidationError } from '../../errors/AppError';
 import { realtimeBroker } from '../realtime-module/realtime.broker';
 import { parseCheckpointMarkdown } from './checkpoint.markdown';
+import { publishCheckpointActivity } from './checkpoint.notify';
 import {
   assignedTraineeIds,
   toManagerAttemptDetail,
@@ -365,6 +366,8 @@ export class CheckpointManagerService {
     };
     for (const traineeId of assigned) realtimeBroker.publish(traineeId, event);
 
+    await publishCheckpointActivity({ checkpointId, reason: 'PUBLISHED' });
+
     return toManagerDetail(published);
   };
 
@@ -375,6 +378,9 @@ export class CheckpointManagerService {
 
     const cancelled = await repository.cancelCheckpoint(checkpointId, new Date());
     console.info(`[checkpoint] ${managerId} cancelled checkpoint ${checkpointId}`);
+
+    await publishCheckpointActivity({ checkpointId, reason: 'CANCELLED' });
+
     return toManagerDetail(cancelled);
   };
 
@@ -397,6 +403,8 @@ export class CheckpointManagerService {
       publishedAt: (updated.results_published_at ?? new Date()).toISOString(),
     };
     for (const traineeId of recipients) realtimeBroker.publish(traineeId, event);
+
+    await publishCheckpointActivity({ checkpointId, reason: 'RESULTS_PUBLISHED' });
 
     return toManagerDetail(updated);
   };
@@ -457,6 +465,15 @@ export class CheckpointManagerService {
       new Date()
     );
     console.info(`[checkpoint] ${managerId} graded attempt ${attemptId}`);
+
+    await publishCheckpointActivity({
+      checkpointId: updated.checkpoint.id,
+      reason: 'ATTEMPT_GRADED',
+      attemptId: updated.id,
+      traineeId: updated.trainee_id,
+      traineeName: updated.trainee.name,
+    });
+
     return toManagerAttemptDetail(updated);
   };
 

@@ -41,7 +41,12 @@ vi.mock('./checkpoint.repository', () => ({
   },
 }));
 
+vi.mock('./checkpoint.notify', () => ({
+  publishCheckpointActivity: vi.fn(),
+}));
+
 import { CheckpointTraineeService } from './checkpoint.trainee.service';
+import { publishCheckpointActivity } from './checkpoint.notify';
 
 const traineeId = 'trainee-1';
 const checkpointId = 'checkpoint-1';
@@ -118,6 +123,7 @@ function attemptRow(overrides: Record<string, unknown> = {}) {
       results_published_at: null,
       questions: [question],
     },
+    trainee: { name: 'Test Trainee', email: 'test@vonnue.com' },
     ...overrides,
   };
 }
@@ -125,11 +131,14 @@ function attemptRow(overrides: Record<string, unknown> = {}) {
 function summaryRow(overrides: Record<string, unknown> = {}) {
   return {
     id: attemptId,
+    checkpoint_id: checkpointId,
+    trainee_id: traineeId,
     status: 'SUBMITTED',
     submitted_at: new Date(),
     submission_reason: 'MANUAL',
     total_score: 7,
     graded_at: null,
+    trainee: { name: 'Test Trainee', email: 'test@vonnue.com' },
     ...overrides,
   };
 }
@@ -380,6 +389,13 @@ describe('CheckpointTraineeService', () => {
       expect(deadlineAt.getTime() - startedAt.getTime()).toBe(30 * 60_000);
       expect(attemptNumber).toBe(1);
       expect(questions).toEqual([question]);
+      expect(publishCheckpointActivity).toHaveBeenCalledWith({
+        checkpointId,
+        reason: 'ATTEMPT_STARTED',
+        attemptId,
+        traineeId,
+        traineeName: 'Test Trainee',
+      });
     });
   });
 
@@ -608,6 +624,13 @@ describe('CheckpointTraineeService', () => {
         expect.any(Date)
       );
       expect(result.submissionReason).toBe('TIME_EXPIRED');
+      expect(publishCheckpointActivity).toHaveBeenCalledWith({
+        checkpointId,
+        reason: 'ATTEMPT_SUBMITTED',
+        attemptId,
+        traineeId,
+        traineeName: 'Test Trainee',
+      });
     });
 
     it('rejects manual submission when early submission is disabled', async () => {
@@ -630,6 +653,13 @@ describe('CheckpointTraineeService', () => {
 
       expect(repo.finalizeAttempt).toHaveBeenCalledWith(attemptId, 'MANUAL', expect.any(Date));
       expect(result.status).toBe('SUBMITTED');
+      expect(publishCheckpointActivity).toHaveBeenCalledWith({
+        checkpointId,
+        reason: 'ATTEMPT_SUBMITTED',
+        attemptId,
+        traineeId,
+        traineeName: 'Test Trainee',
+      });
     });
 
     it('does not allow submitting another trainee attempt', async () => {

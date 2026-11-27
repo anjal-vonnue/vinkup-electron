@@ -76,7 +76,6 @@ export type TraineeReassignedEvent = {
 };
 
 /**
-<<<<<<< HEAD
  * A manager scheduled a checkpoint, making it visible to its assigned trainees.
  * Sent to every trainee the checkpoint reaches, so the Checkpoints tab can show
  * an unread indicator.
@@ -101,6 +100,29 @@ export type CheckpointResultsPublishedEvent = {
   checkpointTitle: string;
   /** When the results became visible to trainees. */
   publishedAt: string;
+};
+
+/**
+ * A checkpoint changed in a way the manager view should show without a reload:
+ * a trainee started or submitted an attempt, an attempt was graded, or a
+ * checkpoint was scheduled, cancelled or had its results published. Sent to
+ * every active manager; the REST response stays the source of truth.
+ */
+export type CheckpointUpdatedEvent = {
+  type: 'checkpoint.updated';
+  checkpointId: string;
+  reason:
+    | 'ATTEMPT_STARTED'
+    | 'ATTEMPT_SUBMITTED'
+    | 'ATTEMPT_GRADED'
+    | 'PUBLISHED'
+    | 'CANCELLED'
+    | 'RESULTS_PUBLISHED';
+  /** Present for attempt events, so an open submission can refresh too. */
+  attemptId?: string;
+  traineeId?: string;
+  traineeName?: string;
+  changedAt: string;
 };
 /**
  * A trainee submitted a leave request; sent to their assigned mentor so the
@@ -134,5 +156,6 @@ export type RealtimeEvent =
   | TraineeReassignedEvent
   | CheckpointPublishedEvent
   | CheckpointResultsPublishedEvent
+  | CheckpointUpdatedEvent
   | LeaveSubmittedEvent
   | LeaveReviewedEvent;

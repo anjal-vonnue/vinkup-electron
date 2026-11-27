@@ -51,7 +51,12 @@ vi.mock('./checkpoint.repository', () => ({
   },
 }));
 
+vi.mock('./checkpoint.notify', () => ({
+  publishCheckpointActivity: vi.fn(),
+}));
+
 import { CheckpointManagerService } from './checkpoint.manager.service';
+import { publishCheckpointActivity } from './checkpoint.notify';
 import { realtimeBroker } from '../realtime-module/realtime.broker';
 
 const publishSpy = vi.spyOn(realtimeBroker, 'publish');
@@ -351,6 +356,10 @@ describe('CheckpointManagerService', () => {
         't1',
         expect.objectContaining({ type: 'checkpoint.published', checkpointId })
       );
+      expect(publishCheckpointActivity).toHaveBeenCalledWith({
+        checkpointId,
+        reason: 'PUBLISHED',
+      });
     });
 
     it('publishes when a group still has at least one active member', async () => {
@@ -432,6 +441,10 @@ describe('CheckpointManagerService', () => {
       await service.cancel(managerId, checkpointId);
 
       expect(repo.cancelCheckpoint).toHaveBeenCalledWith(checkpointId, expect.any(Date));
+      expect(publishCheckpointActivity).toHaveBeenCalledWith({
+        checkpointId,
+        reason: 'CANCELLED',
+      });
     });
   });
 
@@ -484,6 +497,13 @@ describe('CheckpointManagerService', () => {
         managerId,
         expect.any(Date)
       );
+      expect(publishCheckpointActivity).toHaveBeenCalledWith({
+        checkpointId,
+        reason: 'ATTEMPT_GRADED',
+        attemptId,
+        traineeId: 'trainee-1',
+        traineeName: 'Trainee One',
+      });
     });
   });
 
@@ -587,6 +607,10 @@ describe('CheckpointManagerService', () => {
         'trainee-1',
         expect.objectContaining({ type: 'checkpoint.results.published', checkpointId })
       );
+      expect(publishCheckpointActivity).toHaveBeenCalledWith({
+        checkpointId,
+        reason: 'RESULTS_PUBLISHED',
+      });
     });
   });
 });
