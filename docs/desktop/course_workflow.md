@@ -2,8 +2,9 @@
 
 The Electron app runs the same React renderer as the web app. Course progress, code snapshots,
 submissions, mentor decisions and integrity scores all come from the Express API; the desktop shell
-adds only the local folder, preview server and terminal described in
-[workspace](workspace.md). This document follows the implementation in
+adds the local folder, preview server and terminal described in [workspace](workspace.md), plus
+fullscreen/overlay, focus and screen-lock protection that emits integrity flags. This document
+follows the implementation in
 `backend/src/module/dashboard-module/`, `backend/src/module/day-module/`,
 `backend/src/module/task-module/`, `backend/src/module/review-module/`,
 `backend/src/module/progress-module/`, `backend/src/module/ai-review-module/` and
@@ -18,18 +19,19 @@ erDiagram
   curriculum_day ||--o{ learning_objective : "id"
   curriculum_day ||--o{ self_check_item : "id"
   curriculum_day ||--o{ task : "sequence_order"
-  task ||--o| task_progress : "trainee + task"
+  task ||--o{ task_progress : "per trainee, unique on trainee + task"
   task_progress ||--o{ task_review : "one per submission_no"
-  curriculum_day ||--o| day_completion : "trainee + day"
-  curriculum_day ||--o| journal_response : "trainee + day"
+  curriculum_day ||--o{ day_completion : "per trainee, unique on trainee + day"
+  curriculum_day ||--o{ journal_response : "per trainee, unique on trainee + day"
 ```
 
 - `course` IDs are slugs (`html`, `css`, `js`, `ts`, `node`, `postgresql`, `prisma`, `react`) with a
   unique `sort_order`. `curriculum_day` IDs are strings such as `css-day-03`, unique per
   `(course_id, day_number)`. Task IDs are slugs such as `css-day-03-t-2`, unique per
   `(curriculum_day_id, sequence_order)`.
-- Curriculum content is seeded from `backend/src/lib/seed.ts`/`curriculum.json`; the database is the
-  source of truth for tasks and progress.
+- Curriculum content is seeded by `backend/src/lib/seed.ts` from
+  `backend/prisma/seed-data/curriculum.json`; the database is the source of truth for tasks and
+  progress.
 - `task.runtime` is `browser | node | sql`. The frontend uses that value, plus `run_command` and
   `setup_sql`, to choose the desktop runtime.
 - `task_progress` is unique on `(trainee_id, task_id)`. It holds the latest working `files`, the
@@ -42,8 +44,10 @@ erDiagram
 
 `ProgressService.isDayUnlocked()` is the only definition of the lock rule. A day is unlocked when it is
 already completed, when it is the first day in curriculum order, or when the preceding day is
-completed. Unknown day IDs are rejected before lock checks. The server enforces the rule; the UI only
-reflects it.
+completed. Unknown day IDs are rejected before lock checks. Interactive and state-changing endpoints
+enforce the rule; `GET /api/days/:dayId` still serves lesson content and
+`GET /api/days/:dayId/status` reports `isLocked` for a locked day. The UI only reflects the server’s
+decision.
 
 A day can be submitted when all **non-stretch** tasks for that day have `task_progress.status =
 'completed'` (meaning submitted at least once). Stretch goals do not block completion. Completing a day
@@ -58,10 +62,10 @@ is idempotent and returns the next day ID in curriculum order.
 | PATCH  | `/api/days/:dayId/complete`   | `CompleteDayResponse`                         |
 | PATCH  | `/api/days/:dayId/status`     | `DayCurrentStatus` (legacy alias of complete) |
 
-`PATCH /api/days/:dayId/status` is kept for the existing day overview client; prefer
-`/api/days/:dayId/complete`. Both call the same service. A locked day returns `403 DAY_LOCKED`; an
-incomplete checklist returns `403 CHECKLIST_INCOMPLETE` with `completedTasks` and `requiredTasks` in
-`error.details`.
+`PATCH /api/days/:dayId/status` is a legacy compatibility alias; the current frontend calls
+`PATCH /api/days/:dayId/complete` (`frontend/src/api/days.ts`). Both call the same service. A locked
+day returns `403 DAY_LOCKED`; an incomplete checklist returns `403 CHECKLIST_INCOMPLETE` with
+`completedTasks` and `requiredTasks` in `error.details`.
 
 ```ts
 type DayStatus = 'LOCKED' | 'UNLOCKED' | 'COMPLETED';
@@ -237,25 +241,27 @@ is stale — the Zod schema in `backend/src/module/review-module/review.schema.t
 
 A decision may only target a submission still waiting for review. No submission gives
 `409 TASK_NOT_SUBMITTED`; an already approved or reworked attempt gives `409 ALREADY_REVIEWED`. The
-check is repeated inside a transaction so two mentors cannot judge the same attempt. A successful
-decision publishes `task.reviewed` to the trainee’s open session; the trainee review history is append-only.
+check is repeated inside a transaction so two mentors cannot judge the same attempt. After a rework
+decision the trainee must resubmit the task; trying to approve or rework the reworked attempt again
+returns `409 ALREADY_REVIEWED`. A successful decision publishes `task.reviewed` to the trainee’s open
+session; the trainee review history is append-only.
 
-`AdminTaskCode` contains `instructionsMarkdown`, `status`, `reviewStatus`, `submissionCount`,
-`timeSpentSeconds`, `files` (the latest **submitted** files, never the live working copy),
-`codeUpdatedAt` and `lastSubmittedAt`. Mentors can read it for a trainee assigned to them; see
-[users](users.md).
+`AdminTaskCode` contains `taskId`, `title`, `sequenceOrder`, `isStarterCode`,
+`instructionsMarkdown`, `status`, `reviewStatus`, `submissionCount`, `timeSpentSeconds`, `files` (the
+latest **submitted** files, never the live working copy), `codeUpdatedAt` and `lastSubmittedAt`.
+Mentors can read it for a trainee assigned to them; see [users](users.md).
 
 ## Journal and integrity
 
 The journal is optional and stored per `(trainee_id, curriculum_day_id)`.
 
-| Method | Endpoint                     | Request            | Response               |
-| ------ | ---------------------------- | ------------------ | ---------------------- |
-| GET    | `/api/days/:dayId/journal`   | —                  | `DayJournal`           |
-| PUT    | `/api/days/:dayId/journal`   | `{ responseText }` | `DayJournal`           |
-| GET    | `/api/journal`               | —                  | `JournalListResponse`  |
-| GET    | `/api/days/:dayId/tasks`     | —                  | `DayTask[]`            |
-| GET    | `/api/days/:dayId/integrity` | —                  | `DayIntegrityResponse` |
+| Method | Endpoint                     | Request            | Response               | Errors                                |
+| ------ | ---------------------------- | ------------------ | ---------------------- | ------------------------------------- |
+| GET    | `/api/days/:dayId/journal`   | —                  | `DayJournal`           | `401`, `403 DAY_LOCKED`, `404`        |
+| PUT    | `/api/days/:dayId/journal`   | `{ responseText }` | `DayJournal`           | `400`, `401`, `403 DAY_LOCKED`, `404` |
+| GET    | `/api/journal`               | —                  | `JournalListResponse`  | `401`                                 |
+| GET    | `/api/days/:dayId/tasks`     | —                  | `DayTask[]`            | `401`, `403 DAY_LOCKED`               |
+| GET    | `/api/days/:dayId/integrity` | —                  | `DayIntegrityResponse` | `401`, `403 DAY_LOCKED`               |
 
 `responseText` is trimmed, required and at most **5,000 characters**. A journal failure on the day page
 is non-fatal: the page still renders with an empty journal.
@@ -276,15 +282,18 @@ type DayIntegrityResponse = { score: number | null }; // null = no task worked o
 ```
 
 The integrity score is computed from recorded flag events, not stored as a value. `IDLE` flags are shown
-to mentors but never scored. A task counts as worked on when it has a `task_progress` row **or** scored
-flag events; submission is not required. Penalties start from 100, are multiplied by the event’s
-`reviewPriority` (`LOW` 1.0, `NORMAL` 1.5, `HIGH` 2) and cannot make a task score negative:
+to mentors but never scored. A task counts as worked on when it has a `task_progress` row with status
+`in_progress` or `completed` (including heartbeat-only progress) **or** at least one scored flag event.
+A `not_started` row does not qualify, and submission is not required. Penalties start from 100, are
+multiplied by the event’s `reviewPriority` (`LOW` 1.0, `NORMAL` 1.5, `HIGH` 2) and cannot make a task
+score negative:
 
 - blocked paste: 10 points, counted at most 5 times per task;
 - tab switch: 3 points plus one per full minute away, at most 9 points, ignored for absences under
   10 seconds;
 - fullscreen exit: 4 points plus one per full minute away, at most 11 points;
-- window blur: 1 point, counted at most twice, ignored for absences under 10 seconds.
+- window blur: 1 point, counted at most twice; an absence under 10 seconds scores 0 but still consumes
+  one of the two counted blur slots.
 
 The day score is the rounded average of its task scores, clamped to 0–100. Integrity never blocks a
 trainee; it is reported to mentors. Flag events come from the desktop window protection described in
@@ -303,6 +312,7 @@ sequenceDiagram
   API-->>T: task.reviewed real-time event
   T->>API: GET /api/dashboard/rework
   API-->>T: ReworkTaskSummary[]
+  T->>API: POST /api/tasks/:id/submit (resubmit → pending)
   M->>API: POST /api/admin/trainees/:id/tasks/:id/approve with feedback
   API-->>T: task.reviewed real-time event
   T->>API: GET /api/dashboard/unread-comments
@@ -355,11 +365,11 @@ type UnreadTaskComment = {
 
 ## Certificate endpoints
 
-| Method | Endpoint                                  | Guard                | Response                          |
-| ------ | ----------------------------------------- | -------------------- | --------------------------------- |
-| GET    | `/api/courses/:courseId/certificate`      | trainee, own         | `CourseCertificate`               |
-| GET    | `/api/certificates/verify/:certificateId` | public, rate-limited | `CertificateVerificationResponse` |
-| POST   | `/api/certificates/:certificateId/revoke` | staff                | 204, no body                      |
+| Method | Endpoint                                  | Guard                | Response                                    |
+| ------ | ----------------------------------------- | -------------------- | ------------------------------------------- |
+| GET    | `/api/courses/:courseId/certificate`      | trainee, own         | `CourseCertificate`                         |
+| GET    | `/api/certificates/verify/:certificateId` | public, rate-limited | `CertificateVerificationResponse`           |
+| POST   | `/api/certificates/:certificateId/revoke` | staff                | 200 `CourseCertificate` (`status: REVOKED`) |
 
 `courseId` is a lowercase slug (`/^[a-z0-9-]+$/`, at most 50 characters) and day IDs are strings.
 A certificate ID matches `VK-[A-F0-9]{20}`. `CourseCertificate` includes the
@@ -372,17 +382,19 @@ Details are in [certificate security](../certificate-security.md).
 Mounted at `/api/admin/ai-review` behind `requireMentor`. The trainer’s saved prompts are private to
 that mentor; someone else’s prompt ID looks like a missing prompt.
 
-| Method | Endpoint                                           | Request                 | Response               |
-| ------ | -------------------------------------------------- | ----------------------- | ---------------------- |
-| GET    | `/api/admin/ai-review/prompts`                     | —                       | `ReviewPrompt[]`       |
-| POST   | `/api/admin/ai-review/prompts`                     | `{ name, content }`     | `ReviewPrompt` (201)   |
-| PATCH  | `/api/admin/ai-review/prompts/:promptId`           | `{ name?, content? }`   | `ReviewPrompt`         |
-| DELETE | `/api/admin/ai-review/prompts/:promptId`           | —                       | 204, no body           |
-| POST   | `/api/admin/ai-review/trainees/:traineeId/analyze` | `{ promptId, taskIds }` | `AnalyzeTasksResponse` |
+| Method | Endpoint                                           | Request                                       | Response               |
+| ------ | -------------------------------------------------- | --------------------------------------------- | ---------------------- |
+| GET    | `/api/admin/ai-review/prompts`                     | —                                             | `ReviewPrompt[]`       |
+| POST   | `/api/admin/ai-review/prompts`                     | `{ name, content }`                           | `ReviewPrompt` (201)   |
+| PATCH  | `/api/admin/ai-review/prompts/:promptId`           | `{ name?, content? }` (at least one required) | `ReviewPrompt`         |
+| DELETE | `/api/admin/ai-review/prompts/:promptId`           | —                                             | 204, no body           |
+| POST   | `/api/admin/ai-review/trainees/:traineeId/analyze` | `{ promptId, taskIds }`                       | `AnalyzeTasksResponse` |
 
-`name` is 1–100 characters, `content` is 1–8,000 characters, `promptId` is a UUID, and `taskIds`
-contains 1–50 task slugs of at most 100 characters. Duplicate prompt names for the same mentor give
-`409 PROMPT_NAME_TAKEN`. The `analyze` route also uses `requireAssignedTrainee` and returns
+A PATCH body must contain at least one of `name` or `content`; an empty body returns
+`400 VALIDATION_FAILED`. `name` is 1–100 characters, `content` is 1–8,000 characters, `promptId` is a
+UUID, and `taskIds` contains 1–50 task slugs of at most 100 characters. Duplicate prompt names for the
+same mentor give `409 PROMPT_NAME_TAKEN`. The `analyze` route also uses `requireAssignedTrainee` and
+returns
 recommendations only:
 
 ```ts
