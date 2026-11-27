@@ -43,7 +43,7 @@ After that, every API call simply carried the cookie:
 - `backend/src/middleware/authMiddleware.ts` (`requireAuth`) read that cookie,
   verified the JWT, and put the user on `request.user`.
 - The renderer had no token at all — the cookie was **httpOnly**, so even
-  JavaScript in the page couldn't touch it. The cookie *was* the session.
+  JavaScript in the page couldn't touch it. The cookie _was_ the session.
 
 ### How the app knew who was logged in
 
@@ -85,7 +85,7 @@ password). So the "redirect inside the page" trick dies immediately.
 An Electron window isn't a normal browser tab. Navigating the shell away from
 the app (or pointing it at Google) would either break the app or embed a
 webview that Google refuses — see (a). The login has to happen in the **user's
-own system browser**, and then somehow *come back* into the desktop app.
+own system browser**, and then somehow _come back_ into the desktop app.
 
 ### c) "Coming back" is the hard part
 
@@ -109,7 +109,7 @@ with the refresh token stored safely by the OS.
 
 This is the big security question. The Electron **renderer** (where React runs)
 is still effectively a browser context — anything in it can be read by
-compromised web content. So the answer is: the renderer should *never* hold
+compromised web content. So the answer is: the renderer should _never_ hold
 tokens. But the renderer still needs to call the same `/api` endpoints as the
 web app, which expect the `auth_token` cookie…
 
@@ -127,28 +127,28 @@ The new implementation (`desktop/src/main/auth/*`, backend
 
 1. **Open the user's system browser** for the Google consent screen.
 2. **Catch the redirect on a local loopback URL** (`http://127.0.0.1:<random
-   port>/callback`) with a tiny HTTP server spun up inside the Electron main
+port>/callback`) with a tiny HTTP server spun up inside the Electron main
    process.
 3. **Exchange a one-time code for tokens** — but never in the browser, only in
    the main process, proven with PKCE.
 
 And one clever glue detail: because the backend already owns the Google
-*Web* client (and we don't want to ship a client secret inside the desktop
+_Web_ client (and we don't want to ship a client secret inside the desktop
 app), the desktop flow **reuses the backend's Google client**. The browser leg
 ends at the backend, and the backend hands the app an **opaque one-time
 handoff code** — not a token.
 
 ### The cast of characters
 
-| Piece | File | Job |
-|---|---|---|
-| `DesktopAuthManager` | `desktop/src/main/auth/manager.ts` | The brain. Owns all tokens, runs login/refresh/logout, keeps session state |
-| `HttpDesktopAuthApi` | `desktop/src/main/auth/api.ts` | Talks to the backend **directly from main** (never through the renderer) |
-| Loopback listener | `desktop/src/main/auth/loopback.ts` | One-shot local HTTP server that catches the browser redirect |
-| `SecureDesktopCredentialStorage` | `desktop/src/main/auth/storage.ts` | Persists the refresh token, encrypted by the OS via `safeStorage` |
-| Backend `DesktopAuthService` | `backend/src/module/auth-module/desktop-auth.service.ts` | Transactions, handoff codes, PKCE check, session/refresh rotation |
-| Preload bridge | `desktop/src/preload/index.ts` | Exposes only `auth: { getState, login, cancel, refresh, logout, onChange }` via IPC |
-| Renderer `AuthProvider` | `frontend/src/context/AuthProvider.tsx` | If `window.desktop.auth` exists → desktop flow; else → old cookie flow |
+| Piece                            | File                                                     | Job                                                                                                                                           |
+| -------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DesktopAuthManager`             | `desktop/src/main/auth/manager.ts`                       | The brain. Owns all tokens, runs login/refresh/logout, keeps session state                                                                    |
+| `HttpDesktopAuthApi`             | `desktop/src/main/auth/api.ts`                           | Talks to the backend **directly from main** (never through the renderer)                                                                      |
+| Loopback listener                | `desktop/src/main/auth/loopback.ts`                      | One-shot local HTTP server that catches the browser redirect                                                                                  |
+| `SecureDesktopCredentialStorage` | `desktop/src/main/auth/storage.ts`                       | Persists the refresh token, encrypted by the OS via `safeStorage`                                                                             |
+| Backend `DesktopAuthService`     | `backend/src/module/auth-module/desktop-auth.service.ts` | Transactions, handoff codes, PKCE check, session/refresh rotation                                                                             |
+| Preload bridge                   | `desktop/src/preload/index.ts`                           | Exposes the `auth` namespace `{ getState, login, cancel, refresh, logout, onChange }` via IPC; other namespaces expose unrelated desktop APIs |
+| Renderer `AuthProvider`          | `frontend/src/context/AuthProvider.tsx`                  | If `window.desktop.auth` exists → desktop flow; else → old cookie flow                                                                        |
 
 ---
 
@@ -164,9 +164,10 @@ Electron main                    Backend                          System browser
      │                              │ saves a pending "transaction":  │
      │                              │  state, code_challenge,         │
      │                              │  loopback URI (5-min TTL)       │
-     │◄─────────────────────────────┤ transactionId, state, authUrl   │
+     │◄─────────────────────────────┤ transactionId, state,           │
+     │                              │ authorizationUrl, expiresAt     │
      │                              │                                 │
-     │ 2. shell.openExternal(authUrl) ────────────────────────────────►│
+     │ 2. shell.openExternal(authorizationUrl) ──────────────────────►│
      │                              │◄── GET /google?transaction=… ───┤
      │                              │ Passport "google-desktop"       │
      │                              │ strategy → Google consent ─────►│
@@ -189,9 +190,13 @@ Electron main                    Backend                          System browser
      │  - Host header must be       │                                 │
      │    exactly 127.0.0.1:<port>  │                                 │
      │    (anti DNS-rebinding)      │                                 │
-     │  - state must equal the      │                                 │
-     │    transaction state         │                                 │
      │  - accepts exactly ONE call  │                                 │
+     │                              │                                 │
+     │  main (manager.ts):          │                                 │
+     │  - error callback → fail;    │                                 │
+     │    state check skipped       │                                 │
+     │  - otherwise compare state   │                                 │
+     │    in constant time          │                                 │
      │                              │                                 │
      │ 4. POST /api/auth/desktop/exchange                             │
      │    { code: <handoff>, codeVerifier: <PKCE verifier> }          │
@@ -208,6 +213,7 @@ Electron main                    Backend                          System browser
      │  { accessToken,              │                                 │
      │    accessTokenExpiresAt,     │                                 │
      │    refreshToken,             │                                 │
+     │    refreshTokenExpiresAt,    │                                 │
      │    user }                    │                                 │
      │                              │                                 │
      │ 5. main process finishes:    │                                 │
@@ -240,12 +246,13 @@ memory. So the code in the URL is worthless on its own. It's also single-use,
 
 ### Why the loopback listener is paranoid
 
-`loopback.ts` checks:
+The `loopback.ts` listener and the `manager.ts` callback handler check:
 
 - **Host header** must be exactly `127.0.0.1:<port>` — blocks DNS-rebinding
   pages from faking a callback.
 - **Exact path** `/callback`, **GET only**.
-- **State equality** (constant-time compare) against the backend transaction.
+- **State equality** is checked later by `manager.ts` with a constant-time compare — but only when the
+  callback carried no error. Error callbacks fail immediately and skip that check.
 - **Exactly one** callback — a second one is ignored.
 - Binds to a **random port** for every login, with a 5-minute timeout.
 - Serves a locked-down HTML page (CSP `default-src 'none'`, `no-store`).
@@ -273,9 +280,12 @@ memory. So the code in the URL is worthless on its own. It's also single-use,
   **1 minute before expiry** (`REFRESH_SKEW_MS`), with a 60-second retry if
   the backend is down.
 - Every refresh **rotates** the refresh token: the old one is invalidated
-  server-side and a new one is stored. If a stolen refresh token is ever used
-  twice, rotation fails → session revoked. (This is the "sliding" 30-day
-  session — it keeps extending as long as you actually use the app.)
+  server-side and a new one is stored. Replaying the superseded token is
+  rejected with `SESSION_REVOKED`, but the active session is **not** revoked —
+  its current refresh token still works. There is no reuse detection that
+  revokes the whole session; explicit revocation happens on logout or token
+  expiry. (This is the "sliding" 30-day session — it keeps extending as long as
+  you actually use the app.)
 - Refresh tokens are never stored in plaintext: on disk only
   `safeStorage`-encrypted (and on Linux with the weak `basic_text` backend the
   app refuses to persist at all and keeps the session memory-only —
@@ -299,8 +309,9 @@ itself fails do we clear the UI state.
 
 ## 6. What the renderer is allowed to see
 
-The preload bridge (`desktop/src/preload/index.ts`) exposes exactly five
-functions and one event — no token ever crosses that boundary:
+The `auth` namespace of the preload bridge (`desktop/src/preload/index.ts`)
+exposes exactly five functions and one event — no token ever crosses that
+boundary:
 
 ```ts
 auth: {
@@ -326,16 +337,16 @@ intact for the browser build; the desktop path activates only when
 
 ## 7. Old vs new at a glance
 
-| | Old (browser) | New (Electron) |
-|---|---|---|
-| Consent screen | Same tab, full-page redirect | System browser via `openExternal` |
-| Who holds tokens | Nobody — httpOnly cookie only | **Main process only** (renderer still gets just an httpOnly cookie) |
-| Session secret | 7-day JWT cookie | Short-lived access JWT + 30-day sliding rotating refresh token |
-| Session restore | `GET /auth/me` with cookie | Decrypt stored refresh token → `POST /refresh` |
-| Expiry handling | 401 → back to `/login` | 401 → silent refresh → only then show login |
-| Persistent storage | Browser cookie jar | `safeStorage`-encrypted file, atomic write, `0600` |
-| Anti-theft measures | httpOnly + SameSite cookie | PKCE S256, one-time hashed handoff code, refresh rotation, loopback Host check, state compare, transaction TTLs |
-| Where auth API calls happen | Renderer (axios) | Main process (`HttpDesktopAuthApi`); renderer calls only go through IPC |
+|                             | Old (browser)                 | New (Electron)                                                                                                  |
+| --------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Consent screen              | Same tab, full-page redirect  | System browser via `openExternal`                                                                               |
+| Who holds tokens            | Nobody — httpOnly cookie only | **Main process only** (renderer still gets just an httpOnly cookie)                                             |
+| Session secret              | 7-day JWT cookie              | Short-lived access JWT + 30-day sliding rotating refresh token                                                  |
+| Session restore             | `GET /auth/me` with cookie    | Decrypt stored refresh token → `POST /refresh`                                                                  |
+| Expiry handling             | 401 → back to `/login`        | 401 → silent refresh → only then show login                                                                     |
+| Persistent storage          | Browser cookie jar            | `safeStorage`-encrypted file, atomic write, `0600`                                                              |
+| Anti-theft measures         | httpOnly + SameSite cookie    | PKCE S256, one-time hashed handoff code, refresh rotation, loopback Host check, state compare, transaction TTLs |
+| Where auth API calls happen | Renderer (axios)              | Main process (`HttpDesktopAuthApi`); renderer calls only go through IPC                                         |
 
 ---
 
@@ -348,7 +359,7 @@ desktop/
     loopback.ts       One-shot 127.0.0.1 listener for the OAuth redirect
     api.ts            HTTP calls to the backend from main + error-code mapping
     storage.ts        Encrypted, atomic refresh-token persistence
-  src/preload/index.ts  The only API surface the renderer can reach
+  src/preload/index.ts  The renderer-facing bridge; its auth namespace is the auth surface used here
 
 backend/src/module/auth-module/
   desktop-auth.service.ts    Transactions, handoff codes, PKCE verify, rotation
@@ -377,6 +388,6 @@ itself with PKCE, and exchanges a one-time hashed handoff code for a
 short-lived access token plus a rotating refresh token that is encrypted by
 the OS. The renderer gets an httpOnly cookie (so all existing API middleware
 works unchanged) and a tiny IPC surface that only ever reports
-`{ status, user, error }`. The result: desktop-grade security, silent session
+`{ status, user, error, persistent }`. The result: desktop-grade security, silent session
 renewal, offline-tolerant restore — and the plain web flow still works exactly
 as before.
