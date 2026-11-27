@@ -16,7 +16,8 @@ model in `backend/prisma/schema.prisma`.
 flowchart LR
   Trainee[Trainee desktop app] -->|submit task / create leave request| API[Express API]
   Mentor[Mentor desktop app] -->|configure own channel ID| API
-  API -->|queue row in same DB transaction| Outbox[(slack_notification_outbox)]
+  API -->|task submissions: queue in same DB transaction| Outbox[(slack_notification_outbox)]
+  API -->|leave requests: enqueue after create, best effort| Outbox
   API -->|in-app SSE notification| Mentor
   Worker[Slack outbox worker] -->|claim with SKIP LOCKED| Outbox
   Worker -->|chat.postMessage| Slack[Slack Web API]
@@ -40,6 +41,10 @@ rejecting a leave request never queues a Slack notification. If Slack is disable
 mentor, the mentor has no channel, or queueing fails, the leave request is still created and the rest
 of the workflow continues normally with no Slack notification. Existing in-app/SSE notifications and
 mentor/manager review permissions are unchanged.
+
+For task submissions, a duplicate outbox write (`P2002`) is ignored, but any other outbox error is
+rethrown inside the submission transaction and fails the submission. Leave queue failures are logged
+and swallowed; the leave request remains.
 
 ## Slack application setup
 
@@ -143,9 +148,14 @@ and `leave_request:<request-id>` for leave requests, so the same event cannot be
 - **Temporary failures** (network, 5xx, HTTP 429/`ratelimited`): retried with exponential backoff
   (15 s base, capped at 5 min, plus up to 999 ms of jitter). A numeric-seconds `Retry-After` header is
   honoured by waiting `max(retryAfterSeconds * 1000, 15_000)`; that value is not capped at 5 min.
-- **Permanent failures** (`invalid_auth`, `missing_scope`, `channel_not_found`, archived channel,
-  etc.) and attempts beyond `max_attempts` (default 5) are marked `FAILED` and kept for inspection.
-- **Restart recovery:** expired `PROCESSING` leases are returned to `PENDING` on worker startup.
+- **Permanent failures** are `invalid_auth`, `account_inactive`, `token_revoked`, `token_expired`,
+  `missing_scope`, `channel_not_found`, `is_archived`, `invalid_channel` and
+  `parameter_validation_failed`. They are marked `FAILED` and kept for inspection.
+- **Other failures** — any Slack error not in the permanent list, plus generic errors — are retried
+  until `max_attempts` (default 5), then marked `FAILED`.
+- **Lease recovery:** worker startup returns expired `PROCESSING` leases to `PENDING`; every 5-second
+  poll also claims `PROCESSING` rows older than 60 seconds, renewing the lease and incrementing the
+  attempt count.
 - **Worker lifecycle:** the worker starts when the backend listens and stops gracefully on
   `SIGINT`/`SIGTERM`.
 
@@ -171,13 +181,16 @@ available), submission count, submission timestamp and review status.
 *Subject:* Personal Leave
 ```
 
-User-provided text is escaped for `&`, `<` and `>`. Zero-width characters are inserted only into
-`@here`, `@channel` and `@everyone`, so those mass mentions cannot be triggered accidentally.
-Arbitrary `@username` mentions are not neutralized. Internal IDs and tokens are not included.
+Escaping for `&`, `<` and `>` (plus zero-width insertion into `@here`, `@channel` and `@everyone`)
+applies to leave message text and the Task Block Kit fields. Arbitrary `@username` mentions are not
+neutralized, and internal IDs and tokens are not included. The task fallback `text` uses the raw
+trainee name and task title, so it is not mention-safe; see [known limitations](#known-limitations).
 
-The in-app notification shown to mentors/managers is a separate channel (the SSE stream at
-`GET /api/events` and the header badge backed by `GET /api/leave-requests/unread-count`). Disabling
-Slack or failing delivery does not suppress those in-app notifications.
+In-app notifications are a separate channel. Trainee header badges use
+`GET /api/leave-requests/unread-count?since=…`; mentor/manager badges use `getPendingLeaveCount(role)`
+— `GET /api/admin/leave-requests/pending-count` for mentors and
+`GET /api/manager/leave-requests/pending-count` for managers. `GET /api/events` refreshes the counts
+over SSE. Disabling Slack or failing delivery does not suppress those in-app notifications.
 
 ## Source files
 
@@ -196,5 +209,7 @@ Slack or failing delivery does not suppress those in-app notifications.
   invited to each channel. Automated tests mock all Slack API calls.
 - The worker polls every 5 seconds; notifications are near-real-time, not instant.
 - Failed rows are retained for investigation; there is no admin UI to replay them yet.
+- The task fallback `text` in `backend/src/module/slack-module/slack-notification.worker.ts` uses the
+  raw trainee name and task title; only the Block Kit fields and leave messages are escaped.
 - A plain browser build can configure and use the same REST endpoints, but the desktop app offers no
   additional Slack-specific Electron API.
