@@ -44,19 +44,23 @@ const envSchema = z
     ),
     /** Lifetime of a desktop access JWT. Refresh tokens are long-lived and revocable. */
     DESKTOP_ACCESS_TOKEN_TTL: z.string().default('15m'),
-    /** Hourly sweep of abandoned desktop auth transactions. */
-    DESKTOP_TRANSACTION_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+    /** Weekly sweep of abandoned desktop auth transactions. */
+    DESKTOP_TRANSACTION_CLEANUP_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(604_800_000),
     /** How long failed and consumed transactions remain available for debugging. */
     DESKTOP_TRANSACTION_FAILED_RETENTION_MS: z.coerce
       .number()
       .int()
       .nonnegative()
-      .default(3_600_000),
+      .default(604_800_000),
     DESKTOP_TRANSACTION_CONSUMED_RETENTION_MS: z.coerce
       .number()
       .int()
       .nonnegative()
-      .default(3_600_000),
+      .default(604_800_000),
     ALLOWED_EMAIL_DOMAIN: z.string().min(1),
     FRONTEND_URL: z.string().default('http://localhost:5173'),
     JWT_SECRET: z.string().min(16),

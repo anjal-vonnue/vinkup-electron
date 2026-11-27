@@ -53,7 +53,10 @@ async function seedTransaction(overrides: SeedOverrides = {}) {
   return { id: row.id, handoffCode, state: row.state };
 }
 
-const service = new DesktopAuthService();
+const service = new DesktopAuthService(undefined, undefined, undefined, {
+  failedMs: HOUR_MS,
+  consumedMs: HOUR_MS,
+});
 
 beforeEach(async () => {
   await db.$executeRawUnsafe(
