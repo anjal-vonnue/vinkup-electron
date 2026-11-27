@@ -519,6 +519,7 @@ export class CheckpointRepository {
       return tx.checkpoint_attempt.findUniqueOrThrow({
         where: { id: attempt.id },
         include: {
+          trainee: { select: { name: true } },
           answers: true,
           checkpoint: {
             select: {

@@ -16,6 +16,7 @@ import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import { MANAGER_NAV } from '../../constants/managerNav';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import {
@@ -32,11 +33,13 @@ import styles from './ManagerCheckpointsPage.module.css';
 
 type EditorTarget = { mode: 'create' } | { mode: 'edit'; checkpointId: string } | null;
 
-function sessionLabel(checkpoint: ManagerCheckpointSummary): string {
+/** How often the Upcoming / Live now / Window closed badge re-evaluates. */
+const STATUS_TICK_MS = 30_000;
+
+function sessionLabel(checkpoint: ManagerCheckpointSummary, now: number): string {
   if (checkpoint.status === 'DRAFT') return 'Draft';
   if (checkpoint.status === 'CANCELLED') return 'Cancelled';
   if (!checkpoint.startAt) return 'Scheduled';
-  const now = Date.now();
   const start = new Date(checkpoint.startAt).getTime();
   const end = start + checkpoint.durationMinutes * 60_000;
   if (now < start) return 'Upcoming';
@@ -44,10 +47,10 @@ function sessionLabel(checkpoint: ManagerCheckpointSummary): string {
   return 'Window closed';
 }
 
-function statusClass(checkpoint: ManagerCheckpointSummary): string {
+function statusClass(checkpoint: ManagerCheckpointSummary, now: number): string {
   if (checkpoint.status === 'CANCELLED') return styles.badgeCancelled;
   if (checkpoint.status === 'DRAFT') return styles.badgeDraft;
-  if (sessionLabel(checkpoint) === 'Live now') return styles.badgeLive;
+  if (sessionLabel(checkpoint, now) === 'Live now') return styles.badgeLive;
   return styles.badgeScheduled;
 }
 
@@ -68,6 +71,20 @@ export default function ManagerCheckpointsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  // The badge is time-based, so re-render it when a scheduled window opens or
+  // closes even if no realtime event arrives.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), STATUS_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // A trainee starting or submitting changes the attempt counts and status.
+  useRealtimeEvent((event) => {
+    if (event.type === 'checkpoint.updated') reload();
+  });
+  useRealtimeRefresh(reload);
 
   useEffect(() => {
     let cancelled = false;
@@ -337,8 +354,8 @@ export default function ManagerCheckpointsPage() {
                         )}
                       </td>
                       <td>
-                        <span className={`${styles.badge} ${statusClass(checkpoint)}`}>
-                          {sessionLabel(checkpoint)}
+                        <span className={`${styles.badge} ${statusClass(checkpoint, now)}`}>
+                          {sessionLabel(checkpoint, now)}
                         </span>
                       </td>
                       <td>

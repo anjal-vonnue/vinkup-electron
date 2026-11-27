@@ -11,6 +11,7 @@ import LoaderOverlay from '../../components/Common/LoadingState';
 import { ErrorState } from '../../components/Common/ErrorState';
 import MarkdownRenderer from '../../components/MarkdownRenderer';
 import { useToast } from '../../components/Toast';
+import { useRealtimeEvent, useRealtimeRefresh } from '../../context/useRealtime';
 import { MANAGER_NAV } from '../../constants/managerNav';
 import { formatIstDateTime } from '../../lib/formatDateTime';
 import { createTasksZip, downloadBlob, safeZipName } from '../../lib/adminTaskZip';
@@ -65,6 +66,7 @@ export default function ManagerCheckpointResultsPage() {
   const [attemptDetail, setAttemptDetail] = useState<ManagerCheckpointAttemptDetail | null>(null);
   const [attemptLoading, setAttemptLoading] = useState(false);
   const [attemptError, setAttemptError] = useState<string | null>(null);
+  const [attemptReloadKey, setAttemptReloadKey] = useState(0);
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState('');
   const [grading, setGrading] = useState(false);
@@ -72,6 +74,17 @@ export default function ManagerCheckpointResultsPage() {
   const [downloadingFiles, setDownloadingFiles] = useState(false);
 
   const reload = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  // New starts, submissions and grades land without a manual refresh. Only
+  // events for the checkpoint on screen matter here.
+  useRealtimeEvent((event) => {
+    if (event.type !== 'checkpoint.updated' || event.checkpointId !== checkpointId) return;
+    reload();
+    if (event.attemptId && event.attemptId === selectedAttemptId) {
+      setAttemptReloadKey((value) => value + 1);
+    }
+  });
+  useRealtimeRefresh(reload);
 
   useEffect(() => {
     if (!checkpointId) return;
@@ -132,7 +145,7 @@ export default function ManagerCheckpointResultsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedAttemptId]);
+  }, [selectedAttemptId, attemptReloadKey]);
 
   const stats = useMemo(() => {
     const list = attempts ?? [];

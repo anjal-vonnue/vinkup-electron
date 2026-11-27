@@ -26,6 +26,7 @@ import {
   toTraineeSummary,
 } from './checkpoint.mapper';
 import { CheckpointRepository, type AttemptSummaryRow } from './checkpoint.repository';
+import { publishCheckpointActivity } from './checkpoint.notify';
 import type { SaveAnswerBody } from './checkpoint.schema';
 
 const repository = new CheckpointRepository();
@@ -70,10 +71,23 @@ function toSubmitResponse(
 async function finalizeExpired(
   attempt: { id: string; deadline_at: Date },
   now: Date
-): Promise<void> {
+): Promise<AttemptSummaryRow | null> {
   if (attempt.deadline_at.getTime() <= now.getTime()) {
-    await repository.finalizeAttempt(attempt.id, 'TIME_EXPIRED', now);
+    return repository.finalizeAttempt(attempt.id, 'TIME_EXPIRED', now);
   }
+  return null;
+}
+
+/** Tells managers that an attempt became submitted, whichever path finalised it. */
+async function publishSubmitted(row: AttemptSummaryRow | null, traineeId: string): Promise<void> {
+  if (row?.status !== 'SUBMITTED') return;
+  await publishCheckpointActivity({
+    checkpointId: row.checkpoint_id,
+    reason: 'ATTEMPT_SUBMITTED',
+    attemptId: row.id,
+    traineeId,
+    traineeName: row.trainee.name,
+  });
 }
 
 export class CheckpointTraineeService {
@@ -109,7 +123,8 @@ export class CheckpointTraineeService {
         const active = await repository.findAttemptWithCheckpoint(latest.id);
         if (active) return toTraineeAttempt(active);
       }
-      await repository.finalizeAttempt(latest.id, 'TIME_EXPIRED', now);
+      const expired = await repository.finalizeAttempt(latest.id, 'TIME_EXPIRED', now);
+      await publishSubmitted(expired, traineeId);
       checkpoint = await repository.findTraineeCheckpoint(traineeId, checkpointId);
       if (!checkpoint) throw new CheckpointNotAssignedError();
     }
@@ -119,7 +134,8 @@ export class CheckpointTraineeService {
     const activeOther = await repository.findActiveAttemptWithCheckpoint(traineeId);
     if (activeOther) {
       if (activeOther.deadline_at.getTime() <= now.getTime()) {
-        await repository.finalizeAttempt(activeOther.id, 'TIME_EXPIRED', now);
+        const expired = await repository.finalizeAttempt(activeOther.id, 'TIME_EXPIRED', now);
+        await publishSubmitted(expired, traineeId);
       } else {
         throw new CheckpointActiveError({
           attemptId: activeOther.id,
@@ -183,6 +199,13 @@ export class CheckpointTraineeService {
         attemptsUsed + 1,
         checkpoint.questions
       );
+      await publishCheckpointActivity({
+        checkpointId,
+        reason: 'ATTEMPT_STARTED',
+        attemptId: attempt.id,
+        traineeId,
+        traineeName: attempt.trainee.name,
+      });
       return toTraineeAttempt(attempt);
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
@@ -207,7 +230,7 @@ export class CheckpointTraineeService {
     if (!attempt || attempt.trainee_id !== traineeId) throw new NotFoundError('Attempt not found.');
 
     if (attempt.status === 'IN_PROGRESS' && attempt.deadline_at.getTime() <= now.getTime()) {
-      await finalizeExpired(attempt, now);
+      await publishSubmitted(await finalizeExpired(attempt, now), traineeId);
       attempt = await repository.findAttemptWithCheckpoint(attemptId);
       if (!attempt) throw new NotFoundError('Attempt not found.');
     }
@@ -230,7 +253,10 @@ export class CheckpointTraineeService {
     const active = await repository.findActiveAttemptWithCheckpoint(traineeId);
     if (!active) return null;
     if (active.deadline_at.getTime() <= now.getTime()) {
-      await repository.finalizeAttempt(active.id, 'TIME_EXPIRED', now);
+      await publishSubmitted(
+        await repository.finalizeAttempt(active.id, 'TIME_EXPIRED', now),
+        traineeId
+      );
       return null;
     }
     const attempt = await repository.findAttemptWithCheckpoint(active.id);
@@ -251,7 +277,10 @@ export class CheckpointTraineeService {
       throw new CheckpointAttemptFinalizedError();
     }
     if (attempt.deadline_at.getTime() <= now.getTime()) {
-      await repository.finalizeAttempt(attemptId, 'TIME_EXPIRED', now);
+      await publishSubmitted(
+        await repository.finalizeAttempt(attemptId, 'TIME_EXPIRED', now),
+        traineeId
+      );
       throw new CheckpointExpiredError();
     }
 
@@ -328,6 +357,7 @@ export class CheckpointTraineeService {
 
     if (now.getTime() >= attempt.deadline_at.getTime()) {
       const finalized = await repository.finalizeAttempt(attemptId, 'TIME_EXPIRED', now);
+      await publishSubmitted(finalized, traineeId);
       return toSubmitResponse(finalized, attempt.checkpoint);
     }
 
@@ -340,6 +370,7 @@ export class CheckpointTraineeService {
     }
 
     const finalized = await repository.finalizeAttempt(attemptId, 'MANUAL', now);
+    await publishSubmitted(finalized, traineeId);
     return toSubmitResponse(finalized, attempt.checkpoint);
   };
 
@@ -349,7 +380,10 @@ export class CheckpointTraineeService {
     if (!attempt || attempt.trainee_id !== traineeId) throw new NotFoundError('Attempt not found.');
 
     if (attempt.status === 'IN_PROGRESS' && attempt.deadline_at.getTime() <= now.getTime()) {
-      await repository.finalizeAttempt(attemptId, 'TIME_EXPIRED', now);
+      await publishSubmitted(
+        await repository.finalizeAttempt(attemptId, 'TIME_EXPIRED', now),
+        traineeId
+      );
       attempt = await repository.findAttempt(attemptId);
       if (!attempt) throw new NotFoundError('Attempt not found.');
     }
