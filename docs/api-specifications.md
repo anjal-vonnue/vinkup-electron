@@ -179,9 +179,9 @@ One rule, `ProgressService.isDayUnlocked()` (`progress-module/progress.service.t
 | GET    | `/api/admin/trainees/:traineeId/flags`                 | Mentor  | An assigned trainee's flag events, newest first                                            |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/code`    | Mentor  | An assigned trainee's saved files for a task (read-only)                                   |
 | GET    | `/api/admin/analytics`                                 | Mentor  | Team analytics for a period: progress, comparison, task status, typing, integrity          |
-| GET    | `/api/admin/slack-channel`                             | Mentor  | This mentor's configured Slack channel ID                                              |
-| PUT    | `/api/admin/slack-channel`                             | Mentor  | Save or replace this mentor's Slack channel ID                                         |
-| DELETE | `/api/admin/slack-channel`                             | Mentor  | Clear this mentor's Slack channel ID                                                    |
+| GET    | `/api/admin/slack-channel`                             | Mentor  | This mentor's configured Slack channel ID                                                  |
+| PUT    | `/api/admin/slack-channel`                             | Mentor  | Save or replace this mentor's Slack channel ID                                             |
+| DELETE | `/api/admin/slack-channel`                             | Mentor  | Clear this mentor's Slack channel ID                                                       |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/approve` | Mentor  | Approve an assigned trainee's current submission                                           |
 | POST   | `/api/admin/trainees/:traineeId/tasks/:taskId/rework`  | Mentor  | Send an assigned trainee's submission back for rework                                      |
 | GET    | `/api/admin/trainees/:traineeId/tasks/:taskId/reviews` | Mentor  | Review history for an assigned trainee's task                                              |
@@ -649,7 +649,7 @@ or `{ "responseText": "Because padding and border stay inside the declared width
 - **Path params:** `dayId`: string, 1–100 chars.
 - **Business rules** (`integrity.service.ts`, pure scoring in `integrity.scoring.ts`):
   1. Unknown day → 404; locked day → `403 DAY_LOCKED`.
-  2. The tasks that count are this day's tasks the trainee **worked on**: a `task_progress` row (saved code) **or** at least one flag event. Submission is not required.
+  2. The tasks that count are this day's tasks the trainee **worked on**: a `task_progress` row with status `in_progress` or `completed` (heartbeat-only progress qualifies; `not_started` does not) **or** at least one flag event. Submission is not required.
   3. **Task score** = 100 minus the penalties of that task's flag events, never below 0. Penalty per event, before the priority multiplier:
 
 | Event             | Penalty                                                            | Cap                    |
@@ -657,7 +657,7 @@ or `{ "responseText": "Because padding and border stay inside the declared width
 | `PASTE_BLOCKED`   | 10                                                                 | first 5 per task count |
 | `TAB_SWITCH`      | 0 if `durationMs` < 10,000; else 3 + 1 per full minute (extra ≤ 6) | 9 per event            |
 | `FULLSCREEN_EXIT` | 4 + 1 per full minute (extra ≤ 7); always counts                   | 11 per event           |
-| `WINDOW_BLUR`     | 0 if `durationMs` < 10,000; else 1                                 | first 2 per task count |
+| `WINDOW_BLUR`     | 0 if `durationMs` < 10,000 (still consumes a slot); else 1         | first 2 per task count |
 
      Each penalty is multiplied by the event's `review_priority`: `LOW` ×1, `NORMAL` ×1.5, `HIGH` ×2. A missing `durationMs` counts as 0 extra minutes and isn't "short".
 
@@ -1265,7 +1265,7 @@ from `req.user.id`; no mentor id is accepted from the client. Trainees and manag
 ### POST /api/admin/trainees/:traineeId/tasks/:taskId/approve
 
 - **Auth:** admin.
-- **Request body:** optional `{ "feedback": "Optional note" }`; the whole body may be omitted. Trimmed, max 5,000 characters.
+- **Request body:** optional `{ "feedback": "Optional note" }`; the whole body may be omitted. Trimmed, max 10,000 characters (`MAX_FEEDBACK_CHARS`).
 - **Business rules:** creates a `task_review` row for the current `submission_no` and sets `task_progress.review_status = 'approved'` in one transaction. Only a `completed` submission that is still `pending` (or legacy `NULL`) can be approved.
 - **Response 201** (`TaskReview`):
 
@@ -1287,7 +1287,7 @@ from `req.user.id`; no mentor id is accepted from the client. Trainees and manag
 ### POST /api/admin/trainees/:traineeId/tasks/:taskId/rework
 
 - **Auth:** admin.
-- **Request body:** `{ "feedback": "What must change" }` — trimmed, required, 1–5,000 characters.
+- **Request body:** `{ "feedback": "What must change" }` — trimmed, required, 1–10,000 characters (`MAX_FEEDBACK_CHARS`).
 - **Business rules:** same transaction and state checks as approve, with `decision: 'rework'`. The trainee must edit and resubmit before the task can be reviewed again.
 - **Response 201** (`TaskReview`), identical shape to approve with `"decision": "rework"` and the given feedback.
 - **Errors:** 400 `VALIDATION_FAILED`; 401; 403; 404; 409 `TASK_NOT_SUBMITTED`; 409 `ALREADY_REVIEWED`.
