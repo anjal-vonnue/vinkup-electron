@@ -212,8 +212,9 @@ folder.
   `generated`, `.vinkup` and `.not-committed`. Ignored files include `package-lock.json`, `.DS_Store`
   and `*.log`.
 - Files containing NUL, U+FFFD or a known binary extension are not mirrored back into the editor.
-- Terminal ids must be UUID-shaped and must belong to the supplied task; dimensions are clamped to
-  2–400 columns and 2–200 rows by the PTY layer (IPC input is rounded and clamped to 2–400).
+- Terminal ids must be UUID-shaped and must belong to the supplied task. IPC input is rounded and
+  clamped to 2–400 for both columns and rows; the PTY layer then clamps columns to 20–400 and rows to
+  2–200.
 - Terminal input is limited to 16,384 characters per `write`. Run commands are limited to 500
   characters and reject line breaks and NUL.
 
@@ -382,7 +383,8 @@ preview servers. The default remote URL is
 `<api>/api/resources/allowlist`; set `VINKUP_RESOURCES_ALLOWLIST_URL` to another URL or to an empty
 string to override or disable remote updates. There is currently no backend route mounted at that
 default path, so normal operation uses the bundled or cached list. Secondary display windows mirror
-these calls through `window.vinkupDisplay.resources` and `secondary-resources:*` channels; see
+these calls through `window.vinkupDisplay.resources` and `secondary-resources:*` channels, except
+`onActivity`; overlay-chrome activity is sent automatically over `resources:activity`. See
 [window management](window.md).
 
 ## Current limitations
@@ -390,5 +392,9 @@ these calls through `window.vinkupDisplay.resources` and `secondary-resources:*`
 - Recursive filesystem watching is best effort: filesystems that do not support it still mirror
   editor saves to disk, but terminal-created files need `workspace:reload`.
 - The desktop shell does not flush accumulated activity time immediately before quit.
+- `ipcMain.on('resources:activity')` forwards the activity ping without checking `event.sender`, so a
+  frame that can send IPC can trigger the renderer heartbeat.
+- Process cleanup uses a 3-second `KILL_GRACE_MS` in `workspace/process.ts` but 2 seconds in
+  `workspace/pty.ts`; terminal and fallback-run shutdown windows differ.
 - Local workspaces require the Electron shell. `window.desktop` is absent in a plain browser, so
   `useLocalWorkspace` reports "Local workspaces are only available in the desktop app."
