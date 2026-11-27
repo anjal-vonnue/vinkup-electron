@@ -80,17 +80,17 @@ A resubmission always sets it back to `pending`; it never clears the previous hi
 
 `task_review` is append-only history:
 
-| Column                      | Type              | Notes                                                |
-| --------------------------- | ----------------- | ---------------------------------------------------- |
-| `id`                        | `UUID`            | Primary key                                          |
-| `trainee_id`                | `UUID`            | FK → `trainee`, cascades on delete                   |
-| `task_id`                   | `String`          | FK → `task`, cascades on delete                      |
-| `admin_id`                  | `UUID`            | FK → `admin`, cascades on delete                     |
-| `submission_no`             | `Int`             | The attempt being judged                             |
-| `decision`                  | `review_decision` | `approved` / `rework`                                |
-| `feedback`                  | `String`          | `''` for an approval without a note; max 5,000 chars |
-| `reviewed_at`               | `TIMESTAMPTZ`     | When the decision was made                           |
-| `created_at` / `updated_at` | `TIMESTAMPTZ`     | Audit timestamps                                     |
+| Column                      | Type              | Notes                                                 |
+| --------------------------- | ----------------- | ----------------------------------------------------- |
+| `id`                        | `UUID`            | Primary key                                           |
+| `trainee_id`                | `UUID`            | FK → `trainee`, cascades on delete                    |
+| `task_id`                   | `String`          | FK → `task`, cascades on delete                       |
+| `admin_id`                  | `UUID`            | FK → `admin`, cascades on delete                      |
+| `submission_no`             | `Int`             | The attempt being judged                              |
+| `decision`                  | `review_decision` | `approved` / `rework`                                 |
+| `feedback`                  | `String`          | `''` for an approval without a note; max 10,000 chars |
+| `reviewed_at`               | `TIMESTAMPTZ`     | When the decision was made                            |
+| `created_at` / `updated_at` | `TIMESTAMPTZ`     | Audit timestamps                                      |
 
 Indexes:
 
@@ -159,13 +159,13 @@ for every route that names a trainee.
 
 - Body: optional `{ "feedback": "Optional note" }`; the whole body may be omitted.
 - Response `201` with the created `TaskReview`.
-- Errors: `400 VALIDATION_FAILED` (note over 5,000 chars), `403`, `404`
+- Errors: `400 VALIDATION_FAILED` (note over 10,000 chars), `403`, `404`
   (`Trainee not found.` / `Task not found.`), `409 TASK_NOT_SUBMITTED`,
   `409 ALREADY_REVIEWED`.
 
 ### `POST .../rework`
 
-- Body: `{ "feedback": "What must change" }`; trimmed, required, 1–5,000 chars.
+- Body: `{ "feedback": "What must change" }`; trimmed, required, 1–10,000 chars.
 - Response `201` with the created `TaskReview`.
 - Errors: `400 VALIDATION_FAILED`, `403`, `404`, `409 TASK_NOT_SUBMITTED`,
   `409 ALREADY_REVIEWED`.

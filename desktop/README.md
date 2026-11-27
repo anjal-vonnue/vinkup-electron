@@ -35,11 +35,12 @@ On multi-display setups, other displays are covered while the app is running.
 Press `Ctrl+Alt+Shift+M` to move the fullscreen app to the next display;
 moving the app away from focus opens a return-or-exit alert on every display.
 Screen protection is enabled for trainee sessions and disabled for authenticated
-admin/mentor sessions. The main process bases this on the authenticated user's
-role; admins can use a normal window without display covers or focus alerts.
-In GNOME sessions, Super+Arrow tiling, Super+H minimize, and Super+D show
-desktop bindings are temporarily removed from GNOME keybinding settings,
-including extension-defined bindings, while a trainee is authenticated. This
+mentor/manager staff sessions. The main process bases this on the authenticated
+user's role; staff can use a normal window without display covers or focus
+alerts. In GNOME sessions, 22 bindings are temporarily removed from GNOME
+keybinding settings while a trainee is authenticated: Super+Arrow (all four
+directions), Super+H, Super+D, Super+P, Super+KP_1–9, Alt+Space,
+Alt+F5/F6/F10, F1 and Super+F1. Extension-defined bindings are included. This
 affects other applications in that same desktop session until the trainee logs
 out or VinkUp exits. The original bindings are saved and restored on logout/exit;
 if VinkUp is interrupted, it attempts recovery at its next startup.
@@ -50,11 +51,13 @@ to Documents/VinkUp Certificates and then VinkUp app data if needed. Existing
 files are preserved and duplicate names receive a numbered suffix. This avoids
 opening a native print/save dialog, so focus protection remains active.
 
-To temporarily disable the entire screen-protection feature for a developer
-run, add `VINKUP_DISABLE_SCREEN_PROTECTION=true` to `desktop/.env.local` and
-restart Electron. The setting is read only by the desktop main process and is
-not exposed to the renderer. Protection is enabled by default; only the exact
-values `true` and `false` are accepted.
+To temporarily disable display covers, focus alerts and fullscreen protection
+for a developer run, add `VINKUP_DISABLE_SCREEN_PROTECTION=true` to
+`desktop/.env.local` and restart Electron. GNOME shortcut removal is still
+applied to authenticated trainees. The setting is read only by the desktop main
+process and is not exposed to the renderer. Protection is enabled by default:
+the value is trimmed and lower-cased, `true` disables it, `false`/blank/unset
+keeps it enabled, and any other value fails at startup.
 
 If you want to run them separately (for example, to restart only the shell):
 
@@ -64,8 +67,8 @@ npm run dev -w desktop
 ```
 
 In development, Electron loads Vite directly. In production it loads the local
-server that serves `frontend/dist` — that is why the frontend must be built
-before `npm run start:desktop` or `npm run dist:desktop`.
+server that serves `frontend/dist`, so the frontend must be built before
+`npm run start:desktop`. `npm run dist:desktop` builds it automatically.
 
 Authentication uses the system browser and the backend's Google OAuth client. The
 main process creates a PKCE transaction, opens Google in the system browser,
@@ -112,8 +115,10 @@ Prisma Studio (`5555`) and any dev server a task workspace starts. The main
 process polls the fixed ports and adds/removes workspace ports from
 `server-ready` / `server-closed`, so a stopped service cannot be opened.
 `localhost:PORT`, `127.0.0.1:PORT` and `[::1]:PORT` all work; any other local
-port is blocked with "This local server is not available" (there is no mentor
-approval path for another program's port).
+port is blocked. The main Resources page shows "This local server is not
+available"; the secondary overlay shows
+`<host> is not available. Start the backend, React app or Prisma Studio, then try again.`
+There is no mentor approval path for another program's port.
 
 ### Page tools
 
@@ -129,11 +134,13 @@ approval path for another program's port).
   distinguish offline, unreachable and refused connections. The heading receives
   focus and an `aria-live` region announces navigation changes.
 
-The app also fetches a newer copy from `VINKUP_API_URL` + `/api/resources/allowlist`
-at startup, validates it, and caches it in `userData`. A failed fetch or an
-invalid file is ignored, so the bundled list always works offline. To point at a
-different centrally hosted file, set `VINKUP_RESOURCES_ALLOWLIST_URL`; set it to
-an empty string to disable remote updates.
+The app also tries to fetch a newer copy from `VINKUP_API_URL` +
+`/api/resources/allowlist` at startup, validates it, and caches it in `userData`.
+No backend route is mounted at that default path today, so the fetch fails
+silently and the bundled or cached list is used. A failed fetch or an invalid
+file is always ignored, so the list works offline. To point at a different
+centrally hosted file, set `VINKUP_RESOURCES_ALLOWLIST_URL`; set it to an empty
+string to disable remote updates.
 
 ## Workspace terminal prompt
 
@@ -205,8 +212,8 @@ npm run dist:desktop
 ```
 
 This builds the frontend first, then produces an AppImage and a `.deb` in
-`desktop/release/`. Add `desktop/build/icon.png` (512×512) before publishing a
-release.
+`desktop/release/`. Ensure `desktop/build/icon.png` (512×512) is present; it is
+already tracked in the repository.
 
 ## Environment variables
 
@@ -218,7 +225,7 @@ release.
 | `VINKUP_DISABLE_SCREEN_PROTECTION` | `false`                                | Set to `true` to disable screen protection. Loaded from `desktop/.env.local` in development; packaged runs use the process environment. |
 | `NODE_ENV`                         | unset                                  | `development` loads the Vite dev server and enables DevTools.                                                                           |
 | `VINKUP_OZONE_PLATFORM`            | unset                                  | Set to `wayland` to use native Wayland instead of XWayland on Linux.                                                                    |
-| `VINKUP_RESOURCES_ALLOWLIST_URL`   | API URL + `/api/resources/allowlist`   | Centrally hosted Resources allowlist JSON. An empty string disables remote updates.                                                     |
+| `VINKUP_RESOURCES_ALLOWLIST_URL`   | API URL + `/api/resources/allowlist`   | Centrally hosted Resources allowlist JSON; the default path has no backend route today. An empty string disables remote updates.        |
 
 ## Linux troubleshooting
 
@@ -273,7 +280,7 @@ or run the AppImage with `--appimage-extract-and-run`.
   fullscreen events for the follow-up change.
 - Activity time is not flushed on quit yet (see the `TODO` in
   `src/main/index.ts`).
-- Mentor/admin routes are not gated yet. They will be hidden or disabled for the
-  student-only desktop build.
+- Mentor/manager routes are gated by `RoleRoute` in the renderer; the REST API
+  remains the security boundary.
 - Task runs need the desktop app: a plain browser build shows the Result pane
   with "Local workspaces are only available in the desktop app."
