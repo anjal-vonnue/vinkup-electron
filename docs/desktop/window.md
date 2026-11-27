@@ -130,8 +130,9 @@ flowchart TD
   origin keeps cookies, `localStorage` and IndexedDB stable across restarts.
 - The production API is `https://vinkup-electron.onrender.com`; development uses
   `http://localhost:3000`. Override with `VINKUP_API_URL`. The Resources allowlist defaults to
-  `<API>/api/resources/allowlist`; `VINKUP_RESOURCES_ALLOWLIST_URL` overrides it, and an empty value
-  disables remote updates.
+  `<API>/api/resources/allowlist`; no backend route is mounted at that path today, so the bundled or
+  cached list is used. `VINKUP_RESOURCES_ALLOWLIST_URL` overrides it, and an empty value disables
+  remote updates.
 - The main `BrowserWindow` uses the primary display’s bounds, `frame: false`, `useContentSize: true`
   and background `#10131f`. `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false` and
   `webSecurity: true` are all enabled. The preload script is the only bridge.
@@ -139,11 +140,11 @@ flowchart TD
   certificate printing additionally require the main window’s main frame. Overlay and alert windows
   are identified by owning `WebContents`, not by caller-supplied ids.
 - External links are denied in-window and passed to `shell.openExternal` only when the URL is HTTP(S).
-  Google sign-in is restricted to the configured API origin. Permission requests for camera,
-  microphone, location, notifications and clipboard-read are denied.
-- The custom menu keeps File/Edit/View roles but removes the developer-tools menu. F12, Ctrl+Shift+I
-  and Meta+Alt+I are intercepted; DevTools toggle only in development. Ctrl+Shift+Alt+M moves the app
-  to the next unique display when protection is active.
+  Google sign-in is restricted to the configured API origin. **All** permission requests are denied,
+  including camera, microphone, location, notifications and clipboard-read.
+- The custom menu keeps File/Edit/View roles and removes the developer-tools menu in production.
+  Development restores `View > Toggle Developer Tools` and rebinds F12, Ctrl+Shift+I and Meta+Alt+I to
+  toggle DevTools. Ctrl+Shift+Alt+M moves the app to the next unique display when protection is active.
 
 ## Protection context
 
@@ -151,9 +152,10 @@ flowchart TD
 is called at startup and on every `auth:state-changed` broadcast.
 
 - Protection applies only to an authenticated **trainee** and only when
-  `VINKUP_DISABLE_SCREEN_PROTECTION` is not exactly `true` (case-insensitive, trimmed). Any other
-  value, including blank, leaves protection enabled; an invalid non-boolean string is a startup
-  error.
+  `VINKUP_DISABLE_SCREEN_PROTECTION` does not resolve to `true` (trimmed and lower-cased). `false`,
+  blank or unset keeps protection enabled; `true` disables display covers, focus alerts and
+  fullscreen protection, while any other value throws at startup. GNOME shortcut removal still
+  applies to authenticated trainees.
 - Mentors and managers are staff sessions: overlays and focus alerts are destroyed, fullscreen is
   exited, and the main window is no longer visible on all workspaces.
 - While auth is `loading` or `pending`, protection is suspended. When login completes, the window is
@@ -192,8 +194,11 @@ window.vinkupDisplay.setResourcesActive(active: boolean): void;
 window.vinkupDisplay.getBrowserAvailability(): Promise<BrowserAvailability>;
 window.vinkupDisplay.onBrowserAvailabilityChange(listener): () => void;
 window.vinkupDisplay.onAuthenticationChange(listener): () => void;
-window.vinkupDisplay.resources; // secondary-resources:* mirror of window.desktop.resources
+window.vinkupDisplay.resources; // secondary-resources:* mirror except onActivity
 ```
+
+The secondary `resources` object mirrors the main `window.desktop.resources` calls except
+`onActivity`; overlay-chrome activity is reported automatically over `resources:activity`.
 
 - Overlays are frameless, fullscreen, skip the taskbar and stay above normal windows at the
   `screen-saver` level. They are placed exactly on their display bounds and refuse to be moved.
@@ -212,7 +217,8 @@ window.vinkupDisplay.resources; // secondary-resources:* mirror of window.deskto
 
 `ScreenLockWatcher` listens to `lock-screen`/`unlock-screen` and `suspend`/`resume`. On Linux, where
 lock events are not available, `powerMonitor.getSystemIdleState(60)` is polled every 15 seconds and a
-`locked` state is reported. Duplicate transitions are suppressed. The renderer receives
+`locked` state is reported; this only applies on desktops that report `locked`, and polling has no
+maximum duration. Duplicate transitions are suppressed. The renderer receives
 `power:screen-lock-changed` and can end an idle stretch or clear blur state without flagging the
 trainee.
 
