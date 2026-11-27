@@ -83,6 +83,8 @@ const store = vi.hoisted(() => {
 
   const transactions = new Map<string, Transaction>();
   const sessions = new Map<string, Session>();
+  let failSessionCreation = false;
+  let failTransactionDeletion = false;
   let sequence = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}`;
   const count = (matched: boolean) => ({ count: matched ? 1 : 0 });
@@ -187,8 +189,40 @@ const store = vi.hoisted(() => {
     };
 
     deleteTransaction = (id: string) => {
+      if (failTransactionDeletion) throw new Error('transaction delete failed');
       const deleted = transactions.delete(id);
       return count(Boolean(deleted));
+    };
+
+    consumeHandoffAndCreateSession = (data: {
+      transactionId: string;
+      sessionId: string;
+      user: Snapshot;
+      refreshTokenHash: string;
+      expiresAt: Date;
+      now: Date;
+    }) => {
+      // Mirror a database transaction: on any failure, restore all touched rows.
+      const transactionSnapshot = [...transactions].map(([id, row]) => [id, { ...row }] as const);
+      const sessionSnapshot = [...sessions].map(([id, row]) => [id, { ...row }] as const);
+      try {
+        const consumed = this.consumeHandoff(data.transactionId, data.now);
+        if (consumed.count !== 1) return null;
+        if (failSessionCreation) throw new Error('session insert failed');
+        return this.createSession({
+          id: data.sessionId,
+          user: data.user,
+          refreshTokenHash: data.refreshTokenHash,
+          expiresAt: data.expiresAt,
+          now: data.now,
+        });
+      } catch (error) {
+        transactions.clear();
+        sessions.clear();
+        for (const [id, row] of transactionSnapshot) transactions.set(id, row);
+        for (const [id, row] of sessionSnapshot) sessions.set(id, row);
+        throw error;
+      }
     };
 
     createSession = (data: {
@@ -262,9 +296,17 @@ const store = vi.hoisted(() => {
     transactions,
     sessions,
     InMemoryDesktopAuthRepository,
+    setFailSessionCreation: (value: boolean) => {
+      failSessionCreation = value;
+    },
+    setFailTransactionDeletion: (value: boolean) => {
+      failTransactionDeletion = value;
+    },
     reset: () => {
       transactions.clear();
       sessions.clear();
+      failSessionCreation = false;
+      failTransactionDeletion = false;
     },
   };
 });
@@ -610,6 +652,27 @@ describe('POST /api/auth/desktop/exchange', () => {
       .send({ code: handoffCode(redirect), codeVerifier: CODE_VERIFIER })
       .expect(400);
     expect((response.body as { error: { code: string } }).error.code).toBe('DESKTOP_AUTH_EXPIRED');
+  });
+
+  it('leaves the handoff usable when session creation fails', async () => {
+    const { redirect, transaction } = await beginLogin();
+    store.setFailSessionCreation(true);
+
+    const failed = await request(app)
+      .post(`${BASE}/exchange`)
+      .send({ code: handoffCode(redirect), codeVerifier: CODE_VERIFIER });
+    expect(failed.status).toBe(500);
+    store.setFailSessionCreation(false);
+
+    const row = store.transactions.get(transaction.transactionId);
+    expect(row?.status).toBe('authenticated');
+    expect(row?.handoff_consumed_at).toBeNull();
+    expect(store.sessions.size).toBe(0);
+
+    await request(app)
+      .post(`${BASE}/exchange`)
+      .send({ code: handoffCode(redirect), codeVerifier: CODE_VERIFIER })
+      .expect(200);
   });
 
   it('signs in an admin and returns the mentor role', async () => {

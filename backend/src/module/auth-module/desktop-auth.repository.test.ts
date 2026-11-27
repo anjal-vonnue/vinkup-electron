@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prisma = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   desktop_auth_transaction: {
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
@@ -23,6 +24,7 @@ const user: DesktopUserSnapshot = {
 };
 
 beforeEach(() => {
+  prisma.$transaction.mockReset();
   prisma.desktop_auth_transaction.updateMany.mockReset();
   prisma.desktop_auth_transaction.deleteMany.mockReset();
   prisma.desktop_session.create.mockReset();
@@ -76,5 +78,77 @@ describe('DesktopAuthRepository client injection', () => {
     });
     expect(prisma.desktop_auth_transaction.updateMany).not.toHaveBeenCalled();
     expect(prisma.desktop_session.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('DesktopAuthRepository atomic exchange', () => {
+  const exchangeData = {
+    transactionId: 'transaction-1',
+    sessionId: 'session-1',
+    user,
+    refreshTokenHash: 'hash',
+    expiresAt: now,
+    now,
+  };
+
+  function mockTransaction(client: {
+    desktop_auth_transaction: { updateMany: ReturnType<typeof vi.fn> };
+    desktop_session: { create: ReturnType<typeof vi.fn> };
+  }) {
+    prisma.$transaction.mockImplementation((callback: (tx: typeof client) => unknown) =>
+      callback(client)
+    );
+  }
+
+  it('consumes the handoff and creates the session inside one transaction', async () => {
+    const client = {
+      desktop_auth_transaction: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      desktop_session: { create: vi.fn().mockResolvedValue({ id: 'session-1' }) },
+    };
+    mockTransaction(client);
+
+    await expect(
+      new DesktopAuthRepository().consumeHandoffAndCreateSession(exchangeData)
+    ).resolves.toEqual({ id: 'session-1' });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(client.desktop_auth_transaction.updateMany).toHaveBeenCalledTimes(1);
+    expect(client.desktop_session.create).toHaveBeenCalledWith({
+      data: {
+        id: 'session-1',
+        user_id: user.id,
+        user_email: user.email,
+        user_name: user.name,
+        user_role: user.role,
+        refresh_token_hash: 'hash',
+        expires_at: now,
+        last_used_at: now,
+      },
+    });
+  });
+
+  it('does not create a session when the handoff was already consumed', async () => {
+    const client = {
+      desktop_auth_transaction: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      desktop_session: { create: vi.fn() },
+    };
+    mockTransaction(client);
+
+    await expect(
+      new DesktopAuthRepository().consumeHandoffAndCreateSession(exchangeData)
+    ).resolves.toBeNull();
+    expect(client.desktop_session.create).not.toHaveBeenCalled();
+  });
+
+  it('propagates a session creation failure so the transaction rolls back', async () => {
+    const client = {
+      desktop_auth_transaction: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      desktop_session: { create: vi.fn().mockRejectedValue(new Error('insert failed')) },
+    };
+    mockTransaction(client);
+
+    await expect(
+      new DesktopAuthRepository().consumeHandoffAndCreateSession(exchangeData)
+    ).rejects.toThrow('insert failed');
   });
 });

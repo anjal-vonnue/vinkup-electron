@@ -225,13 +225,24 @@ export class DesktopAuthService {
       throw new AppError(400, 'DESKTOP_AUTH_INVALID_PKCE', 'The sign-in proof is invalid.');
     }
 
-    const consumed = await this.repository.consumeHandoff(transaction.id, now);
-    if (consumed.count !== 1) {
+    const user = toUserSnapshot(transaction);
+    const sessionId = randomUUID();
+    const refreshToken = base64url(randomBytes(48));
+    const expiresAt = new Date(now.getTime() + DESKTOP_REFRESH_TOKEN_TTL_MS);
+
+    const session = await this.repository.consumeHandoffAndCreateSession({
+      transactionId: transaction.id,
+      sessionId,
+      user,
+      refreshTokenHash: sha256(refreshToken),
+      expiresAt,
+      now,
+    });
+    if (!session) {
       throw new AppError(409, 'DESKTOP_AUTH_CODE_USED', 'This sign-in code was already used.');
     }
 
-    const user = toUserSnapshot(transaction);
-    return this.createSession(user, now);
+    return this.buildSessionResult(user, sessionId, refreshToken, expiresAt, now);
   }
 
   async getSession(accessToken: string): Promise<{ user: MeResponse }> {
@@ -297,22 +308,6 @@ export class DesktopAuthService {
     if (options.refreshToken) {
       await this.repository.revokeSessionByTokenHash(sha256(options.refreshToken), now);
     }
-  }
-
-  private async createSession(user: DesktopUserSnapshot, now: Date): Promise<DesktopSessionResult> {
-    const sessionId = randomUUID();
-    const refreshToken = base64url(randomBytes(48));
-    const expiresAt = new Date(now.getTime() + DESKTOP_REFRESH_TOKEN_TTL_MS);
-
-    await this.repository.createSession({
-      id: sessionId,
-      user,
-      refreshTokenHash: sha256(refreshToken),
-      expiresAt,
-      now,
-    });
-
-    return this.buildSessionResult(user, sessionId, refreshToken, expiresAt, now);
   }
 
   private buildSessionResult(

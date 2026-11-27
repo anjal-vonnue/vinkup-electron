@@ -86,6 +86,35 @@ export class DesktopAuthRepository {
       data: { status: 'consumed', handoff_consumed_at: now, consumed_at: now },
     });
 
+  /**
+   * Consumes the one-time handoff and opens a session in a single database
+   * transaction. A losing concurrent exchange returns `null`; any write error
+   * rejects and rolls both writes back.
+   */
+  consumeHandoffAndCreateSession = (data: {
+    transactionId: string;
+    sessionId: string;
+    user: DesktopUserSnapshot;
+    refreshTokenHash: string;
+    expiresAt: Date;
+    now: Date;
+  }) =>
+    prisma.$transaction(async (tx) => {
+      const consumed = await this.consumeHandoff(data.transactionId, data.now, tx);
+      if (consumed.count !== 1) return null;
+
+      return this.createSession(
+        {
+          id: data.sessionId,
+          user: data.user,
+          refreshTokenHash: data.refreshTokenHash,
+          expiresAt: data.expiresAt,
+          now: data.now,
+        },
+        tx
+      );
+    });
+
   createSession = (
     data: {
       id: string;
