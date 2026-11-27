@@ -519,7 +519,9 @@ describe('GET /api/auth/desktop/callback', () => {
     const raw = redirect.toString().toLowerCase();
     expect(raw).not.toContain('accesstoken');
     expect(raw).not.toContain('refreshtoken');
-    expect(raw).not.toContain('jwt');
+    // Check parameter names rather than a raw substring: random base64url
+    // values can legitimately contain letter sequences such as "jwt".
+    expect([...redirect.searchParams.keys()].sort()).toEqual(['code', 'state']);
   });
 
   it('rejects an unknown state', async () => {

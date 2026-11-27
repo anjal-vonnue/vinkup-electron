@@ -24,14 +24,14 @@ const envSchema = z
     GOOGLE_CLIENT_SECRET: z.string().min(1),
     GOOGLE_CALLBACK_URL: z.string().min(1),
     AI_PROVIDER_ORDER: z.string().default('groq,gemini,anthropic'),
-    AI_REQUEST_TIMEOUT_MS: z.coerce.number().default(60000),
-    GROQ_API_KEY: optionalString,
-    GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
-    GEMINI_API_KEY: optionalString,
-    GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
-    ANTHROPIC_API_KEY: optionalString,
-    ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
-    /**
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().default(60000),
+  GROQ_API_KEY: optionalString,
+  GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
+  GEMINI_API_KEY: optionalString,
+  GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
+  ANTHROPIC_API_KEY: optionalString,
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
+  /**
      * Google redirect URI for the Electron flow. It is a second redirect URI on
      * the same Web OAuth client; no desktop client or client secret ships with
      * the app. Defaults to the web callback with `/desktop/` inserted.
@@ -62,15 +62,15 @@ const envSchema = z
     JWT_SECRET: z.string().min(16),
     JWT_EXPIRES_IN: z.string().default('1h'),
     /**
-     * Ed25519 private key used to sign issued certificates. Accepts a PKCS8 PEM
-     * string or a base64-encoded PKCS8 PEM. Required when certificate issuance is
-     * enabled; issuance fails safely when missing.
-     */
-    CERTIFICATE_SIGNING_PRIVATE_KEY: z.preprocess(
-      (value) => (value === '' ? undefined : value),
-      z.string().min(1).optional()
-    ),
-    NODE_ENV: z.string().min(1).default('development'),
+   * Ed25519 private key used to sign issued certificates. Accepts a PKCS8 PEM
+   * string or a base64-encoded PKCS8 PEM. Required when certificate issuance is
+   * enabled; issuance fails safely when missing.
+   */
+  CERTIFICATE_SIGNING_PRIVATE_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).optional()
+  ),
+  NODE_ENV: z.string().min(1).default('development'),
     SLACK_ENABLED: booleanEnv.default(false),
     SLACK_BOT_TOKEN: z.preprocess(
       (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
