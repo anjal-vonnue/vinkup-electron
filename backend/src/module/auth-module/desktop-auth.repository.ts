@@ -1,10 +1,21 @@
 import { prisma } from '../../lib/prisma';
+import type { Prisma } from '../../generated/prisma/client';
+
+/** Either the shared client or the client handed to a `$transaction` callback. */
+type DesktopAuthDbClient = Prisma.TransactionClient | typeof prisma;
 
 export type DesktopUserSnapshot = {
   id: string;
   email: string;
   name: string;
   role: 'trainee' | 'mentor' | 'manager';
+};
+
+/** Cutoffs computed by the service from the status-specific retention rules. */
+export type DesktopTransactionCleanupCutoffs = {
+  expiredBefore: Date;
+  failedBefore: Date;
+  consumedBefore: Date;
 };
 
 export class DesktopAuthRepository {
@@ -71,8 +82,8 @@ export class DesktopAuthRepository {
       where: { handoff_code_hash: handoffCodeHash },
     });
 
-  consumeHandoff = (id: string, now: Date) =>
-    prisma.desktop_auth_transaction.updateMany({
+  consumeHandoff = (id: string, now: Date, client: DesktopAuthDbClient = prisma) =>
+    client.desktop_auth_transaction.updateMany({
       where: {
         id,
         status: 'authenticated',
@@ -82,14 +93,52 @@ export class DesktopAuthRepository {
       data: { status: 'consumed', handoff_consumed_at: now, consumed_at: now },
     });
 
-  createSession = (data: {
-    id: string;
+  /**
+   * Consumes the one-time handoff, opens a session and removes the no-longer-
+   * needed transaction in a single database transaction. A losing concurrent
+   * exchange returns `null`; any write error rejects and rolls every write back.
+   */
+  exchangeHandoffAndCreateSession = (data: {
+    transactionId: string;
+    sessionId: string;
     user: DesktopUserSnapshot;
     refreshTokenHash: string;
     expiresAt: Date;
     now: Date;
   }) =>
-    prisma.desktop_session.create({
+    prisma.$transaction(async (tx) => {
+      const consumed = await this.consumeHandoff(data.transactionId, data.now, tx);
+      if (consumed.count !== 1) return null;
+
+      const session = await this.createSession(
+        {
+          id: data.sessionId,
+          user: data.user,
+          refreshTokenHash: data.refreshTokenHash,
+          expiresAt: data.expiresAt,
+          now: data.now,
+        },
+        tx
+      );
+
+      const deleted = await this.deleteTransaction(data.transactionId, tx);
+      if (deleted.count !== 1) {
+        throw new Error(`Desktop auth transaction ${data.transactionId} could not be deleted.`);
+      }
+      return session;
+    });
+
+  createSession = (
+    data: {
+      id: string;
+      user: DesktopUserSnapshot;
+      refreshTokenHash: string;
+      expiresAt: Date;
+      now: Date;
+    },
+    client: DesktopAuthDbClient = prisma
+  ) =>
+    client.desktop_session.create({
       data: {
         id: data.id,
         user_id: data.user.id,
@@ -99,6 +148,28 @@ export class DesktopAuthRepository {
         refresh_token_hash: data.refreshTokenHash,
         expires_at: data.expiresAt,
         last_used_at: data.now,
+      },
+    });
+
+  deleteTransaction = (id: string, client: DesktopAuthDbClient = prisma) =>
+    client.desktop_auth_transaction.deleteMany({ where: { id } });
+
+  /**
+   * One set-based delete for every abandoned status. Each branch mirrors the
+   * read-side guard, so a transaction that can still be completed is preserved.
+   */
+  deleteExpiredTransactions = (cutoffs: DesktopTransactionCleanupCutoffs) =>
+    prisma.desktop_auth_transaction.deleteMany({
+      where: {
+        OR: [
+          {
+            status: { in: ['pending', 'processing'] },
+            expires_at: { lte: cutoffs.expiredBefore },
+          },
+          { status: 'authenticated', handoff_expires_at: { lte: cutoffs.expiredBefore } },
+          { status: 'failed', consumed_at: { lte: cutoffs.failedBefore } },
+          { status: 'consumed', consumed_at: { lte: cutoffs.consumedBefore } },
+        ],
       },
     });
 

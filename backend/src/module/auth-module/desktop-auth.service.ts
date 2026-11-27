@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import type { MeResponse } from '@itp/types';
+import { env } from '../../config/env';
 import { AppError } from '../../errors/AppError';
 import { signDesktopAccessToken, verifyDesktopAccessToken, type JwtPayload } from '../../utils/jwt';
 import { AuthRepository } from './auth.repository';
@@ -28,6 +29,11 @@ export type DesktopSessionResult = {
   refreshToken: string;
   refreshTokenExpiresAt: string;
   user: MeResponse;
+};
+
+export type DesktopTransactionCleanupRetention = {
+  failedMs: number;
+  consumedMs: number;
 };
 
 const base64url = (buffer: Buffer): string => buffer.toString('base64url');
@@ -93,7 +99,11 @@ export class DesktopAuthService {
   constructor(
     private readonly repository = new DesktopAuthRepository(),
     private readonly authRepository = new AuthRepository(),
-    private readonly clock: () => Date = () => new Date()
+    private readonly clock: () => Date = () => new Date(),
+    private readonly cleanupRetention: DesktopTransactionCleanupRetention = {
+      failedMs: env.DESKTOP_TRANSACTION_FAILED_RETENTION_MS,
+      consumedMs: env.DESKTOP_TRANSACTION_CONSUMED_RETENTION_MS,
+    }
   ) {}
 
   async createTransaction(input: CreateTransactionInput): Promise<{
@@ -225,13 +235,38 @@ export class DesktopAuthService {
       throw new AppError(400, 'DESKTOP_AUTH_INVALID_PKCE', 'The sign-in proof is invalid.');
     }
 
-    const consumed = await this.repository.consumeHandoff(transaction.id, now);
-    if (consumed.count !== 1) {
+    const user = toUserSnapshot(transaction);
+    const sessionId = randomUUID();
+    const refreshToken = base64url(randomBytes(48));
+    const expiresAt = new Date(now.getTime() + DESKTOP_REFRESH_TOKEN_TTL_MS);
+
+    const session = await this.repository.exchangeHandoffAndCreateSession({
+      transactionId: transaction.id,
+      sessionId,
+      user,
+      refreshTokenHash: sha256(refreshToken),
+      expiresAt,
+      now,
+    });
+    if (!session) {
       throw new AppError(409, 'DESKTOP_AUTH_CODE_USED', 'This sign-in code was already used.');
     }
 
-    const user = toUserSnapshot(transaction);
-    return this.createSession(user, now);
+    return this.buildSessionResult(user, sessionId, refreshToken, expiresAt, now);
+  }
+
+  /**
+   * Removes transactions that can no longer be completed. The status-specific
+   * cutoffs match every guard used by the live authentication flow, so a valid
+   * pending, processing or authenticated transaction is never swept away.
+   */
+  async cleanupExpiredTransactions(now: Date = this.clock()): Promise<number> {
+    const result = await this.repository.deleteExpiredTransactions({
+      expiredBefore: now,
+      failedBefore: new Date(now.getTime() - this.cleanupRetention.failedMs),
+      consumedBefore: new Date(now.getTime() - this.cleanupRetention.consumedMs),
+    });
+    return result.count;
   }
 
   async getSession(accessToken: string): Promise<{ user: MeResponse }> {
@@ -297,22 +332,6 @@ export class DesktopAuthService {
     if (options.refreshToken) {
       await this.repository.revokeSessionByTokenHash(sha256(options.refreshToken), now);
     }
-  }
-
-  private async createSession(user: DesktopUserSnapshot, now: Date): Promise<DesktopSessionResult> {
-    const sessionId = randomUUID();
-    const refreshToken = base64url(randomBytes(48));
-    const expiresAt = new Date(now.getTime() + DESKTOP_REFRESH_TOKEN_TTL_MS);
-
-    await this.repository.createSession({
-      id: sessionId,
-      user,
-      refreshTokenHash: sha256(refreshToken),
-      expiresAt,
-      now,
-    });
-
-    return this.buildSessionResult(user, sessionId, refreshToken, expiresAt, now);
   }
 
   private buildSessionResult(

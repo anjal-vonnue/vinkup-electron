@@ -1,5 +1,6 @@
 import app from './app';
 import { env } from './config/env';
+import { desktopTransactionCleanupScheduler } from './module/auth-module/desktop-auth.cleanup';
 import { startCheckpointDeadlineProcessor } from './module/checkpoint-module/checkpoint.deadline';
 import { slackNotificationWorker } from './module/slack-module/slack-notification.worker';
 
@@ -9,6 +10,7 @@ const server = app.listen(env.PORT, () => {
   // trainee browser is open.
   startCheckpointDeadlineProcessor();
   slackNotificationWorker.start();
+  desktopTransactionCleanupScheduler.start();
 });
 
 let shuttingDown = false;
@@ -17,6 +19,7 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   console.log(`[server] received ${signal}, shutting down`);
   await slackNotificationWorker.stop();
+  await desktopTransactionCleanupScheduler.stop();
   server.close(() => {
     process.exit(0);
   });
