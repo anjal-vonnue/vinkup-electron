@@ -20,9 +20,10 @@ types in `packages/types/src/leave.ts` and the Prisma models in `backend/prisma/
 
 Mentors cannot review requests for trainees who are not currently assigned to them; an unknown or
 out-of-scope id returns `404 NOT_FOUND`. Managers can review any request, including one belonging to
-a trainee assigned to a different Mentor. Role checks run in middleware, in the service and in every
-database query. Reviewer identity always comes from the authenticated user, never from the request
-body.
+a trainee assigned to a different Mentor. Role checks run in route middleware and the controller’s
+`reviewerFrom`; the service only forwards the authenticated reviewer. The repository applies that
+scope: Mentor queries filter by `trainee.mentor_id`, while Manager queries are unfiltered. Reviewer
+identity always comes from the authenticated user, never from the request body.
 
 **Can a Manager override a previous Mentor decision? Yes.** The API permits a Manager to reject a
 request approved by a Mentor, and to approve or re-reject a request rejected by a Mentor. The Mentor’s
@@ -45,8 +46,12 @@ stateDiagram-v2
   APPROVED --> REJECTED: Manager overrides a Mentor approval (feedback required)
   REJECTED --> APPROVED: Manager overrides a Mentor rejection
   REJECTED --> REJECTED: Manager re-rejects a Mentor rejection (feedback required)
-  APPROVED --> [*]: No further review allowed
+  APPROVED --> [*]: Final when reviewerRole = MANAGER
+  REJECTED --> [*]: Final when reviewerRole = MANAGER
 ```
+
+A decision made by a Mentor is not final: it stays reviewable by a Manager. Only a decision recorded
+with `reviewerRole = MANAGER` is final.
 
 1. A Trainee submits a subject (1–200 chars) and reason (1–2,000 chars). The request starts `PENDING`
    with no reviewer, feedback or review timestamp.
@@ -140,8 +145,9 @@ fields while `PENDING`, and require reviewer details once decided. The
 `leave_request_status_guard` trigger permits only `PENDING → APPROVED/REJECTED` and
 Mentor-decision → Manager-decision transitions (`APPROVED → REJECTED` and
 `REJECTED → APPROVED/REJECTED`); all other status or review-field changes are rejected even outside
-the API. Foreign keys use `ON DELETE RESTRICT` so removing an account cannot erase request or review
-history.
+the API. `leave_review.leave_request_id` uses `ON DELETE CASCADE`; reviewer/admin foreign keys and
+`leave_request.trainee_id`/`reviewer_id` use `ON DELETE RESTRICT` so removing an account cannot erase
+request or review history.
 
 The migration `20261123150000_add_leave_review_history` creates the history table, backfills a review
 row for every already-decided request from its existing columns, and replaces the old “decision is
@@ -157,9 +163,10 @@ From `backend/prisma/schema.prisma` (see also the [database documentation](../da
   `status` (`PENDING | APPROVED | REJECTED`), `reviewer_id` → `admin` (`ON DELETE RESTRICT`),
   `reviewer_role`, `reviewer_name`, `feedback`, `submitted_at`, `reviewed_at`, audit timestamps.
   Indexes: `(trainee_id, submitted_at)` and `(status, submitted_at)`.
-- `leave_review`: `id`, `leave_request_id` → `leave_request`, `reviewer_id` → `admin`,
-  `reviewer_role`, `reviewer_name`, `decision`, `feedback`, `reviewed_at`, audit timestamp. Unique
-  `(leave_request_id, reviewer_role)`; index `(leave_request_id, reviewed_at)`.
+- `leave_review`: `id`, `leave_request_id` → `leave_request` (`ON DELETE CASCADE`), `reviewer_id` →
+  `admin` (`ON DELETE RESTRICT`), `reviewer_role`, `reviewer_name`, `decision`, `feedback`,
+  `reviewed_at`, audit timestamp. Unique `(leave_request_id, reviewer_role)`; index
+  `(leave_request_id, reviewed_at)`.
 - `trainee.mentor_id` → `admin.id` (`ON DELETE SET NULL`) defines the Mentor scope used by every
   `/api/admin/leave-requests` query. Reassignment changes scope immediately.
 
@@ -243,7 +250,7 @@ Frontend methods:
 createLeaveRequest(body: CreateLeaveRequestInput): Promise<LeaveRequest>;
 getMyLeaveRequests(): Promise<LeaveRequest[]>;
 getMyLeaveRequest(requestId: string): Promise<LeaveRequest>;
-getUnreadLeaveCount(since?: string): Promise<LeaveCountResponse>;
+getUnreadLeaveCount(since: string | null): Promise<number>;
 ```
 
 ### Mentor endpoints (assigned trainees only)
@@ -296,8 +303,10 @@ reviewLeaveRequest(
   requestId: string,
   body: ReviewLeaveRequestInput
 ): Promise<LeaveRequest>;
-getPendingLeaveCount(role: 'admin' | 'manager'): Promise<LeaveCountResponse>;
+getPendingLeaveCount(role: 'mentor' | 'manager'): Promise<number>;
 ```
+
+Both count wrappers unwrap `LeaveCountResponse.count` before returning.
 
 ## In-app notifications
 
@@ -318,6 +327,14 @@ The renderer keeps two kinds of badge state:
 
 The shared `LeaveReviewHistory` component renders the same `reviews` array for Trainees, Mentors and
 Managers.
+
+## UI limitations
+
+- `StaffLeaveRequestsPage.canReview` offers **Review** to a Manager for any decided request, including
+  one already decided by that Manager. The API still rejects that attempt with `409 ALREADY_REVIEWED`.
+- The note “A Mentor approved this request. Add feedback to reject it.” is shown for any approved
+  request, even when the approver was a Manager. The stored `reviewerRole` and the review history are
+  authoritative.
 
 ## Slack notifications
 
