@@ -186,6 +186,11 @@ const store = vi.hoisted(() => {
       return count(matched);
     };
 
+    deleteTransaction = (id: string) => {
+      const deleted = transactions.delete(id);
+      return count(Boolean(deleted));
+    };
+
     createSession = (data: {
       id: string;
       user: Snapshot;

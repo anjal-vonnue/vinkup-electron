@@ -1,4 +1,8 @@
 import { prisma } from '../../lib/prisma';
+import type { Prisma } from '../../generated/prisma/client';
+
+/** Either the shared client or the client handed to a `$transaction` callback. */
+type DesktopAuthDbClient = Prisma.TransactionClient | typeof prisma;
 
 export type DesktopUserSnapshot = {
   id: string;
@@ -71,8 +75,8 @@ export class DesktopAuthRepository {
       where: { handoff_code_hash: handoffCodeHash },
     });
 
-  consumeHandoff = (id: string, now: Date) =>
-    prisma.desktop_auth_transaction.updateMany({
+  consumeHandoff = (id: string, now: Date, client: DesktopAuthDbClient = prisma) =>
+    client.desktop_auth_transaction.updateMany({
       where: {
         id,
         status: 'authenticated',
@@ -82,14 +86,17 @@ export class DesktopAuthRepository {
       data: { status: 'consumed', handoff_consumed_at: now, consumed_at: now },
     });
 
-  createSession = (data: {
-    id: string;
-    user: DesktopUserSnapshot;
-    refreshTokenHash: string;
-    expiresAt: Date;
-    now: Date;
-  }) =>
-    prisma.desktop_session.create({
+  createSession = (
+    data: {
+      id: string;
+      user: DesktopUserSnapshot;
+      refreshTokenHash: string;
+      expiresAt: Date;
+      now: Date;
+    },
+    client: DesktopAuthDbClient = prisma
+  ) =>
+    client.desktop_session.create({
       data: {
         id: data.id,
         user_id: data.user.id,
@@ -101,6 +108,9 @@ export class DesktopAuthRepository {
         last_used_at: data.now,
       },
     });
+
+  deleteTransaction = (id: string, client: DesktopAuthDbClient = prisma) =>
+    client.desktop_auth_transaction.deleteMany({ where: { id } });
 
   findSessionByTokenHash = (refreshTokenHash: string) =>
     prisma.desktop_session.findUnique({ where: { refresh_token_hash: refreshTokenHash } });

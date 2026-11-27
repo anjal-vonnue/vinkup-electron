@@ -1,0 +1,80 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const prisma = vi.hoisted(() => ({
+  desktop_auth_transaction: {
+    updateMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  desktop_session: {
+    create: vi.fn(),
+  },
+}));
+
+vi.mock('../../lib/prisma', () => ({ prisma }));
+
+import { DesktopAuthRepository, type DesktopUserSnapshot } from './desktop-auth.repository';
+
+const now = new Date('2026-01-01T12:00:00.000Z');
+const user: DesktopUserSnapshot = {
+  id: '3f2c9c0e-5b1d-4c53-9a7e-0d6f2f1a9b11',
+  email: 'trainee@vonnue.com',
+  name: 'Test Trainee',
+  role: 'trainee',
+};
+
+beforeEach(() => {
+  prisma.desktop_auth_transaction.updateMany.mockReset();
+  prisma.desktop_auth_transaction.deleteMany.mockReset();
+  prisma.desktop_session.create.mockReset();
+});
+
+describe('DesktopAuthRepository client injection', () => {
+  it('consumes a handoff with the shared client by default', async () => {
+    prisma.desktop_auth_transaction.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(new DesktopAuthRepository().consumeHandoff('transaction-1', now)).resolves.toEqual(
+      { count: 1 }
+    );
+    expect(prisma.desktop_auth_transaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'transaction-1',
+        status: 'authenticated',
+        handoff_consumed_at: null,
+        handoff_expires_at: { gt: now },
+      },
+      data: { status: 'consumed', handoff_consumed_at: now, consumed_at: now },
+    });
+  });
+
+  it('can run the exchange writes through a supplied transaction client', async () => {
+    const client = {
+      desktop_auth_transaction: { updateMany: vi.fn(), deleteMany: vi.fn() },
+      desktop_session: { create: vi.fn() },
+    };
+    client.desktop_auth_transaction.updateMany.mockResolvedValue({ count: 1 });
+    client.desktop_auth_transaction.deleteMany.mockResolvedValue({ count: 1 });
+    client.desktop_session.create.mockResolvedValue({ id: 'session-1' });
+    const repository = new DesktopAuthRepository();
+
+    await repository.consumeHandoff('transaction-1', now, client as never);
+    await repository.createSession(
+      {
+        id: 'session-1',
+        user,
+        refreshTokenHash: 'hash',
+        expiresAt: now,
+        now,
+      },
+      client as never
+    );
+    await repository.deleteTransaction('transaction-1', client as never);
+
+    expect(client.desktop_auth_transaction.updateMany).toHaveBeenCalledTimes(1);
+    expect(client.desktop_session.create).toHaveBeenCalledTimes(1);
+    expect(client.desktop_auth_transaction.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'transaction-1' },
+    });
+    expect(prisma.desktop_auth_transaction.updateMany).not.toHaveBeenCalled();
+    expect(prisma.desktop_session.create).not.toHaveBeenCalled();
+  });
+});
